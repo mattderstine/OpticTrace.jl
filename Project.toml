@@ -1,0 +1,13 @@
+name = "OpticTrace"
+uuid = "60c3e2a0-e4b8-4495-a31b-fd7fa057a23c"
+authors = ["Matthew Derstine"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
