@@ -5,33 +5,29 @@
 
 =#
 
-
-riN_LAK22 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK22.yml")
-riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")
-riN_SF2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF2.yml")
-riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
-riD_ZK3 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-ZK3.yml")
+export lensAC508180AB, lensAC127050A, lens_ACL12708U, lens_TLF220APC
 
 
 
+const curvAC508180_1= 6.923078165548776121E-03
+const glassAC508180_1 = "N-LAK22"
+const thickAC508180_1 = 9.5
+const semiDiamAC508180 = 25.4
 
-curvAC508180_1= 6.923078165548776121E-03
-glassAC508180_1 = "N-LAK22"
-thickAC508180_1 = 9.5
-semiDiamAC508180 = 25.4
+const curvAC508180_2= -8.663404145164059142E-03
+const glassAC508180_2 = "N-SF6"
+const thickAC508180_2 = 4.
 
-curvAC508180_2= -8.663404145164059142E-03
-glassAC508180_2 = "N-SF6"
-thickAC508180_2 = 4.
+const curvAC508180_3= -3.046912099599362322E-03
 
-curvAC508180_3= -3.046912099599362322E-03
-
-thickAC508180 = thickAC508180_1 + thickAC508180_2
-bflAC508180= 173.09544577349999
+const thickAC508180 = thickAC508180_1 + thickAC508180_2
+const bflAC508180= 173.09544577349999
 
 
 function lensAC508180AB(base, dir, lambda; order = "forward", lensname = "AC508180AB")
     #compute the refractive indexes
+    riN_LAK22 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK22.yml")
+    riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")
     riLens1 = riN_LAK22(lambda)
     riLens2 = riN_SF6(lambda)
 
@@ -78,6 +74,9 @@ const bflAC127050A= 4.721088792319E+1
 
 function lensAC127050A(base, dir, lambda; order = "forward", lensname = "AC127050A")
     #compute the refractive indexes
+    riN_SF2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF2.yml")
+    riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
+    
     riLens1 = riN_BK7(lambda)
     riLens2 = riN_SF2(lambda)
 
@@ -117,16 +116,16 @@ const curvAC127019AB_2= -7.266197974165333751E-02
 const glassAC127019AB_2 = "N-SF57"
 const thickAC127019AB_2 = 0.99980241223690003
 const curvAC127019AB_3= -1.459515106998706020E-02
-thickAC127019AB = thickAC127019AB_1 + thickAC127019AB_2
+# thickAC127019AB = thickAC127019AB_1 + thickAC127019AB_2
 const bflAC127019AB= 15.8738491298
 
-riN_SF57 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF57.yml")
-riN_LAK10 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK10.yml")
 
 
 
 function lensAC127019AB(base, dir, lambda; order = "forward", lensname = "AC127019AB")
     #compute the refractive indexes
+    riN_SF57 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF57.yml")
+    riN_LAK10 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK10.yml")
     riLens1 = riN_LAK10(lambda)
     riLens2 = riN_SF57(lambda)
 
@@ -383,6 +382,8 @@ const glass_F220APC="D-ZK3"
 
 
 function lens_TLF220APC(base, dir,  λ; order = "forward", lensname = "TL_F220APC")
+    riD_ZK3 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-ZK3.yml")
+
     lensASinglet(base, dir, 0.0, 0.0, [0.], osurf2C_F220APC, osurf2ϵ_F220APC, osurf2ASP_F220APC, thickF220APC, λ, riD_ZK3, semiDiamF220APC; order = order, lensname = lensname)
 end
 

@@ -1,3 +1,14 @@
+export printFigure, multipleFigures, sizeOptic, sizeOpticSurface,plotSurface3D!,plotGeometry3D
+export trcAndPrintPlot!, trcAndPrintPlotRay!, trcAndPlotRay!,trcAndPlotRayRel!
+export printTrcCoords, trcAndPrintRay, trcAndPrintRayRel, printTrcLen
+export opdRel, trcAndPrintLengthsRel, trcAndPrintLengths, surfnumFromName
+export printSurfNames, printMissed, plotRayFan!,perimeterRays,plotPerimeterRays
+export plotPerimeterRays!, rayHeatmap, rayHeatmap!, computeExitPupilLoc
+export plotOPD!, plotOPD3D!, printGeo, printSurface
+
+
+
+
 """
     printFigure(fileNameStub, fig; startnum = 0, directory = "")
     saves Makie figure to a file

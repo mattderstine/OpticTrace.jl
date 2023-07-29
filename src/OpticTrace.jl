@@ -1,6 +1,6 @@
 module OpticTrace
 
-# Write your package code here.
+
 using StaticArrays
 using FileIO # MeshIO should also be installed
 using LinearAlgebra
@@ -11,8 +11,6 @@ using DataInterpolations
 using StatsBase
 using GeometryBasics
 using GLMakie
-#using Makie.MakieLayout
-#using Makie
 using Printf
 import YAML
 
@@ -21,7 +19,7 @@ import YAML
 
 
 
-
+include("constants.jl")
 include("lens definitions.jl")
 include("lens refractive index.jl")
 include("mesh primitives.jl")

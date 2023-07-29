@@ -5,10 +5,19 @@ Functions to get refractive index from the RefractiveIndex.info website
 =#
 
 
+export getRefractiveIndexFunc, setDirectoryBaseRefractiveIndex
 
+global dirBaseRefractiveIndex::String ="/Users/matt/Development/Projects/refractiveindex/database/data"
 
-dirBaseRefractiveIndex="/Users/matt/Development/Projects/refractiveindex/database/data"
+function setDirectoryBaseRefractiveIndex()
+    global dirBaseRefractiveIndex="/Users/matt/Development/Projects/refractiveindex/database/data"
+end
 
+function setDirectoryBaseRefractiveIndex(dir::AbstractString)
+    global dirBaseRefractiveIndex= dir
+end
+
+#=
 
 fusedSilica = (0.696166300, 0.407942600, 0.897479400, 4.67914826E-3,
         1.35120631E-2, 97.9340025)
@@ -22,6 +31,11 @@ magnesiumFluoride = (0.27620, 0.60967, 0.0080, 2.14973, 0.08636^2, 18.0^2, 25.0^
 
 dlak6 = (2.81430513, -0.013449512, 0.0196569671, 0.000249252546, 1.98274573e-05, -8.02641015e-07)
 
+
+libRI = YAML.load_file("/Users/matt/Development/Projects/refractiveIndex/database/library.yml")
+=#
+
+
 findRefractiveIndex(lambda, (b1, b2, b3, c1, c2, c3)) =
     sqrt(1 + (b1 * lambda^2)/(lambda^2 - c1) +
     (b2 *lambda^2)/(lambda^2 - c2) + (b3 *lambda^2)/(lambda^2 - c3))
@@ -30,8 +44,6 @@ findRefractiveIndexAlt(lambda, (c1, c2, c3, c4, c5, c6))=
     sqrt(c1 + c2*lambda^2 + c3 * lambda^-2 +c4 * lambda^-4 +
         c5 * lambda^-6+ c6*lambda^-8)
 
-
-libRI = YAML.load_file("/Users/matt/Development/Projects/refractiveIndex/database/library.yml")
 
 function riFormula2(λ, c)
     λ2 = λ^2
@@ -83,7 +95,7 @@ function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
     f
 end
 
-riN_LAK22 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK22.yml")
-riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")
-riN_SF2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF2.yml")
-riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
+#riN_LAK22 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK22.yml")
+#riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")
+#riN_SF2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF2.yml")
+#riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")

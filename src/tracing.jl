@@ -1,3 +1,10 @@
+export traceGeometry, traceGeometryRel, surfAmpFunc
+export refractConic, refractSphere, reflectConic, cDiffuser
+export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
+export referencePlane, planeMirror, roundAperture, rectAperture
+export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
+
+
 """
     sag - compute the z coordinate in local coordinates for decendants of
     AbstractProfile
@@ -217,7 +224,7 @@ function traceSurf(r::Ray,s::ModelSurface)
     return(stat, Trace(Ray(newRayBase, r.dir), s.refIndex, delta, identityAmpMats()))
 end
 
-debugFlag = false
+
 
 """
     deltaToSurf - find distance along Ray to OptSurface
@@ -237,10 +244,12 @@ function deltaToSurf(r::Ray, p::SurfProfileConic)
     else
         C = p.curv * (L^2 + M^2 + p.ϵ * N^2)
     end
+    #=
     if debugFlag
         println("N = $N  gfunc = $gfunc  ffunc = $ffunc")
         println("p.curv = $(p.curv)  C = $C")
     end
+    =#
 
     if isapprox(C, 0., atol=1e-16)
         if isapprox(N, 0., atol=1e-16)
@@ -268,14 +277,18 @@ end
 # logic is flawed in this one
 #change to add offset to ray to put it into the coordinate system of the offset parabola
 function deltaToSurf(r::Ray, p::SurfProfileOAConic)
+    #=
     if debugFlag
         println("deltaToSurf OAConic")
         println("base = $(r.base)  dir = $(r.dir)  offset = $(p.offset)  net = $(r.base .- p.offset)")
     end
+    =#
     de = deltaToSurf(Ray(r.base .+ p.offset, r.dir), SurfProfileConic(p.curv, p.ϵ))
+    #=
     if debugFlag
         println("delta = $de")
     end
+    =#
     de
 end
 
@@ -284,9 +297,11 @@ function deltaToSurf(r::Ray, profile::SurfProfileAsphere)
     L, M, N = r.dir
 
     guess = deltaToSurf(r, SurfProfileConic(profile.curv, profile.ϵ))
+    #=
     if debugFlag
         println("guess = $guess")
     end
+    =#
     f(δ)=sag(x0 + L*δ, y0 + M * δ, profile) - z0 - N * δ
     Δl = find_zero(f, guess)
     Δl
@@ -304,10 +319,13 @@ function deltaToSurf(r::Ray, profile::SurfProfileCyl)
     else
         C = p.curv * ( M^2 + p.ϵ * N^2)
     end
+    #=
     if debugFlag
         println("N = $N  gfunc = $gfunc  ffunc = $ffunc")
         println("p.curv = $(p.curv)  C = $C")
     end
+    =#
+
 
     if isapprox(C, 0., atol=1e-16)
         if isapprox(N, 0., atol=1e-16)

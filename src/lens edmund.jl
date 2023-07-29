@@ -5,9 +5,10 @@
 
 =#
 
+export lens_EO68001, lens_EO67652,lens_EO67548
 
-riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
-riN_SF11 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")
+#riN_SF11 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")
+#riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
 
 
 
@@ -81,8 +82,8 @@ SURF 3
 
 
 function lens_EO38398(base, dir, lambda; order = "forward", lensname = "EO38-398")
-    
-    lensSinglet(base, dir, 8.496176720475789867E-02, 0.0, 3.1, lambda, riN_SF11, 5.75; order = order, lensname = lensname)
+  riN_SF11 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")
+  lensSinglet(base, dir, 8.496176720475789867E-02, 0.0, 3.1, lambda, riN_SF11, 5.75; order = order, lensname = lensname)
 end
 
 #=
@@ -151,8 +152,8 @@ SURF 3
 =#
 
 function lens_EO68001(base, dir, lambda; order="forward", lensname = "EO68-001")
-    
-    lensSinglet(base, dir, -3.869969040247679681E-02, 0.0, 3.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
+  riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")  
+  lensSinglet(base, dir, -3.869969040247679681E-02, 0.0, 3.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
     
 end
 
@@ -222,8 +223,8 @@ SURF 3
 
 
 function lens_EO67548(base, dir, lambda; order = "forward", lensname = "EO67-548")
-    
-    lensSinglet(base, dir, 2.579979360165119903E-02, 0.0, 4.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
+  riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
+  lensSinglet(base, dir, 2.579979360165119903E-02, 0.0, 4.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
     
 end
 
@@ -293,7 +294,8 @@ SURF 3
 =#
 
 function lens_EO67652(base, dir, lambda; order="forward", lensname = "EO67-652")
+  riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
 
-    lensSinglet(base, dir, 1.304461257500649958E-02, -1.304461257500649958E-02, 3.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
+  lensSinglet(base, dir, 1.304461257500649958E-02, -1.304461257500649958E-02, 3.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
 
 end
