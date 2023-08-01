@@ -171,10 +171,12 @@ function traceSurf(r::Ray,s::OptSurface)
     localRayDir = s.toLocalDir(r.dir)
 
     delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
+    #=
     if debugFlag
         println("traceSurf...  Δ = $delta")
         println("start = $(r.base)")
     end
+    =#
     if delta == NaN
         return (1, Trace(r, NaN, delta, identityAmpMats()) )
     end
@@ -184,18 +186,20 @@ function traceSurf(r::Ray,s::OptSurface)
     lnormal = surfNormal(newLocalBase, s.profile)
 
     normal = s.toGlobalDir(lnormal)
+    #=
     if debugFlag
         println("local normal = $lnormal  global normal = $normal")
     end
-
+    =#
     t, newRayDir, nIn = modFunc(Ray(newRayBase, r.dir), normal, s.mod)
     if !t
         return (2, Trace(Ray(newRayBase, newRayDir), nIn, delta, identityAmpMats()))
     end
+    #=
     if debugFlag
         println("old dir = $(r.dir)  newdir = $newRayDir")
     end
-
+    =#
     ampMats = surfAmpFunc(r.dir, newRayDir, normal, s.mod, s.coating)
 
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
