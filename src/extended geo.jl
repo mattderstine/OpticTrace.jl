@@ -7,10 +7,10 @@ guess.
 """
 
 function findPerpenMap(planenormal::SVector{3, Float64})
-    tryy = yaxis
-    newx = cross(tryy, planenormal) # if planenormal == zaxis this give x axis
+    tryy = YAXIS
+    newx = cross(tryy, planenormal) # if planenormal == ZAXIS this give x axis
     if norm(newx)==0. # planenormal is along y axis
-        tryy = xaxis
+        tryy = XAXIS
         newx = cross(tryy, planenormal)
     end
 
@@ -24,7 +24,7 @@ end
 Find a perpendicular in the plane to planenormal and ydir
 """
 function findPerpenMap(planenormal::SVector{3, Float64}, ydir::SVector{3, Float64})
-    newx = cross(ydir, planenormal) # if planenormal == zaxis this give x axis
+    newx = cross(ydir, planenormal) # if planenormal == ZAXIS this give x axis
     newx = normalize(newx)
     ydir, LinearMap(SMatrix{3,3}([newx; ydir; planenormal]))
 end
@@ -56,7 +56,7 @@ end
 
 
 """
-    EGeo(func, baseObject, size, wavelength; dir = zaxis, setup = defaultSetupGeo, parameters = Dict{Any,Any}() )
+    EGeo(func, baseObject, size, wavelength; dir = ZAXIS, setup = defaultSetupGeo, parameters = Dict{Any,Any}() )
     simple way to set up ExtendedGeometry
 
     func - function defining geometry
@@ -69,7 +69,7 @@ end
     parameters - dictionary for parameters used by funcSetup and funcGeo
 
 """
-function EGeo(func, baseObject, size, wavelength; dir = zaxis, setup = defaultSetupGeo, parameters = Dict{Any,Any}() )
+function EGeo(func, baseObject, size, wavelength; dir = ZAXIS, setup = defaultSetupGeo, parameters = Dict{Any,Any}() )
     object = referencePlane("object", baseObject, dir, refIndexDefault, size, "none")
     newgeo = setup(func, object, wavelength, parameters)
     a = ExtendedGeometry(newgeo, func, setup, object, wavelength, parameters)

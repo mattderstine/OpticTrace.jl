@@ -1,0 +1,308 @@
+## Testing Set Up Figures
+4+4
+
+using OpticTrace # load all the lens design stuff
+using StaticArrays
+using FileIO # MeshIO should also be installed
+using LinearAlgebra
+using CoordinateTransformations
+using IterTools
+using Roots
+using DataInterpolations
+using StatsBase
+using GeometryBasics
+using GLMakie
+using Printf
+
+
+#set up simple geometry and plot it
+
+figs = [Figure(resolution = (1600,1200),backgroundcolor = RGBf(0.98, 0.98, 0.98), ) for i in 1:5]
+#figs=multipleFigures()
+
+## Test the diffuser fig1
+
+"""test the diffuser
+# 11/26/20 works as expected
+"""
+function testDiffuser(fig; pnts=20)
+
+    testradius = 2.
+    distance = testradius / tan(10.0 * π/180.)
+    testDiffGeo = [
+        referencePlane("start", ORIGIN, ZAXIS, 1., 5., "nocoating"),
+        cDiffuser("diff", SVector(0., 0., 2.), ZAXIS, 1., 1., 10.0 * π/180., 5., "nocoating"),
+        referencePlane("end", SVector(0., 0., distance+2), ZAXIS, 1., 5., "nocoating")
+    ]
+
+    outer_padding = 30
+    lscene = LScene(fig[1,2], scenekw = (camera = cam3d_cad!, raw = false))
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+
+    plotGeometry3D!(lscene, testDiffGeo)
+    for j in 1:pnts
+        trcAndPlotRay!(lscene, Ray(ORIGIN, ZAXIS), testDiffGeo)
+    end
+
+    ax1 = fig[1,3] = Axis(fig, title = "Spots radius = $testradius")
+    ax1.aspect = DataAspect()
+
+
+#should produce a circle with radius "testradius".
+    aa()=traceGeometryRel(Ray(SVector(0.,0., 0.),ZAXIS), testDiffGeo)
+    pnts = [SVector{2}(aa()[2][4].ray.base[1:2]) for i in 1:100000]
+    scatter!(ax1,pnts)
+
+    fig
+end
+
+figDiffuserTest=testDiffuser(figs[1], pnts=100)
+
+display(figDiffuserTest)
+
+## test 2
+
+
+testgeo = [
+    refractSphere("first", ORIGIN,ZAXIS,1., 1.5, 0., 5., "testcoat"),
+    refractSphere("second", SVector(0., 0., 3.), ZAXIS, 1.5, 1., -0.1, 5., "testcoat"),
+
+    refractSphere("third", SVector(0., 0., 3.5), ZAXIS, 1., 1.5, 0.1, 5., "testcoat"),
+    refractSphere("fourth", SVector(0., 0., 6.5), ZAXIS, 1.5, 1., 0., 5., "testcoat"),
+
+#    refractSphere("last", SVector(0., 0., 15.), ZAXIS, 1. , 1. , 0., 10., "testcoat")
+    referencePlane("RP-last",SVector(0., 0., 15.), ZAXIS, 1. , 7., "testcoat")
+
+]
+
+refIndexDefault = 1. 
+
+testGeometry = [
+    referencePlane("start",SVector(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
+    refractSphere("Lens1i", SVector(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
+    refractSphere("Lens10", SVector(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
+    referencePlane("image", SVector(0., 0., 50.), ZAXIS, refIndexDefault, 3., "testcoat")
+]
+
+
+function test2(fig)
+    lscene = LScene(fig[1,2], scenekw = (camera = cam3d_cad!, raw = false))
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+
+    scene1 = plotGeometry3D!(lscene, testgeo)
+
+    scene2 = trcAndPrintPlotRay!(lscene, Ray(SVector(0., 5.0, -10.), SVector(0., 0., 1.)), testgeo )
+
+    #refPlane = referencePlane("test reference plane",ORIGIN,YAXIS, 1., 5., "testCoating")
+    lscene2 = LScene(fig[1,3], scenekw = (camera = cam3d_cad!, raw = false))
+    linesegments!(lscene2,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene2,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene2,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+
+    scene3 = plotGeometry3D!(lscene2, testGeometry)
+
+    scene4 = trcAndPrintPlotRay!(lscene2, Ray(SVector(0., 10.0, -50.), SVector(0., 0., 1.)), testGeometry)
+
+    scene5 = trcAndPrintPlotRay!(lscene2, Ray(SVector(0., 10.0, -50.), SVector(0., -10.0/50., sqrt(1-(10.0/50.)^2))), testGeometry)
+    fig
+end
+
+display(test2(figs[2]))
+
+## test 3
+
+l2i = refractSphere("Lens2i", SVector(-131., 0., 40.), XAXIS, refIndexDefault,
+    1.5, 0., 20., "coatingTransmitFresnel") # gaussian power of 1/100
+l2o = refractSphere("Lens2o", SVector(-141., 0., 40.), XAXIS, 1.5,
+    refIndexDefault, 1.0 /50., 20., "coatingTransmitFresnel")
+
+testGeometry2 = [
+    referencePlane("start",SVector(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
+    refractSphere("Lens1i", SVector(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
+    refractSphere("Lens10", SVector(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
+    planeMirror("Mirror", SVector(0., 0., 40.), SVector(cos(π /4), 0., sin(π/4)),
+    refIndexDefault, 1.5, 8., "coatingReflectFresnel"),
+    roundAperture("App", SVector(-20., 0., 40.), XAXIS, refIndexDefault, 0., 5.),
+    roundAperture("Hole", SVector(-20., -2.5, 40.), XAXIS, refIndexDefault,1., ∞),
+    rectAperture("RectApp", SVector(-120., -5., 40.), XAXIS,
+    SVector(0., sqrt(2.)/2, sqrt(2.)/2), refIndexDefault, 1.0, 2.0, 5., 10.),
+    l2i, l2o,
+    planeMirror("Mirror", SVector(-161., 0., 40.), XAXIS, refIndexDefault,
+        1.5, 8., "coatingTransmitFresnel"),
+    # test going backwards through refractive surfaces
+    l2o, l2i,
+
+    referencePlane("end", SVector(50., 0., 40.), XAXIS, refIndexDefault, 3., "testcoat")
+]
+
+#
+fig6, scene6 = plotGeometry3D(testGeometry2)
+scene6
+cam = Makie.cameracontrols(scene6)
+cam.eyeposition[]=SVector{3, Float64}(-80, -300., 100.)
+cam.lookat[] = ORIGIN
+cam.upvector[] = YAXIS
+Makie.update_cam!(scene6.scene)
+#=
+Makie.hbox(
+    Makie.vbox(scene2, scene4),
+    Makie.vbox(scene5, scene6)
+    )
+=#
+display(fig6)
+
+## test OAP operation test4
+
+function testOAP(f1, f2, oapseparation, aper)
+
+    vefl = f1 * 25.4 # 1 inch
+    vefl1 = f2 * 25.4
+#=
+    oapseparation = 50.0
+    aper = 38.1 * 0.5 #from NewportMKS catalog
+=#
+    sourceplane = ORIGIN
+    mirror1 = sourceplane .+ (vefl1) .* ZAXIS
+    println("mirror1 base = $mirror1")
+    mirror2 = mirror1 .+ oapseparation .* YAXIS
+    println("mirror2 base = $mirror2")
+    imageplane = mirror2 .+ vefl .* ZAXIS
+    println("image plane = $imageplane")
+
+    c = 1.0/vefl
+    c1 = 1.0/vefl1
+    ϵ = 0.0 #it's a parabola
+
+    [
+        referencePlane("start",sourceplane, ZAXIS, refIndexDefault , 5.0, "testcoat"),
+
+        #=
+        reflectConic("bigmirror", mirror1 .- SVector{3, Float64}(0., vefl/2, vefl), -YAXIS,
+            refIndexDefault, 1.5,-c, -ϵ, 2*aper, "dummycoating"),
+        =#
+
+        reflectOAP("OAP1", mirror1, -YAXIS,  ZAXIS,
+                refIndexDefault, 1.5,
+                -c, aper, "dummycoating"),
+
+        reflectOAP("OAP2", mirror2, YAXIS, -ZAXIS,
+            refIndexDefault, 1.5,
+            -c1, aper, "dummycoating"),
+
+        referencePlane("image",imageplane, ZAXIS, refIndexDefault , 5.0, "testcoat")
+    ]
+end
+
+
+
+function offAxisParabolaTest(fig)
+
+    parabolageometry3 = testOAP(1.0, 1.0, 50., 38.1/2)
+    outer_padding = 30
+    lscene = LScene(fig[1,2], scenekw = (camera = cam3d_cad!, raw = false))
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+
+    plotGeometry3D!(lscene, parabolageometry3)
+
+    testProfile = SurfProfileOAConic(1/25.0 ,  0.0 , SVector{3, Float64}(0.0, 25.0, -25.0 * 0.5))
+
+    #θ = 0.3
+    θ = 0.
+
+    trcAndPrintPlotRay!(lscene, Ray(ORIGIN,SVector(0., sin(θ), cos(θ))),parabolageometry3)
+    
+    ax1 = fig[1,3] = Axis(fig, title = "Sag")
+
+    plotXSag!(ax1, 25.0, 0.0, testProfile)
+    plotYSag!(ax1, 25.0, 0.0, testProfile)
+
+    fig
+end
+
+offAxisParabolaTest(figs[4])
+
+display(figs[4])
+
+function sN(x)
+    sn = surfNormal(SVector{3, Float64}(0.0,x, sag(0.0, x, testProfile)),testProfile)
+    n = norm(sn)
+    println("sn = $sn   norm = $n")
+end
+
+
+
+
+
+
+##
+diffusergeo =
+    [
+
+    cDiffuser("diffuser", ORIGIN, ZAXIS, refIndexDefault, refIndexDefault, 25.0*π / 180., 12.5, "nocoating"),
+    refractSphere("Lens1i", SVector(0., 0., 100.), ZAXIS, 1., 101., 0., 20., "testcoat"),
+    refractSphere("Lens10", SVector(0., 0., 101.), ZAXIS, 101., 1., -1. / 5000., 20., "testcoat"),
+    referencePlane("image",149.969 .* ZAXIS, ZAXIS, refIndexDefault , 50., "testcoat")
+    ]
+
+fig7, scenediff = plotGeometry3D(diffusergeo)
+begin
+    for i in 1:100
+        trcAndPlotRay!(scenediff, Ray(ORIGIN, SVector{3}(normalize([0., 0., .9]))), diffusergeo, color=:blue)
+    end
+end
+
+display(fig7)
+
+#=
+
+
+perfectLensgeo = [
+    refractSphere("Lens1i", SVector(0., 0., 100.), ZAXIS, 1., 1001., 0., 20., "testcoat"),
+    refractSphere("Lens10", SVector(0., 0., 100.1), ZAXIS, 1001., 1., -1. / 50000., 20., "testcoat"),
+    referencePlane("image",149.088 .* ZAXIS, ZAXIS, refIndexDefault , 50., "testcoat")
+
+]
+
+perfectLensgeoA = [
+    referencePlane("object", ORIGIN, ZAXIS, refIndexDefault , 10., "testcoat")
+    perfectLensImage(0., 0., 80., ZAXIS, 80., 8.0, 10.)
+]
+
+
+scenediff = plotGeometry3D(perfectLensgeoA)
+
+
+trcAndPlotRay!(scenediff, Ray(5. .*YAXIS, ZAXIS), Array{AbstractSurface,1}(perfectLensgeoA), color=plotcolors[1])
+
+trc=trcAndPrintRay(Ray(.01 .*YAXIS, ZAXIS), Array{AbstractSurface,1}(perfectLensgeoA))
+
+trcAndPlotRay!(scenediff, Ray(5. .*YAXIS, ZAXIS), perfectLensgeoA, color=:blue)
+
+plotGeometry3D(perfectLensgeoA)
+
+=#
+
+
+
+
+##
+#=
+sfunc(x, y) =  x^2 + y^2 < 64 ? (x^2 + y^2)/8 : NaN
+
+
+function surfacetest2()
+    x = -10.:.1:10
+    y = -10.:.1:10
+    z = [sfunc(xi,yi) for xi in x, yi in y]
+    surface(x, y, z, colormap = :Spectral)
+end
+
+display(surfacetest2())
+=#
+

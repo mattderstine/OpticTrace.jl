@@ -52,7 +52,7 @@ end
 
 # Overloaded Functions
 
-GeometryBasics.origin(c::OptSurface) = c.base.base #the origin of the surface in global coordinates
+GeometryBasics.origin(c::OptSurface) = c.base.base #the ORIGIN of the surface in global coordinates
 GeometryBasics.radius(c::OptSurface) = gbRadius(c.aperture, c.profile) #fix
 GeometryBasics.widths(c::OptSurface) = gbWidths(c.aperture, c.profile)
 
@@ -140,9 +140,9 @@ Base.minimum(c::OptSurf) = Vec{3, Float32}(origin(c)) - Vec{3, Float32}(radius(c
 Base.maximum(c::OptSurf) = Vec{3, Float32}(origin(c)) + Vec{3, Float32}(radius(c), radius(c), c.curv*radius(c)^2)
 =#
 # overloaded methods for apertures
-struct Washer <: AbstractSurface
-    base::SVector{3, Float64}
-    dir::SVector{3, Float64}
+struct Washer{N,T} <: AbstractSurface{N,T}
+    base::SVector{N, T}
+    dir::SVector{N, T}
     semiDiameter::Float64
     toGlobalCoord::AffineMap
     toGlobalDir::LinearMap
@@ -169,7 +169,7 @@ const Washer(base::SVector{3, Float64}, dir::SVector{3, Float64},
     semiDiameter::Float64,toGlobalCoord::AffineMap,toGlobalDir::LinearMap) =
         Washer(base, dir, semiDiameter,toGlobalCoord, toGlobalDir,NoProfile(0.))
 
-GeometryBasics.origin(c::Washer) = c.base #the origin of the surface in global coordinates
+GeometryBasics.origin(c::Washer) = c.base #the ORIGIN of the surface in global coordinates
 GeometryBasics.radius(c::Washer) = gbRadius(c.semiDiameter, c.profile) #fix
 GeometryBasics.widths(c::Washer) = gbWidths(c.semiDiameter, c.profile)
 
@@ -182,7 +182,7 @@ end
 
 function GeometryBasics.normals(s::Washer, nvertices=24)
     a= samplePoints(s,nvertices)
-    inner(t) = s.toGlobalDir(zaxis)
+    inner(t) = s.toGlobalDir(ZAXIS)
     (inner(a) for a in a)
 end
 
@@ -210,10 +210,10 @@ function gbRadius(a::RectAperture, profile::NoProfile)
 end
 
 #overloaded methods for apertures
-struct Disk <: AbstractSurface
-   base::SVector{3, Float64}
-   dir::SVector{3, Float64}
-   semiDiameter::Float64
+struct Disk{N,T} <: AbstractSurface{N,T}
+   base::SVector{N, T}
+   dir::SVector{N, T}
+   semiDiameter::T
    toGlobalCoord::AffineMap
    toGlobalDir::LinearMap
    profile::AbstractSurfProfile  #NoProfile
@@ -239,7 +239,7 @@ end
 
 const Disk(base::SVector{3, Float64}, dir::SVector{3, Float64}, semiDiameter::Float64,toGlobalCoord::AffineMap,toGlobalDir::LinearMap) = Disk(base, dir, semiDiameter, toGlobalCoord, toGlobalDir,NoProfile(0.))
 
-GeometryBasics.origin(c::Disk) = c.base #the origin of the surface in global coordinates
+GeometryBasics.origin(c::Disk) = c.base #the ORIGIN of the surface in global coordinates
 GeometryBasics.radius(c::Disk) = gbRadius(c.semiDiameter, c.profile) #fix
 GeometryBasics.widths(c::Disk) = gbWidths(c.semiDiameter, c.profile)
 
@@ -252,6 +252,6 @@ end
 
 function GeometryBasics.normals(s::Disk, nvertices=24)
     a= samplePoints(s,nvertices)
-    inner(t) = s.toGlobalDir(zaxis)
+    inner(t) = s.toGlobalDir(ZAXIS)
     (inner(a) for a in a) #isn't this the dumbest thing you've ever seen. Not taking time to fix it.
 end

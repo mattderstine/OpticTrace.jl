@@ -1,7 +1,7 @@
 
 
 
-export Ray, SurfBase, Trace, OptSurface, ModelSurface, ExtendedGeometry
+export Ray, SurfBase, Trace, OptSurface, ModelSurface, ExtendedGeometry, SurfProfileOAConic
 
 abstract type AbstractRay{T<:Real,N} end
 abstract type AbstractSurfBase{T<:Real,N} end
@@ -9,6 +9,9 @@ abstract type AbstractSurfBase{T<:Real,N} end
 struct Ray{T,N} <: AbstractRay{T,N}
     base::SVector{N, T}
     dir::SVector{N, T}
+#    function Ray(b::Tuple{T, T, T}, d::Tuple{T, T, T}) where {T}
+#        return new{T,3}(SVector(b), SVector(d))
+#    end
 end
 
 struct SurfBase{T,N} <: AbstractSurfBase{T,N}
@@ -24,18 +27,18 @@ abstract type AbstractBendType{T<:Real} end #some info on how to do the bending
 abstract type AbstractOpticalObject{T<:Real} end
 abstract type AbstractTrace{T<:Real,N} end
 
-struct SizeLens <: AbstractSize{T}  #size for round optics
+struct SizeLens{T} <: AbstractSize{T}  #size for round optics
     semiDiameter::T
 end
 
-abstract type TrueAperture <: AbstractSize{T} end
+abstract type TrueAperture{T} <: AbstractSize{T} end
 
-struct RoundAperture <: TrueAperture{T}
+struct RoundAperture{T} <: TrueAperture{T}
     obscure::T
     semiDiameter::T
 end
 
-struct RectAperture <: TrueAperture{T}
+struct RectAperture{T} <: TrueAperture{T}
     wo::T
     lo::T
     wclear::T
@@ -53,26 +56,26 @@ struct SurfProfileConic{T} <: AbstractSurfProfile{T}
     ϵ::T #see Welford for definition of ϵ
 end
 
-struct SurfProfileOAConic <: AbstractSurfProfile{T}
+struct SurfProfileOAConic{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
     offset::SVector{3,T}
 end
 
-struct SurfProfileAsphere <: AbstractSurfProfile{T}
+struct SurfProfileAsphere{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
     a::Array{T} #hope this works...
 end
 
-struct SurfProfileCyl <: AbstractSurfProfile{T}
+struct SurfProfileCyl{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ    
     ϵy::T #see Welford for definition of ϵ
     a::Array{T} #hope this works...
 end
 
-struct NoProfile <: AbstractSurfProfile{T}
+struct NoProfile{T} <: AbstractSurfProfile{T}
     curv :: T #but never used
 end
 
@@ -83,9 +86,9 @@ end
 
 abstract type AbstractAmpData{T <:Real} end
 
-struct AmpData <: AbstractAmpData{T}
-    p::SVector{2, T}
-    o::SVector{2, T}
+struct AmpData{T} <: AbstractAmpData{T}
+    p::Matrix{T}
+    o::Matrix{T}
     trans::T #for intensity systems, the "transmission" coefficient of the surface
 end
 
@@ -98,7 +101,7 @@ end
         delta   length of ray leaving surface
         pmatrix polarization p & o matrices
 """
-struct Trace <:AbstractTrace{T,N}
+struct Trace{T,N} <:AbstractTrace{T,N}
     ray::Ray{T,N}
     nIn::T
     delta::T
@@ -106,23 +109,23 @@ struct Trace <:AbstractTrace{T,N}
 end
 
 
-struct DielectricT <: AbstractBendType{T}
+struct DielectricT{T} <: AbstractBendType{T}
     refIndexIn :: T
     refIndexOut :: T
 end
 
-struct MirrorR <: AbstractBendType{T}
+struct MirrorR{T} <: AbstractBendType{T}
     refIndexIn :: T
     refIndexOut :: T
 end
 
-struct CDiffuser <: AbstractBendType{T}
+struct CDiffuser{T} <: AbstractBendType{T}
     tanθ::T
     refIndexIn::T
     refIndexOut::T
 end
 
-struct NoBendIndex <: AbstractBendType{T}
+struct NoBendIndex{T} <: AbstractBendType{T}
     refIndexIn :: T
     refIndexOut::T
     function NoBendIndex(n::T) where {T<:Real}
@@ -144,7 +147,7 @@ end
 abstract type AbstractSurface{N,T} <: GeometryBasics.GeometryPrimitive{N, T} end
 #abstract type AbstractSurface <: GeometryBasics.AbstractGeometry{3, Float64} end
 
-struct OptSurface <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
+struct OptSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
     surfname::String
     base::SurfBase{T,N}
     aperture::AbstractSize{T}
@@ -157,7 +160,7 @@ struct OptSurface <: AbstractSurface{N,T}  #use the data to overload GemoetryBas
     toLocalDir::LinearMap
 end
 
-struct ModelSurface <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
+struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
     surfname::String
     base::SurfBase{T,N}
     aperture::AbstractSize{T}

@@ -3,6 +3,7 @@ export refractConic, refractSphere, reflectConic, cDiffuser
 export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
 export referencePlane, planeMirror, roundAperture, rectAperture
 export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
+export sag
 
 
 """
@@ -985,15 +986,15 @@ end
 
 
 function computeRearFocalPlane(geo; epsilon = 0.001)
-    statusb,bore = traceGeometryRel(Ray(origin, zaxis), geo)
-    statusy,ytrace = traceGeometryRel(Ray(SVector(0., epsilon, 0.), zaxis), geo)
-    statusx,xtrace = traceGeometryRel(Ray(SVector(epsilon, 0., 0.), zaxis), geo)
+    statusb,bore = traceGeometryRel(Ray(ORIGIN, ZAXIS), geo)
+    statusy,ytrace = traceGeometryRel(Ray(SVector(0., epsilon, 0.), ZAXIS), geo)
+    statusx,xtrace = traceGeometryRel(Ray(SVector(epsilon, 0., 0.), ZAXIS), geo)
 
     printTrcCoords(statusb, bore, geo)
 
     #check to make sure all made it through
     if statusb !=0 || statusy !=0 || statusx !=0
-        return(1, NaN, NaN, origin, origin)
+        return(1, NaN, NaN, ORIGIN, ORIGIN)
     end
 
     #compute intersection of bore and ytrace, xtrace
@@ -1014,7 +1015,7 @@ function computeRearFocalPlane(geo; epsilon = 0.001)
 #=
     if dirb[3] != 1.
         println("not yet general calculations $dirb")
-        return(2, NaN, NaN, origin, origin)
+        return(2, NaN, NaN, ORIGIN, ORIGIN)
      end
 =#
 

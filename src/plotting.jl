@@ -1,10 +1,12 @@
 export printFigure, multipleFigures, sizeOptic, sizeOpticSurface,plotSurface3D!,plotGeometry3D
+export plotGeometry3D!
 export trcAndPrintPlot!, trcAndPrintPlotRay!, trcAndPlotRay!,trcAndPlotRayRel!
 export printTrcCoords, trcAndPrintRay, trcAndPrintRayRel, printTrcLen
 export opdRel, trcAndPrintLengthsRel, trcAndPrintLengths, surfnumFromName
 export printSurfNames, printMissed, plotRayFan!,perimeterRays,plotPerimeterRays
 export plotPerimeterRays!, rayHeatmap, rayHeatmap!, computeExitPupilLoc
 export plotOPD!, plotOPD3D!, printGeo, printSurface
+export plotXSag!, plotYSag!
 
 
 
@@ -497,7 +499,7 @@ function plotRayFan!(scene, r::SVector, θmax::Float64, geo; surfview = "end", c
 
     #find the reference local reference intercept coordinates
     #println("base = $r")
-    status, trc = traceGeometryRel(Ray(r, zaxis), geo) #zaxis is default local direction
+    status, trc = traceGeometryRel(Ray(r, ZAXIS), geo) #ZAXIS is default local direction
     if status != 0 && surfnum >0 && length(trc)<surfnum
         #println(trcStatMsg[status+1])
         println("Reference ray did not intersect surface: $surfview")
@@ -665,10 +667,10 @@ end
 function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
     surfnumStop = surfnumFromName("stop", geo)-1
     locgeo = geo[surfnumStop:end]
-    status,trc = traceGeometryRel(Ray(origin, SVector(0., sin(epsilon), cos(epsilon))), locgeo)
+    status,trc = traceGeometryRel(Ray(ORIGIN, SVector(0., sin(epsilon), cos(epsilon))), locgeo)
     #check to make sure all made it through
     if status !=0
-        return(1, origin)
+        return(1, ORIGIN)
     end
     if format!="quiet"
         # takes "normal" or something else
@@ -685,7 +687,7 @@ function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
 #=
     if dirb[3] != 1.
         println("not yet general calculations $dirb")
-        return(2, NaN, NaN, origin, origin)
+        return(2, NaN, NaN, ORIGIN, ORIGIN)
      end
 =#
 
@@ -722,7 +724,7 @@ function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", colo
 
     #find the reference local reference intercept coordinates
     #println("base = $r")
-    status, refTrace = traceGeometryRel(Ray(r, zaxis),localgeo) #zaxis is default local direction
+    status, refTrace = traceGeometryRel(Ray(r, ZAXIS),localgeo) #ZAXIS is default local direction
     if status != 0
         #println(trcStatMsg[status+1])
         println("Reference ray did not intersect surface: $surfview")
@@ -758,7 +760,7 @@ function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", colo
         #    [localgeo[end]]
         ]
     printSurfNames(testgeo)
-    status, refTrace = traceGeometryRel(Ray(r, zaxis),testgeo) #zaxis is default local direction
+    status, refTrace = traceGeometryRel(Ray(r, ZAXIS),testgeo) #ZAXIS is default local direction
 
 
 
@@ -806,7 +808,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     #println("r = $r  dirRef = $dirRef")
     #find the reference local reference intercept coordinates
     #println("base = $r")
-    status, refTrace = traceGeometryRel(Ray(origin, dirRef),usedgeo) #zaxis is default local direction
+    status, refTrace = traceGeometryRel(Ray(ORIGIN, dirRef),usedgeo) #ZAXIS is default local direction
     if status != 0
         #println(trcStatMsg[status+1])
         println("Reference ray did not intersect surface: $surfview")
@@ -842,7 +844,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
         #    [localgeo[end]]
         ]
     #printSurfNames(finalgeo)
-    status, refTrace = traceGeometryRel(Ray(origin, dirRef),finalgeo) #zaxis is default local direction
+    status, refTrace = traceGeometryRel(Ray(ORIGIN, dirRef),finalgeo) #ZAXIS is default local direction
 
 
 
@@ -890,7 +892,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     #println("r = $r  dirRef = $dirRef")
     #find the reference local reference intercept coordinates
     #println("base = $r")
-    status, refTrace = traceGeometryRel(Ray(origin, dirRef),usedgeo) #zaxis is default local direction
+    status, refTrace = traceGeometryRel(Ray(ORIGIN, dirRef),usedgeo) #ZAXIS is default local direction
     if status != 0
         #println(trcStatMsg[status+1])
         println("Reference ray did not intersect surface: $surfview")
@@ -926,7 +928,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
         #    [localgeo[end]]
         ]
     #printSurfNames(finalgeo)
-    status, refTrace = traceGeometryRel(Ray(origin, dirRef),finalgeo) #zaxis is default local direction
+    status, refTrace = traceGeometryRel(Ray(ORIGIN, dirRef),finalgeo) #ZAXIS is default local direction
 
 
 
@@ -970,3 +972,18 @@ end
 function printSurface(n, surf::ModelSurface)
     println("$n    $(surf.surfname)   $(surf.aperture)  $(surf.profile)")
 end  
+
+function plotXSag!(scene, xmax, ycut, profile)
+    sag1(x) = sag(x, Float64(ycut), profile)
+    x = range(-xmax, stop = xmax, length = 160)
+    z = sag1.(x)
+   lines!(scene, x,z, color=:blue)
+end
+
+function plotYSag!(scene, xmax, ycut, profile)
+    sag1(x) = sag(Float64(ycut), x, profile)
+    x = range(-xmax, stop = xmax, length = 160)
+    z = sag1.(x)
+    lines!(scene, x,z, color=:red)
+end
+

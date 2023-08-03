@@ -1,11 +1,11 @@
 
-const origin = SVector(0., 0., 0.)
-const zaxis = SVector(0., 0., 1.)
-const yaxis = SVector(0.,1.,0.)
-const xaxis = SVector(1.,0.,0.)
+const ORIGIN = SVector(0., 0., 0.)
+const ZAXIS = SVector(0., 0., 1.)
+const YAXIS = SVector(0.,1.,0.)
+const XAXIS = SVector(1.,0.,0.)
 
 const ∞ = Inf
 
 global refIndexDefault::Float64
 
-export origin, zaxis, yaxis, xaxis, refIndexDefault
+export ∞, ORIGIN, ZAXIS, YAXIS, XAXIS, refIndexDefault
