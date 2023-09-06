@@ -1,7 +1,7 @@
 export traceGeometry, traceGeometryRel, surfAmpFunc
 export refractConic, refractSphere, reflectConic, cDiffuser
 export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
-export referencePlane, planeMirror, roundAperture, rectAperture
+export referencePlane, planeMirror
 export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
 export sag
 
@@ -19,6 +19,11 @@ function sag(x::Float64, y::Float64, s::SurfProfileConic)
         z=(1 - sqrt(1 - s.curv^2 * s.ϵ * (x^2 + y^2)))/(s.curv*s.ϵ)
     end
     z
+end
+
+function sag(x::Float64, y::Float64, s::SurfProfileSphere)
+
+    z=1 - sqrt(1 - s.curv^2 * (x^2 + y^2))
 end
 
 function sag(x::Float64, y::Float64, s::SurfProfileOAConic)
@@ -45,6 +50,11 @@ function sag(x::Float64, y::Float64, s::SurfProfileCyl)
         z=(1 - sqrt(1 - s.curv^2 * s.ϵ * (y^2)))/(s.curv*s.ϵ)
     end
     z
+end
+
+function sag(x::Float64, y::Float64, s::SurfProfileToroid)
+    #this is likely incorrect
+    z= 1 - sqrt(1 - (s.curvY * y)^2 - (s.curvX * x)^2)
 end
 
 """
@@ -786,72 +796,6 @@ function planeMirror(surfname::String,
         0.,
         semiDiam,
         coating)
-end
-
-function isAperture(a::AbstractSize)
-    false
-end
-
-function isAperture(a::TrueAperture)
-    true
-end
-
-function clipAperture(localBase::SVector{3, Float64}, aperture::RoundAperture)
-    #println("\nclipAperture\nlocalBase = $localBase  aperture=$aperture")
-    r2 = localBase[1]^2 + localBase[2]^2 #z is supposed to be zero
-    t = (r2 < aperture.obscure^2 )|| (r2 > aperture.semiDiameter^2 )
-    #println("t = $t")
-    t
-end
-
-function clipAperture(localBase::SVector{3, Float64}, aperture::RectAperture)
-    x = localBase[1] #width
-    y = localBase[2] #length
-    abs(x)<aperture.wo || abs(x)>aperture.wclear || abs(y)<aperture.lo || abs(y)>aperture.lclear
-end
-
-function roundAperture(surfname::String,
-    pointInPlane::SVector{3, Float64},
-    planenormal::SVector{3, Float64},
-    rinIn::Float64,
-    obscure::Float64,
-    semiDiam::Float64)
-
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
-
-    ModelSurface(surfname,
-        SurfBase(pointInPlane, planenormal, ydir),
-        RoundAperture(obscure, semiDiam),
-        NoProfile(0.),
-        rinIn,
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir
-        )
-end
-
-"""
-define a rectangular aperture
-"""
-function rectAperture(surfname::String,
-    pointInPlane::SVector{3, Float64},
-    planenormal::SVector{3, Float64},
-    ydir::SVector{3, Float64},
-    rinIn::Float64,
-    obscurex::Float64,
-    obscurey::Float64,
-    semiDiamx::Float64,
-    semiDiamy::Float64)
-
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal, ydir)
-
-    ModelSurface(surfname,
-        SurfBase(pointInPlane, planenormal, ydir),
-        RectAperture(obscurex, obscurey, semiDiamx, semiDiamy),
-        NoProfile(0.),
-        rinIn,
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir
-        )
 end
 
 """

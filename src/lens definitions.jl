@@ -45,11 +45,11 @@ struct RectAperture{T} <: TrueAperture{T}
     lclear::T
 end
 
-#=
-struct SurfProfileSphere <: AbstractSurfProfile
-    curv :: Float64
+
+struct SurfProfileSphere{T} <: AbstractSurfProfile{T}
+    curv :: T
 end
-=#
+
 
 struct SurfProfileConic{T} <: AbstractSurfProfile{T}
     curv :: T
@@ -71,8 +71,13 @@ end
 struct SurfProfileCyl{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ    
-    ϵy::T #see Welford for definition of ϵ
+#   ϵy::T #see Welford for definition of ϵ
     a::Array{T} #hope this works...
+end
+
+struct SurfProfileToroid{T} <: AbstractSurfProfile{T}
+    curvY :: T
+    curvX :: T 
 end
 
 struct NoProfile{T} <: AbstractSurfProfile{T}
