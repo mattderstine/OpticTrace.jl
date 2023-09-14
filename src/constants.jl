@@ -8,4 +8,9 @@ const ∞ = Inf
 
 global refIndexDefault::Float64 = 1.0
 
-export ∞, ORIGIN, ZAXIS, YAXIS, XAXIS, refIndexDefault
+rInDef()=refIndexDefault
+function setRInDef(in)
+    global refIndexDefault = in
+end
+
+export ∞, ORIGIN, ZAXIS, YAXIS, XAXIS, refIndexDefault, rInDef, setRInDef
