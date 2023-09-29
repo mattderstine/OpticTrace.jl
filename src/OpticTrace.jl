@@ -16,14 +16,14 @@ import YAML
 
 
 include("constants.jl")
-include("lens definitions.jl")
-include("lens refractive index.jl")
-include("mesh primitives.jl")
+include("lens_definitions.jl")
+include("lens_refractive_index.jl")
+include("mesh_primitives.jl")
 include("plotting.jl")
 include("printing.jl")
 include("tracing.jl")
 include("aperture.jl")
-include("extended geo.jl")
-include("lens edmund.jl")
-include("lens thorlabs.jl")
+include("extended_geo.jl")
+include("lens_edmund.jl")
+include("lens_thorlabs.jl")
 end

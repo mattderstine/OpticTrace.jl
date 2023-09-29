@@ -5,6 +5,7 @@ export plotRayFan!,perimeterRays,plotPerimeterRays
 export plotPerimeterRays!, rayHeatmap, rayHeatmap!, computeExitPupilLoc
 export plotOPD!, plotOPD3D!
 export plotXSag!, plotYSag!
+export plotTrace!
 
 
 
@@ -85,7 +86,7 @@ sizeOpticSurface(surf::AbstractSurface) = sizeOptic(surf.aperture)
 
 
 #plotSurface3D!(scene, s::OptSurface; color=:aquamarine2)=Makie.mesh!(scene, s, color=color, fxaa = true, transparency = true, shading = true)#someday add options to display mesh
-plotSurface3D!(scene, s::OptSurface; color=:aquamarine2, transparency = false)=Makie.mesh!(scene, s, color=color, fxaa = true, transparency = transparency, shading = true)#someday add options to display mesh
+plotSurface3D!(scene, s::OptSurface; transparency = false)=Makie.mesh!(scene, s, color=s.color, fxaa = true, transparency = transparency, shading = true)#someday add options to display mesh
 
 function plotGeometry3D!(scene, geometry)
     for geo in geometry
@@ -112,11 +113,11 @@ function plotGeometry3D(geometry; resolution = (1200,700))
     fig,ax
 end
 
-function plotSurface3D!(scene, s::ModelSurface; color=:khaki3)
-    plotModelSurf!(scene, s.aperture, s, color=color) #dispatch on s.aperture
+function plotSurface3D!(scene, s::ModelSurface)
+    plotModelSurf!(scene, s.aperture, s) #dispatch on s.aperture
 end
 
-function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3; color=:khaki3)
+function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3)
     #this is brute force. I'm still learning...
     connect = [
     1 2 3;
@@ -131,7 +132,7 @@ function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3; co
             x0 y0 0.0;
             x0 -y0 0.0]
         r1a = [s.toGlobalCoord(r1[i,1:3]) for i in 1:4]
-        Makie.poly!(scene, r1a, connect, color=:blue, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r1a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
 
     end
 
@@ -173,25 +174,25 @@ function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3; co
         r2a = [s.toGlobalCoord(r2[i,1:3]) for i in 1:4]
         r3a = [s.toGlobalCoord(r3[i,1:3]) for i in 1:4]
         r4a = [s.toGlobalCoord(r4[i,1:3]) for i in 1:4]
-        Makie.poly!(scene, r1a, connect, color=:blue, fxaa = true, transparency = true, shading = true)
-        Makie.poly!(scene, r2a, connect, color=:blue, fxaa = true, transparency = true, shading = true)
-        Makie.poly!(scene, r3a, connect, color=:blue, fxaa = true, transparency = true, shading = true)
-        Makie.poly!(scene, r4a, connect, color=:blue, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r1a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r2a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r3a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r4a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
     end
 end
 
 #Makie.mesh!(scene, s, color = :orange, shading = true, transparency=true, camera=Makie.cam3d_cad!)#someday add options to display mesh
 
-function plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize = 0.3; color=:khaki3)
+function plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize = 0.3)
     if a.obscure != 0.
         Makie.mesh!(scene, Disk(s.base.base, s.base.dir,
             Float64(a.obscure),s.toGlobalCoord,s.toGlobalDir),
-            color = color, fxaa = true, transparency = true, shading = true)# center obscuration
+            color = s.color, fxaa = true, transparency = true, shading = true)# center obscuration
     end
     if a.semiDiameter != ∞ # not just an obscuration
         Makie.mesh!(scene, Washer(s.base.base, s.base.dir,
             Float64(a.semiDiameter),s.toGlobalCoord,s.toGlobalDir),
-            color = color, fxaa = true, transparency = true, shading = true)
+            color = s.color, fxaa = true, transparency = true, shading = true)
     end
 end
 
@@ -231,13 +232,15 @@ trcAndPlotRay!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
         
 """
 function trcAndPlotRay!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
-    trcStatMsg=("Normal","Missed","TIR","Clipped")
     status, trc = traceGeometry(ray, geo)
-    if clipmsg && status != 0
-        println(trcStatMsg[status+1])
-    end
+    printTrcStatus(status, flagNormal = false, clipmsg=clipmsg)
     Makie.lines!(scene, [a.ray.base for a in trc], color=color)
     status, trc
+end
+
+function plotTrace!(scene, trace::Vector{Trace}; color=:blue)
+    Makie.lines!(scene, [a.ray.base for a in trace], color=color)
+    scene
 end
 
 #=
@@ -261,11 +264,8 @@ trcAndPlotRayRel!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
         
 """
 function trcAndPlotRayRel!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
-    trcStatMsg=("Normal","Missed","TIR","Clipped")
     status, trc = traceGeometryRel(ray, geo)
-    if clipmsg && status != 0
-        println(trcStatMsg[status+1])
-    end
+    printTrcStatus(status, flagNormal = false, clipmsg=clipmsg)
     points = [Point{3,Float32}(a.ray.base...) for a in trc]
     lines!(scene, points, color=color)
     status, trc
@@ -280,11 +280,8 @@ trcAndPlotRayRel!(ray::Ray, geo; color=:blue, clipmsg=false)
         
 """
 function trcAndPlotRayRel!(ray::Ray, geo; color=:blue, clipmsg=false)
-    trcStatMsg=("Normal","Missed","TIR","Clipped")
     status, trc = traceGeometryRel(ray, geo)
-    if clipmsg && status != 0
-        println(trcStatMsg[status+1])
-    end
+    printTrcStatus(status, flagNormal = false, clipmsg=clipmsg)
     Makie.lines!([Point{3,Float32}(a.ray.base...) for a in trc], color=color)
     status, trc
 end
@@ -366,8 +363,7 @@ end
     current version assumes telecentric pupil/stop (i.e. reference ray θ=0)
 
 """
-function plotRayFan!(scene, r::SVector, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
-    #trcStatMsg=("Normal","Missed","TIR","Clipped")
+function plotRayFan!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
     raysy = Vector{SVector{3, Float64}}(undef, points)
     raysx = Vector{SVector{3, Float64}}(undef, points)
     surfnum = surfnumFromName(surfview, geo)
@@ -627,7 +623,7 @@ function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", colo
     radiusRefSphere = (baseImage[3]-zExitPupilLoc+offset)/dirImage[3]
     curvRefSphere = 1.0/radiusRefSphere
     #should have x & y = 0 if exitpupil unless telecentric system
-    baseExitPupil = SVector(0., 0., zExitPupilLoc)
+    baseExitPupil = Point3(0., 0., zExitPupilLoc)
 
     println("zExitPupilLoc = $zExitPupilLoc  radiusRefSphere = $radiusRefSphere")
 
@@ -677,7 +673,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     sizeO = h * sizeOptic(egeo.surfaceObject.aperture) # h is 0 to 1
     sizeP = sizeOptic(usedgeo[1].aperture)
 
-    r = SVector(0., sizeO, egeo.surfaceObject.base.base[3])
+    r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
     z = usedgeo[1].base.base[3]
 
     dirRef = normalize(usedgeo[1].base.base .- r)
@@ -711,7 +707,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     radiusRefSphere = (baseImage[3]-zExitPupilLoc+focusOffset)/dirImage[3]
     curvRefSphere = 1.0/radiusRefSphere
     #should have x & y = 0 if exitpupil unless telecentric system
-    baseExitPupil = SVector(0., 0., zExitPupilLoc)
+    baseExitPupil = Point3(0., 0., zExitPupilLoc)
 
     #println("zExitPupilLoc = $zExitPupilLoc  radiusRefSphere = $radiusRefSphere")
 
@@ -762,7 +758,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     sizeO = h * sizeOptic(egeo.surfaceObject.aperture) # h is 0 to 1
     sizeP = sizeOptic(usedgeo[1].aperture)
 
-    r = SVector(0., sizeO, egeo.surfaceObject.base.base[3])
+    r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
 
     dirRef = normalize(usedgeo[1].base.base .- r)
     #println("r = $r  dirRef = $dirRef")
@@ -795,7 +791,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     radiusRefSphere = (baseImage[3]-zExitPupilLoc+focusOffset)/dirImage[3]
     curvRefSphere = 1.0/radiusRefSphere
     #should have x & y = 0 if exitpupil unless telecentric system
-    baseExitPupil = SVector(0., 0., zExitPupilLoc)
+    baseExitPupil = Point3(0., 0., zExitPupilLoc)
 
     #println("zExitPupilLoc = $zExitPupilLoc  radiusRefSphere = $radiusRefSphere")
 
@@ -813,7 +809,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     z = finalgeo[1].base.base[3]
 
     wl = egeo.wavelength[1] * 1e-3
-    opdfunc(xi, yi) = opdRel(Ray(SVector(xi, yi, 0.), normalize(SVector(xi, yi, z).-r)), refTrace, finalgeo)/wl
+    opdfunc(xi, yi) = opdRel(Ray(Point3(xi, yi, 0.), normalize(Vec3(xi, yi, z).-r)), refTrace, finalgeo)/wl
     opd = [opdfunc(xi, yi) for xi in x, yi in y]
 
     

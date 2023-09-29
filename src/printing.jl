@@ -3,7 +3,7 @@
 
 export printTrcCoords, trcAndPrintRay, trcAndPrintRayRel, printTrcLen
 export opdRel, trcAndPrintLengthsRel, trcAndPrintLengths, surfnumFromName
-export printSurfNames, printMissed, printGeo, printSurface
+export printSurfNames, printMissed, printGeo, printSurface, printTrcStatus
 
 
 """
@@ -11,7 +11,7 @@ export printSurfNames, printMissed, printGeo, printSurface
     surfview -string with user defined name of the surface
     geo - geometry
 
-    returns the surface number
+    returns the surface number +1. This indexes properly for Trace results
 """
 function surfnumFromName(surfview, geo)
     if (surfview == "end")
@@ -35,11 +35,9 @@ printTrcCoords(ray::Ray, geo; color=:blue, clipmsg=false)
         
 """
 function printTrcCoords(status, trc, geo; format="normal")
-    trcStatMsg=("Normal","Missed","TIR","Clipped")
+
     println("\n--- Trace ---")
-    if status != 0
-        println(trcStatMsg[status+1])
-    end
+    printTrcStatus(status)
 #   println("length of geo = $(length(geo))")
     for i in eachindex(trc)
         a = trc[i]
@@ -150,7 +148,7 @@ end
 
 
 function printSurface(n, surf::OptSurface)
-    println("$n    $(surf.surfname)   $(surf.aperture)  $(surf.profile)   $(surf.mod)")
+    println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $(surf.base.base)\n$(" "^20)$(surf.aperture)  $(surf.profile)   $(surf.mod)")
 end  
 #=
 struct ModelSurface <: AbstractSurface  #use the data to overload GemoetryBasics
@@ -166,11 +164,18 @@ struct ModelSurface <: AbstractSurface  #use the data to overload GemoetryBasics
 end
 =#
 function printSurface(n, surf::ModelSurface)
-    println("$n    $(surf.surfname)   $(surf.aperture)  $(surf.profile)")
+    println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $(surf.base.base)\n$(" "^20)$(surf.aperture)  $(surf.profile)")
 end  
 
 function printGeo(geometry)
     for (n, geo) in enumerate(geometry)
         printSurface(n, geo)
+    end
+end
+
+function printTrcStatus(status; flagNormal = false, clipmsg=true)
+    trcStatMsg=("Normal","Missed","TIR","Clipped")
+    if clipmsg &&(flagNormal || status != 0 )
+        println(trcStatMsg[status+1])
     end
 end

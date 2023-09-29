@@ -61,9 +61,9 @@ GeometryBasics.widths(c::OptSurface) = gbWidths(c.aperture, c.profile)
     with any luck it can remain for all surfaces
 
 """
-function GeometryBasics.coordinates(s::OptSurface, nvertices=24)
+function GeometryBasics.coordinates(s::OptSurface, nvertices=60)
     a= samplePoints(s.aperture, nvertices)
-    inner(t) = s.toGlobalCoord(SVector{3, Float64}(t[1], t[2] ,sag(t[1], t[2], s.profile)))
+    inner(t) = s.toGlobalCoord(Point3(t[1], t[2] ,sag(t[1], t[2], s.profile)))
     (inner(a) for a in a)
 end
 
@@ -71,7 +71,7 @@ end
     coordinates - this is stolen directly from GeometryBasics for Sphere
 
 """
-function GeometryBasics.texturecoordinates(s::AbstractSurface, nvertices=24)
+function GeometryBasics.texturecoordinates(s::AbstractSurface, nvertices=60)
     ux = LinRange(0, 1, nvertices)
     return ivec(((φ, θ) for θ in reverse(ux), φ in ux))
 end
@@ -80,7 +80,7 @@ end
     faces - this is stolen directly from GeometryBasics for Sphere
 
 """
-function GeometryBasics.faces(s::AbstractSurface, nvertices=24)
+function GeometryBasics.faces(s::AbstractSurface, nvertices=60)
     return GeometryBasics.faces(GeometryBasics.Rect(0, 0, 1, 1), (nvertices, nvertices))
 end
 
@@ -88,7 +88,7 @@ end
     normals - we need normals to do raytraces. Use them to do fancy rendering
 
 """
-function GeometryBasics.normals(s::AbstractSurface, nvertices=24)
+function GeometryBasics.normals(s::AbstractSurface, nvertices=60)
     a= samplePoints(s.aperture,nvertices)
     dir = inOrOut(s)
     #=
@@ -96,11 +96,11 @@ function GeometryBasics.normals(s::AbstractSurface, nvertices=24)
         println("Normals reverse on : $(s.surfname)")
     end
     =#
-    inner(t) = dir .* s.toGlobalDir(surfNormal(SVector{3, Float64}(t[1], t[2] ,sag(t[1], t[2], s.profile)),s.profile))
+    inner(t) = dir .* s.toGlobalDir(surfNormal(Point3(t[1], t[2] ,sag(t[1], t[2], s.profile)),s.profile))
     (inner(a) for a in a)
 end
 
-function GeometryBasics.normals(s::OptSurface, nvertices=24)
+function GeometryBasics.normals(s::OptSurface, nvertices=60)
     a= samplePoints(s.aperture,nvertices)
     dir = inOrOut(s)
     #=
@@ -108,7 +108,7 @@ function GeometryBasics.normals(s::OptSurface, nvertices=24)
         println("Normals reverse on : $(s.surfname)")
     end
     =#
-    inner(t) = dir .* s.toGlobalDir(surfNormal(SVector{3, Float64}(t[1], t[2] ,sag(t[1], t[2], s.profile)),s.profile))
+    inner(t) = dir .* s.toGlobalDir(surfNormal(Point3(t[1], t[2] ,sag(t[1], t[2], s.profile)),s.profile))
     (inner(a) for a in a)
 end
 
@@ -141,8 +141,8 @@ Base.maximum(c::OptSurf) = Vec{3, Float32}(origin(c)) + Vec{3, Float32}(radius(c
 =#
 # overloaded methods for apertures
 struct Washer{N,T} <: AbstractSurface{N,T}
-    base::SVector{N, T}
-    dir::SVector{N, T}
+    base::Point{N}
+    dir::Vec{N}
     semiDiameter::Float64
     toGlobalCoord::AffineMap
     toGlobalDir::LinearMap
@@ -165,22 +165,22 @@ function gbRadius(aperture::Washer, profile::NoProfile)
 end
 
 
-const Washer(base::SVector{3, Float64}, dir::SVector{3, Float64},
+const Washer(base::Point{3}, dir::Vec{3},
     semiDiameter::Float64,toGlobalCoord::AffineMap,toGlobalDir::LinearMap) =
-        Washer(base, dir, semiDiameter,toGlobalCoord, toGlobalDir,NoProfile(0.))
+        Washer{3, Float64}(base, dir, semiDiameter,toGlobalCoord, toGlobalDir,NoProfile(0.))
 
 GeometryBasics.origin(c::Washer) = c.base #the ORIGIN of the surface in global coordinates
 GeometryBasics.radius(c::Washer) = gbRadius(c.semiDiameter, c.profile) #fix
 GeometryBasics.widths(c::Washer) = gbWidths(c.semiDiameter, c.profile)
 
-function GeometryBasics.coordinates(s::Washer, nvertices=24)
+function GeometryBasics.coordinates(s::Washer, nvertices=60)
     a= samplePoints(s, nvertices)
-    inner(t) = s.toGlobalCoord(SVector{3, Float64}(t[1], t[2] , 0.))
+    inner(t) = s.toGlobalCoord(Point3(t[1], t[2] , 0.))
     (inner(a) for a in a)
 end
 
 
-function GeometryBasics.normals(s::Washer, nvertices=24)
+function GeometryBasics.normals(s::Washer, nvertices=60)
     a= samplePoints(s,nvertices)
     inner(t) = s.toGlobalDir(ZAXIS)
     (inner(a) for a in a)
@@ -211,8 +211,8 @@ end
 
 #overloaded methods for apertures
 struct Disk{N,T} <: AbstractSurface{N,T}
-   base::SVector{N, T}
-   dir::SVector{N, T}
+   base::Point{N}
+   dir::Vec{N}
    semiDiameter::T
    toGlobalCoord::AffineMap
    toGlobalDir::LinearMap
@@ -237,20 +237,20 @@ end
 
 
 
-const Disk(base::SVector{3, Float64}, dir::SVector{3, Float64}, semiDiameter::Float64,toGlobalCoord::AffineMap,toGlobalDir::LinearMap) = Disk(base, dir, semiDiameter, toGlobalCoord, toGlobalDir,NoProfile(0.))
+const Disk(base::Point3, dir::Vec3, semiDiameter::Float64,toGlobalCoord::AffineMap,toGlobalDir::LinearMap) = Disk(base, dir, semiDiameter, toGlobalCoord, toGlobalDir,NoProfile(0.))
 
 GeometryBasics.origin(c::Disk) = c.base #the ORIGIN of the surface in global coordinates
 GeometryBasics.radius(c::Disk) = gbRadius(c.semiDiameter, c.profile) #fix
 GeometryBasics.widths(c::Disk) = gbWidths(c.semiDiameter, c.profile)
 
-function GeometryBasics.coordinates(s::Disk, nvertices=24)
+function GeometryBasics.coordinates(s::Disk, nvertices=60)
    a= samplePoints(s, nvertices)
-   inner(t) = s.toGlobalCoord(SVector{3, Float64}(t[1], t[2] , 0.))
+   inner(t) = s.toGlobalCoord(Point3(t[1], t[2] , 0.))
    (inner(a) for a in a)
 end
 
 
-function GeometryBasics.normals(s::Disk, nvertices=24)
+function GeometryBasics.normals(s::Disk, nvertices=60)
     a= samplePoints(s,nvertices)
     inner(t) = s.toGlobalDir(ZAXIS)
     (inner(a) for a in a) #isn't this the dumbest thing you've ever seen. Not taking time to fix it.

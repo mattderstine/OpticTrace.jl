@@ -6,7 +6,7 @@ Find a perpendicular to plane normal - "local x direction" by using y dir as the
 guess. 
 """
 
-function findPerpenMap(planenormal::SVector{3, Float64})
+function findPerpenMap(planenormal::Vec3)
     tryy = YAXIS
     newx = cross(tryy, planenormal) # if planenormal == ZAXIS this give x axis
     if norm(newx)==0. # planenormal is along y axis
@@ -15,7 +15,7 @@ function findPerpenMap(planenormal::SVector{3, Float64})
     end
 
     newx=normalize(newx)
-    newy = cross(planenormal, newx)
+    newy = Vec3(cross(planenormal, newx)...)
     newy, LinearMap(SMatrix{3,3}([newx; newy; planenormal]))
 end
 
@@ -23,7 +23,7 @@ end
     findPerpenMap(planenormal, ydir)
 Find a perpendicular in the plane to planenormal and ydir
 """
-function findPerpenMap(planenormal::SVector{3, Float64}, ydir::SVector{3, Float64})
+function findPerpenMap(planenormal::Vec3, ydir::Vec3)
     newx = cross(ydir, planenormal) # if planenormal == ZAXIS this give x axis
     newx = normalize(newx)
     ydir, LinearMap(SMatrix{3,3}([newx; ydir; planenormal]))
@@ -36,19 +36,21 @@ end
 update the coordinate transformation functions when the location and/or
 direction changes
 """
-function updateCoordChange(pointInPlane::SVector{3, Float64},
-        planenormal::SVector{3, Float64})
+function updateCoordChange(pointInPlane::Point3,
+        planenormal::Vec3)
+    pip::SVector{3,Float64} = pointInPlane
     ydir, toGlobalDir = findPerpenMap(planenormal)
-    toGlobalCoord = compose(Translation(pointInPlane), toGlobalDir)
+    toGlobalCoord = compose(Translation(pip), toGlobalDir)
     toLocalCoord = inv(toGlobalCoord)
     toLocalDir = inv(toGlobalDir)
     return ydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir
 end
 
-function updateCoordChange(pointInPlane::SVector{3, Float64},
-        planenormal::SVector{3, Float64}, ydir::SVector{3, Float64})
+function updateCoordChange(pointInPlane::Point3,
+        planenormal::Vec3, ydir::Vec3)
+    pip::SVector{3,Float64} = pointInPlane
     myydir, toGlobalDir = findPerpenMap(planenormal, ydir)
-    toGlobalCoord = compose(Translation(pointInPlane), toGlobalDir)
+    toGlobalCoord = compose(Translation(pip), toGlobalDir)
     toLocalCoord = inv(toGlobalCoord)
     toLocalDir = inv(toGlobalDir)
     return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir
