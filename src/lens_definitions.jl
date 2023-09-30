@@ -12,6 +12,8 @@ abstract type AbstractSize{T<:Real} end
 abstract type AbstractSurfProfile{T<:Real} end
 abstract type AbstractAmplitudeParam end
 abstract type AbstractBendType{T<:Real} end #some info on how to do the bending
+abstract type AbstractBendDielectric{T} <: AbstractBendType{T} end
+abstract type AbstractBendMirror{T} <: AbstractBendType{T} end
 abstract type AbstractOpticalObject{T<:Real} end
 abstract type AbstractTrace{T<:Real} end
 
@@ -115,13 +117,18 @@ struct Trace{T} <:AbstractTrace{T}
     pmatrix::AbstractAmpData{T}
 end
 
+#=
 
-struct DielectricT{T} <: AbstractBendType{T}
+AbstractBendTypes
+
+=#
+
+struct DielectricT{T} <: AbstractBendDielectric{T}
     refIndexIn :: T
     refIndexOut :: T
 end
 
-struct MirrorR{T} <: AbstractBendType{T}
+struct MirrorR{T} <: AbstractBendMirror{T}
     refIndexIn :: T
     refIndexOut :: T
 end

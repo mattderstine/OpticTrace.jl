@@ -1,10 +1,10 @@
 export traceGeometry, traceGeometryRel, surfAmpFunc!
 export refractConic, refractSphere, reflectConic, cDiffuser
 export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
-export referencePlane, planeMirror
+export referencePlane, planeMirror, modFunc
 export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
 export sag, randomPointOnSquare, randomPointOnDisk
-
+export attributesSurfaces
 
 """
     sag - compute the z coordinate in local coordinates for decendants of
@@ -379,7 +379,7 @@ end
     modFunc
 
 """
-function modFunc(ray::Ray, normal::Vec3, d::DielectricT)
+function modFunc(ray::Ray, normal::Vec3, d::AbstractBendDielectric)
     r = ray.base
     a = ray.dir
 
@@ -406,7 +406,7 @@ end
 
 
 
-function modFunc(ray::Ray, normal::Vec3, d::MirrorR)
+function modFunc(ray::Ray, normal::Vec3, d::AbstractBendMirror)
     r = ray.base
     a = ray.dir
     cosI = a ⋅ normal
@@ -462,6 +462,13 @@ function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point
     identityAmpMats()
 end
 
+attributesSurfaces = Dict{String, Any}()
+
+function getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
+    tupleParam = get!(attributesSurfaces, s, (AmpParam, s))
+    return tupleParam[1](tupleParam[2:end]...)
+end
+
 
 """
     refractConic(
@@ -482,7 +489,7 @@ function refractConic(surfname::String,
     ϵ::Float64,
     semiDiam::Float64,
     coating::String
-    ;color = :yellow)
+    ;color = :yellow, attributesSurfaces = attributesSurfaces)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal)
@@ -492,7 +499,8 @@ function refractConic(surfname::String,
         SizeLens(semiDiam),
         SurfProfileConic( c, ϵ),
         DielectricT(rinIn, rinOut),
-        AmpParam(coating),
+        #AmpParam(coating),
+        getAmpParams(coating; attributesSurfaces),
         toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
         color
         )
@@ -515,7 +523,8 @@ function refractSphere(surfname::String,
     c::Float64,
     semiDiam::Float64,
     coating::String
-    ;color = :aquamarine2)
+    ;color = :aquamarine2, 
+    attributesSurfaces = attributesSurfaces)
 
     refractConic(surfname,
         pointInPlane,
@@ -526,7 +535,7 @@ function refractSphere(surfname::String,
         1., # ϵ
         semiDiam,
         coating
-        ;color = color)
+        ;color, attributesSurfaces)
 end
 
 
@@ -550,7 +559,8 @@ function reflectConic(surfname::String,
     ϵ::Float64,
     semiDiam::Float64,
     coating::String
-    ;color = :aquamarine2)
+    ;color = :aquamarine2,
+    attributesSurfaces = attributesSurfaces)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal)
@@ -560,7 +570,8 @@ function reflectConic(surfname::String,
         SizeLens(semiDiam),
         SurfProfileConic( c, ϵ),
         MirrorR(rinIn, rinOut),
-        AmpParam(coating),
+        #AmpParam(coating),
+        getAmpParams(coating; attributesSurfaces),
         toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
         color
         )
@@ -612,7 +623,7 @@ function reflectOAConic(surfname::String,
     ϵ::Float64,
     semiDiam::Float64,
     coating::String
-    ;color = :aquamarine2)
+    ;color = :aquamarine2, attributesSurfaces = attributeSurfaces)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -622,7 +633,8 @@ function reflectOAConic(surfname::String,
         SizeLens(semiDiam),
         SurfProfileOAConic( c, ϵ, offset),
         MirrorR(rinIn, rinOut),
-        AmpParam(coating),
+        #AmpParam(coating),
+        getAmpParams(coating; attributesSurfaces),
         toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
         color
         )
@@ -640,7 +652,8 @@ reflectOAP(surfname::String,
     c::Float64,
     semiDiam::Float64,
     coating::String
-    ;color = :blue) = reflectOAConic(surfname,
+    ;color = :blue, attributesSurfaces = attributesSurfaces
+    ) = reflectOAConic(surfname,
                         pointInPlane,
                         planenormal,
                         ydir,
@@ -650,7 +663,7 @@ reflectOAP(surfname::String,
                         c,
                         0.0,
                         semiDiam,
-                        coating;color = color)
+                        coating; color, attributesSurfaces)
 #=
 
     refracting asphere
@@ -682,7 +695,7 @@ function refractAsphere(surfname::String,
     asphere::AbstractVector{Float64},
     semiDiam::Float64,
     coating::String
-    ;color = :aquamarine)
+    ;color = :aquamarine,  attributesSurfaces = attributesSurfaces)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal)
@@ -692,7 +705,8 @@ function refractAsphere(surfname::String,
         SizeLens(semiDiam),
         SurfProfileAsphere( c, ϵ, asphere),
         DielectricT(rinIn, rinOut),
-        AmpParam(coating),
+        #AmpParam(coating),
+        getAmpParams(coating; attributesSurfaces),
         toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
         color
         )
@@ -714,7 +728,7 @@ function reflectAsphere(surfname::String,
     asphere::AbstractVector{Float64},
     semiDiam::Float64,
     coating::String
-    ;color = :aquamarine)
+    ;color = :aquamarine, attributesSurfaces = attributesSurfaces)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal)
@@ -724,7 +738,8 @@ function reflectAsphere(surfname::String,
         SizeLens(semiDiam),
         SurfProfileAsphere( c, ϵ, asphere),
         MirrorR(rinIn, rinOut),
-        AmpParam(coating),
+        #AmpParam(coating),
+        getAmpParams(coating; attributesSurfaces),
         toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, 
         color
         )
@@ -802,7 +817,7 @@ function planeMirror(surfname::String,
     rinOut::Float64,
     semiDiam::Float64,
     coating::String
-    ;color = :blue)
+    ;color = :blue, attributesSurfaces = attributesSurfaces)
 
     reflectConic(surfname,
         pointInPlane,
@@ -812,21 +827,21 @@ function planeMirror(surfname::String,
         0.,
         0.,
         semiDiam,
-        coating, color = color)
+        coating; color, attributesSurfaces)
 end
 
 """
 helper function for singlet lens
 """
-function lensSinglet(base, dir, curv1, curv2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "Singlet")
+function lensSinglet(base, dir, curv1, curv2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "Singlet", coating = "default")
     ri = riFunc(lambda)
     base1 = base + thick .* dir
     if (order != "reverse" )
         lens = [
         refractSphere("$(lensname)_1", base, dir, refIndexDefault, ri,
-            curv1, semiDiam, "testcoat"),
+            curv1, semiDiam, coating),
         refractSphere("$(lensname)_2", base1, dir, ri,refIndexDefault,
-            curv2, semiDiam, "testcoat"),
+            curv2, semiDiam, coating),
 
         ]
     else
@@ -834,9 +849,9 @@ function lensSinglet(base, dir, curv1, curv2, thick, lambda, riFunc, semiDiam; o
 
         lens = [
         refractSphere("$(lensname)_2", base, dir, refIndexDefault, ri, 
-            -curv2, semiDiam, "testcoat"),
+            -curv2, semiDiam, coating),
         refractSphere("$(lensname)_1", base1, dir, ri, refIndexDefault,
-            -curv1, semiDiam, "testcoat")
+            -curv1, semiDiam, Base.compute_assumed_setting)
         ]
     end
     lens
@@ -848,24 +863,24 @@ end
 lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, 
       thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet")
 """
-function lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet")
+function lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet", coating="default")
     ri = riFunc(lambda)
     # should check if the input is really an asphere. if not make the surface spherical #ToDo
     base1 = base + thick .* dir
     if (order != "reverse" )
         lens = [
         refractAsphere("$(lensname)_1", base, dir, refIndexDefault, ri,
-            curv1, ϵ1, aphere1, semiDiam, "testcoat"),
+            curv1, ϵ1, aphere1, semiDiam, coating),
         refractAsphere("$(lensname)_2", base1, dir, ri,refIndexDefault,
-            curv2, ϵ2, aphere2, semiDiam, "testcoat")
+            curv2, ϵ2, aphere2, semiDiam, coating)
         ]
     else
 
         lens = [
         refractAsphere("$(lensname)_2", base, dir, refIndexDefault, ri, 
-            -curv2, ϵ2, -aphere2, semiDiam, "testcoat"),
+            -curv2, ϵ2, -aphere2, semiDiam, coating),
         refractAsphere("$(lensname)_1", base1, dir, ri, refIndexDefault, 
-            -curv1, ϵ1, -aphere1, semiDiam, "testcoat")
+            -curv1, ϵ1, -aphere1, semiDiam, coating)
         ]
     end
     lens

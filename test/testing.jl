@@ -215,7 +215,7 @@ function offAxisParabolaTest(fig)
     #θ = 0.3
     θ = 0.
 
-    trcAndPrintPlotRay!(lscene, Ray(ORIGIN,Vec3(0., sin(θ), cos(θ))),parabolageometry3)
+    trcAndPrintPlotRay!(lscene, Ray(ORIGIN,-ZAXIS),parabolageometry3)
     
     ax1 = fig[1,3] = Axis(fig, title = "Sag")
 
@@ -245,7 +245,8 @@ diffusergeo =
     [
 
     cDiffuser("diffuser", ORIGIN, ZAXIS, refIndexDefault, refIndexDefault, 25.0*π / 180., 12.5, "nocoating"),
-    refractSphere("Lens1i", Point3(0., 0., 100.), ZAXIS, 1., 101., 0., 20., "testcoat"),
+    roundAperture("aperture", Point3(0., 0., 100.), ZAXIS, 1.0, 0.0, 20.0, color = :green3),
+    refractSphere("Lens1i", Point3(0., 0., 100.), ZAXIS, 1.0, 101., 0., 20., "testcoat"),
     refractSphere("Lens10", Point3(0., 0., 101.), ZAXIS, 101., 1., -1. / 5000., 20., "testcoat"),
     referencePlane("image",Point3(149.969 .* ZAXIS...), ZAXIS, refIndexDefault , 50., "testcoat")
     ]
