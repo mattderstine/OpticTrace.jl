@@ -30,9 +30,9 @@ function testDiffuser(fig; pnts=20)
     testradius = 2.
     distance = testradius / tan(10.0 * π/180.)
     testDiffGeo = [
-        referencePlane("start", ORIGIN, ZAXIS, 1., 5., "nocoating"),
+        referencePlane("start", ORIGIN, ZAXIS, 1., 5., "nocoating"; ydir = nothing),
         cDiffuser("diff", Point3(0., 0., 2.), ZAXIS, 1., 1., 10.0 * π/180., 5., "nocoating"),
-        referencePlane("end", Point3(0., 0., distance+2), ZAXIS, 1., 5., "nocoating")
+        referencePlane("end", Point3(0., 0., distance+2), ZAXIS, 1., 5., "nocoating" ; ydir = Vec3(sin(π/2), cos(π/2), 0.))
     ]
 
     outer_padding = 30
@@ -60,17 +60,19 @@ end
 
 figDiffuserTest=testDiffuser(figs[1], pnts=100)
 
+
+
 display(figDiffuserTest)
 
 ## test 2
 
 
 testgeo = [
-    refractSphere("first", ORIGIN,ZAXIS,1., 1.5, 0., 5., "testcoat"),
+    refractSphere("first", ORIGIN,ZAXIS,1., 1.5, 0., 5., "testcoat";ydir = nothing),
     refractSphere("second", Point3(0., 0., 3.), ZAXIS, 1.5, 1., -0.1, 5., "testcoat"),
 
-    refractSphere("third", Point3(0., 0., 3.5), ZAXIS, 1., 1.5, 0.1, 5., "testcoat"),
-    refractSphere("fourth", Point3(0., 0., 6.5), ZAXIS, 1.5, 1., 0., 5., "testcoat"),
+    refractSphere("third", Point3(0., 0., 3.5), ZAXIS, 1., 1.5, 0.1, 5., "testcoat"; ydir = Vec3(sin(π/2), cos(π/2), 0.)),
+    refractSphere("fourth", Point3(0., 0., 6.5), ZAXIS, 1.5, 1., 0., 5., "testcoat"; ydir = Vec3(sin(π/2), cos(π/2), 0.)),
 
 #    refractSphere("last", SVector(0., 0., 15.), ZAXIS, 1. , 1. , 0., 10., "testcoat")
     referencePlane("RP-last",Point3(0., 0., 15.), ZAXIS, 1. , 7., "testcoat")
@@ -126,8 +128,8 @@ testGeometry2 = [
     refractSphere("Lens10", Point3(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
     planeMirror("Mirror", Point3(0., 0., 40.), Vec3(cos(π /4), 0., sin(π/4)),
     refIndexDefault, 1.5, 8., "coatingReflectFresnel"),
-    roundAperture("App", Point3(-20., 0., 40.), XAXIS, refIndexDefault, 0., 5.),
-    roundAperture("Hole", Point3(-20., -2.5, 40.), XAXIS, refIndexDefault,1., ∞),
+    roundAperture("App", Point3(-20., 0., 40.), XAXIS, refIndexDefault, 0., 5.; ydir = Vec3(sin(π/2), cos(π/2), 0.)),
+    roundAperture("Hole", Point3(-20., -2.5, 40.), XAXIS, refIndexDefault,1., ∞;ydir = nothing),
     rectAperture("RectApp", Point3(-120., -5., 40.), XAXIS,
     Vec3(0., sqrt(2.)/2, sqrt(2.)/2), refIndexDefault, 1.0, 2.0, 5., 10.),
     l2i, l2o,
@@ -215,7 +217,7 @@ function offAxisParabolaTest(fig)
     #θ = 0.3
     θ = 0.
 
-    trcAndPrintPlotRay!(lscene, Ray(ORIGIN,Vec3(0., sin(θ), cos(θ))),parabolageometry3)
+    trcAndPrintPlotRay!(lscene, Ray(ORIGIN,-ZAXIS),parabolageometry3)
     
     ax1 = fig[1,3] = Axis(fig, title = "Sag")
 
@@ -245,7 +247,8 @@ diffusergeo =
     [
 
     cDiffuser("diffuser", ORIGIN, ZAXIS, refIndexDefault, refIndexDefault, 25.0*π / 180., 12.5, "nocoating"),
-    refractSphere("Lens1i", Point3(0., 0., 100.), ZAXIS, 1., 101., 0., 20., "testcoat"),
+    roundAperture("aperture", Point3(0., 0., 100.), ZAXIS, 1.0, 0.0, 20.0, color = :green3),
+    refractSphere("Lens1i", Point3(0., 0., 100.), ZAXIS, 1.0, 101., 0., 20., "testcoat"),
     refractSphere("Lens10", Point3(0., 0., 101.), ZAXIS, 101., 1., -1. / 5000., 20., "testcoat"),
     referencePlane("image",Point3(149.969 .* ZAXIS...), ZAXIS, refIndexDefault , 50., "testcoat")
     ]

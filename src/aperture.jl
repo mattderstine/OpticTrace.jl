@@ -45,10 +45,10 @@ function roundAperture(surfname::String,
     rinIn::Float64,
     obscure::Float64,
     semiDiam::Float64
-    ;color = :blue)
+    ;color = :blue, ydir::Union{Vec3, Nothing} = nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal, ydir)
 
     ModelSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),

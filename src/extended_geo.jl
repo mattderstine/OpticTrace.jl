@@ -23,10 +23,22 @@ end
     findPerpenMap(planenormal, ydir)
 Find a perpendicular in the plane to planenormal and ydir
 """
-function findPerpenMap(planenormal::Vec3, ydir::Vec3)
-    newx = cross(ydir, planenormal) # if planenormal == ZAXIS this give x axis
-    newx = normalize(newx)
-    ydir, LinearMap(SMatrix{3,3}([newx; ydir; planenormal]))
+function findPerpenMap(planenormal::Vec3, ydir::Union{Nothing, Vec3})
+    if isnothing(ydir)
+        tryy = YAXIS
+        newx = cross(tryy, planenormal) # if planenormal == ZAXIS this give x axis
+        if norm(newx) < 0.1 # planenormal is very close to Y axis
+            tryy = XAXIS
+            newx = cross(tryy, planenormal)
+        end
+        newx = normalize(newx)
+        newy = Vec3(cross(planenormal, newx)...)
+    else
+        newx = cross(ydir, planenormal) # if planenormal == ZAXIS this give x axis
+        newx = normalize(newx)
+        newy = ydir
+    end
+    newy, LinearMap(SMatrix{3,3}([newx; newy; planenormal]))
 end
 
 
@@ -47,7 +59,7 @@ function updateCoordChange(pointInPlane::Point3,
 end
 
 function updateCoordChange(pointInPlane::Point3,
-        planenormal::Vec3, ydir::Vec3)
+        planenormal::Vec3, ydir::Union{Vec3,Nothing})
     pip::SVector{3,Float64} = pointInPlane
     myydir, toGlobalDir = findPerpenMap(planenormal, ydir)
     toGlobalCoord = compose(Translation(pip), toGlobalDir)
