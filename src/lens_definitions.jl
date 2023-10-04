@@ -3,7 +3,7 @@
 
 export Ray, SurfBase, Trace, OptSurface, ModelSurface, ExtendedGeometry, SurfProfileOAConic, SizeLens, RoundAperture, RectAperture
 
-export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface
+export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface, AbstractAmplitudeParam
 
 abstract type AbstractRay{N} end
 abstract type AbstractSurfBase{N} end

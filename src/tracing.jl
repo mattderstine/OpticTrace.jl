@@ -210,7 +210,7 @@ function traceSurf(r::Ray,s::OptSurface)
         println("old dir = $(r.dir)  newdir = $newRayDir")
     end
     =#
-    ampMats = surfAmpFunc!(r.dir, newRayDir, normal, newRayBase, s.mod, s.coating)
+    ampMats = surfAmpFunc!(r.dir, newRayDir, normal, newLocalBase, s.mod, s.coating)
 
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
@@ -450,15 +450,15 @@ end
     surfAmpFunc!
 
 """
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, sndex::DielectricT,amp::AmpParam)
+function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::DielectricT,amp::AmpParam)
     identityAmpMats()
 end
 
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, ndex::MirrorR,amp::AmpParam)
+function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::MirrorR,amp::AmpParam)
     identityAmpMats()
 end
 
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, ndex::CDiffuser,amp::AmpParam)
+function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::CDiffuser,amp::AmpParam)
     identityAmpMats()
 end
 
