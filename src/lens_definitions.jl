@@ -17,6 +17,7 @@ abstract type AbstractBendMirror{T} <: AbstractBendType{T} end
 abstract type AbstractOpticalObject{T<:Real} end
 abstract type AbstractTrace{T<:Real} end
 
+APorString = Union{AbstractAmplitudeParam, String}
 
 struct Ray{N} <: AbstractRay{N}
     base::Point{N}

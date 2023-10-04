@@ -4,7 +4,7 @@ export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
 export referencePlane, planeMirror, modFunc
 export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
 export sag, randomPointOnSquare, randomPointOnDisk
-export attributesSurfaces
+export attributesSurfaces, surfNormal
 
 """
     sag - compute the z coordinate in local coordinates for decendants of
@@ -469,6 +469,10 @@ function getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
     return tupleParam[1](tupleParam[2:end]...)
 end
 
+function getAmpParams(s::AbstractAmplitudeParam; attributesSurfaces=attributesSurfaces)
+    return s
+end
+
 
 """
     refractConic(
@@ -488,11 +492,13 @@ function refractConic(surfname::String,
     c::Float64,
     ϵ::Float64,
     semiDiam::Float64,
-    coating::String
-    ;color = :yellow, attributesSurfaces = attributesSurfaces)
+    coating::APorString
+    ;color = :yellow, 
+    attributesSurfaces = attributesSurfaces, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal,ydir)
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -522,9 +528,9 @@ function refractSphere(surfname::String,
     rinOut::Float64,
     c::Float64,
     semiDiam::Float64,
-    coating::String
+    coating::APorString
     ;color = :aquamarine2, 
-    attributesSurfaces = attributesSurfaces)
+    attributesSurfaces = attributesSurfaces, ydir::Union{Vec3, Nothing}=nothing)
 
     refractConic(surfname,
         pointInPlane,
@@ -535,7 +541,7 @@ function refractSphere(surfname::String,
         1., # ϵ
         semiDiam,
         coating
-        ;color, attributesSurfaces)
+        ;color, attributesSurfaces, ydir)
 end
 
 
@@ -558,12 +564,13 @@ function reflectConic(surfname::String,
     c::Float64,
     ϵ::Float64,
     semiDiam::Float64,
-    coating::String
+    coating::APorString
     ;color = :aquamarine2,
-    attributesSurfaces = attributesSurfaces)
+    attributesSurfaces = attributesSurfaces, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal,ydir)
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -593,11 +600,12 @@ function cDiffuser(surfname::String,
     rinOut::Float64,
     θ::Float64,
     semiDiam::Float64,
-    coating::String
-    ; color = :brown)
+    coating::APorString
+    ; color = :brown, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -622,7 +630,7 @@ function reflectOAConic(surfname::String,
     c::Float64,
     ϵ::Float64,
     semiDiam::Float64,
-    coating::String
+    coating::APorString
     ;color = :aquamarine2, attributesSurfaces = attributeSurfaces)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
@@ -651,7 +659,7 @@ reflectOAP(surfname::String,
     rinOut::Float64,
     c::Float64,
     semiDiam::Float64,
-    coating::String
+    coating::APorString
     ;color = :blue, attributesSurfaces = attributesSurfaces
     ) = reflectOAConic(surfname,
                         pointInPlane,
@@ -694,11 +702,13 @@ function refractAsphere(surfname::String,
     ϵ::Float64,
     asphere::AbstractVector{Float64},
     semiDiam::Float64,
-    coating::String
-    ;color = :aquamarine,  attributesSurfaces = attributesSurfaces)
+    coating::APorString
+    ;color = :aquamarine,  
+    attributesSurfaces = attributesSurfaces, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -727,11 +737,13 @@ function reflectAsphere(surfname::String,
     ϵ::Float64,
     asphere::AbstractVector{Float64},
     semiDiam::Float64,
-    coating::String
-    ;color = :aquamarine, attributesSurfaces = attributesSurfaces)
+    coating::APorString
+    ;color = :aquamarine, 
+    attributesSurfaces = attributesSurfaces, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -787,11 +799,12 @@ function referencePlane(surfname::String,
     planenormal::Vec3,
     rinIn::Float64,
     semiDiam::Float64,
-    coating::String
-    ;color = :khaki3)
+    coating::APorString
+    ;color = :khaki3, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal)
+                updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -816,8 +829,10 @@ function planeMirror(surfname::String,
     rinIn::Float64,
     rinOut::Float64,
     semiDiam::Float64,
-    coating::String
-    ;color = :blue, attributesSurfaces = attributesSurfaces)
+    coating::APorString
+    ;color = :blue, 
+    attributesSurfaces = attributesSurfaces, 
+    ydir::Union{Vec3, Nothing}=nothing)
 
     reflectConic(surfname,
         pointInPlane,
@@ -827,7 +842,7 @@ function planeMirror(surfname::String,
         0.,
         0.,
         semiDiam,
-        coating; color, attributesSurfaces)
+        coating; color, attributesSurfaces, ydir)
 end
 
 """
