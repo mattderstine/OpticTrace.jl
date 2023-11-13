@@ -2,8 +2,9 @@
 
 
 export Ray, SurfBase, Trace, OptSurface, ModelSurface, ExtendedGeometry, SurfProfileOAConic, SizeLens, RoundAperture, RectAperture
+export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface, AbstractAmplitudeParam, DielectricT,MirrorR,CDiffuser, NoBendIndex
+export AmpData
 
-export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface, AbstractAmplitudeParam
 
 abstract type AbstractRay{N} end
 abstract type AbstractSurfBase{N} end
@@ -111,7 +112,7 @@ end
         delta   length of ray leaving surface
         pmatrix polarization p & o matrices
 """
-struct Trace{T} <:AbstractTrace{T}
+mutable struct Trace{T} <:AbstractTrace{T}
     ray::Ray{3}
     nIn::T
     delta::T
@@ -123,6 +124,7 @@ end
 AbstractBendTypes
 
 =#
+
 
 struct DielectricT{T} <: AbstractBendDielectric{T}
     refIndexIn :: T
@@ -143,10 +145,8 @@ end
 struct NoBendIndex{T} <: AbstractBendType{T}
     refIndexIn :: T
     refIndexOut::T
-    function NoBendIndex(n::T) where {T<:Real}
-        return new{T}(n,n)
-    end
 end
+NoBendIndex(n) = NoBendIndex(n,n)
 
 #=
 function NoBendIndex(n::Float64)

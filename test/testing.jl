@@ -143,20 +143,38 @@ testGeometry2 = [
 
 #
 fig6, scene6 = plotGeometry3D(testGeometry2)
-scene6
 cam = Makie.cameracontrols(scene6)
 cam.eyeposition[]=SVector{3, Float64}(-80, -300., 100.)
 cam.lookat[] = ORIGIN
 cam.upvector[] = YAXIS
 Makie.update_cam!(scene6.scene)
-#=
-Makie.hbox(
-    Makie.vbox(scene2, scene4),
-    Makie.vbox(scene5, scene6)
-    )
-=#
 display(fig6)
 
+
+function testrace(n)
+    sts = zeros(Int64, n)
+    - , trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
+    for i in 1:n
+        sts[i], trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
+    end
+    sts
+end
+
+function testrace2(n)
+    sts = zeros(Int64, n)
+    - , trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
+    for i in 1:n
+        sts[i], len = traceGeometryRel!(trc,Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
+    end
+    sts
+end
+
+@time testrace(10000)
+@time testrace2(10000)
+@time st, trc = traceGeometryRel(Ray(ORIGIN, ZAXIS), testGeometry2)
+@time st, len = traceGeometryRel!(trc, Ray(ORIGIN, ZAXIS), testGeometry2)
+@time test(1000) 
+test(n) = [Point(0.0, 0.0, i) for i in 1:n]
 ## test OAP operation test4
 
 function testOAP(f1, f2, oapseparation, aper)

@@ -676,7 +676,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
     z = usedgeo[1].base.base[3]
 
-    dirRef = normalize(usedgeo[1].base.base .- r)
+    dirRef = normalize!(usedgeo[1].base.base .- r)
     #println("r = $r  dirRef = $dirRef")
     #find the reference local reference intercept coordinates
     #println("base = $r")
@@ -760,7 +760,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
 
     r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
 
-    dirRef = normalize(usedgeo[1].base.base .- r)
+    dirRef = normalize!(usedgeo[1].base.base .- r)
     #println("r = $r  dirRef = $dirRef")
     #find the reference local reference intercept coordinates
     #println("base = $r")

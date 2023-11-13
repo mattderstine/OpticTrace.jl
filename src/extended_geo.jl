@@ -1,11 +1,10 @@
 #extended geometry functions
-
+export findPerpenMap
 """
     findPerpenMap(planenormal)
 Find a perpendicular to plane normal - "local x direction" by using y dir as the
 guess. 
 """
-
 function findPerpenMap(planenormal::Vec3)
     tryy = YAXIS
     newx = cross(tryy, planenormal) # if planenormal == ZAXIS this give x axis

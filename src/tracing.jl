@@ -1,4 +1,5 @@
-export traceGeometry, traceGeometryRel, surfAmpFunc!
+export traceGeometry, traceGeometryRel, surfAmpFunc
+export traceGeometry!, traceGeometryRel!
 export refractConic, refractSphere, reflectConic, cDiffuser
 export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
 export referencePlane, planeMirror, modFunc
@@ -95,7 +96,7 @@ function surfNormal(rr::Point3, s::SurfProfileAsphere)
     r2 = (x^2+y^2)
     r = sqrt(r2)
     aspheresum = sum([i * r^(i-2) * s.a[i-2]  for i in 3:2+length(s.a)])
-    normalize([-x * (s.curv + aspheresum), -y*(s.curv +aspheresum), 1-s.curv * s.ϵ * z])
+    normalize!([-x * (s.curv + aspheresum), -y*(s.curv +aspheresum), 1-s.curv * s.ϵ * z])
 end
 
 function surfNormal(r::Point3, s::SurfProfileCyl)
@@ -120,6 +121,9 @@ end
 
 """
     traceGeometry - trace a Ray through an array of OptSurfaces
+    r       intial ray vector is global coordinates
+    geo     the array of surfaces
+
     returns status, array of results from traceGeometry
 """
 function traceGeometry(r::Ray, geo)
@@ -139,6 +143,31 @@ function traceGeometry(r::Ray, geo)
     status, trc[1:i] #only send the good ones!
 end
 
+"""
+    traceGeometry! - trace a Ray through an array of OptSurfaces
+    trc is a Vector{Trace} of length(geo) + 1 (the output)
+    r is the intial ray vector is global coordinates
+    geo is the array of surfaces
+
+    returns status, length of trace
+"""
+function traceGeometry!(trc, r::Ray, geo)
+    #trc = Vector{Trace}(undef, length(geo)+1)
+    trc[1] = Trace!(trc[1], r, 1., 0., identityAmpMats()) #save the start ray etc
+    curRay = r
+    status = 0
+    i = 1
+    for surf in geo
+        i += 1 #first element in trace is [2] in array
+        status, - = traceSurf!(trc[i], curRay, surf)
+        if status != 0
+            break
+        end
+        curRay=trc[i].ray
+    end
+    status, i #only send the good ones!
+end
+
 function traceGeometryRel(rr::Ray, geo)
     trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
@@ -155,6 +184,13 @@ function traceGeometryRel(rr::Ray, geo)
         curRay=trc[i].ray
     end
     status, trc[1:i] #only send the good ones!
+end
+
+function traceGeometryRel!(trc, rr::Ray, geo)
+    #trc = Vector{Trace}(undef, length(geo)+1)
+    surf1=geo[1]
+    curRay=Ray(surf1.toGlobalCoord(rr.base), surf1.toGlobalDir(rr.dir))
+    traceGeometry!(trc, curRay, geo)
 end
 
 
@@ -210,9 +246,60 @@ function traceSurf(r::Ray,s::OptSurface)
         println("old dir = $(r.dir)  newdir = $newRayDir")
     end
     =#
-    ampMats = surfAmpFunc!(r.dir, newRayDir, normal, newLocalBase, s.mod, s.coating)
+    # can modify amplitude/polarization and direction of the ray, can't change intersection
+
+    ampMats, newRayDir = surfAmpFunc(r.dir, newRayDir, normal, newLocalBase, s.mod, s.coating)
 
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
+end
+
+function Trace!(trc, ray, index, delta, ampdata)
+    trc.ray = ray
+    trc.nIn = index
+    trc.delta = delta
+    trc.pmatrix = ampdata
+    return trc
+end
+
+function traceSurf!(trc, r::Ray,s::OptSurface)
+    localRayStart=s.toLocalCoord(r.base)
+    localRayDir = s.toLocalDir(r.dir)
+
+    delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
+    #=
+    if debugFlag
+        println("traceSurf...  Δ = $delta")
+        println("start = $(r.base)")
+    end
+    =#
+    if delta == NaN
+        return (1, Trace!(trc, r, NaN, delta, identityAmpMats()) )
+    end
+    newRayBase = r.base + r.dir * delta
+    newLocalBase = localRayStart + localRayDir * delta
+
+    lnormal = surfNormal(newLocalBase, s.profile)
+
+    normal = s.toGlobalDir(lnormal)
+    #=
+    if debugFlag
+        println("local normal = $lnormal  global normal = $normal")
+    end
+    =#
+    t, newRayDir, nIn = modFunc(Ray(newRayBase, r.dir), normal, s.mod)
+    if !t
+        return (2, Trace!(trc, Ray(newRayBase, newRayDir), nIn, delta, identityAmpMats()))
+    end
+    #=
+    if debugFlag
+        println("old dir = $(r.dir)  newdir = $newRayDir")
+    end
+    =#
+    # can modify amplitude/polarization and direction of the ray, can't change intersection
+
+    ampMats, newRayDir = surfAmpFunc(r.dir, newRayDir, normal, newLocalBase, s.mod, s.coating)
+
+    return(0, Trace!(trc, Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
 function traceSurf(r::Ray,s::ModelSurface)
@@ -237,6 +324,30 @@ function traceSurf(r::Ray,s::ModelSurface)
 
     return(stat, Trace(Ray(newRayBase, r.dir), s.refIndex, delta, identityAmpMats()))
 end
+
+function traceSurf!(trc, r::Ray,s::ModelSurface)
+    localRayStart=s.toLocalCoord(r.base)
+    localRayDir = s.toLocalDir(r.dir)
+    #println("\ntraceSurf - ModelSurface  name = $(s.surfname)")
+    #println("aperture = $(s.aperture)")
+
+    delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
+    if delta == NaN
+        return (1, Trace!(trc, r, s.refIndex, delta, identityAmpMats()))
+    end
+    newRayBase = r.base + r.dir * delta
+    newLocalBase = localRayStart + localRayDir * delta
+
+
+    if isAperture(s.aperture) && clipAperture(newLocalBase, s.aperture)
+        stat = 3 #clipped
+    else
+        stat = 0 #ok to continue
+    end
+
+    return(stat, Trace!(trc, Ray(newRayBase, r.dir), s.refIndex, delta, identityAmpMats()))
+end
+
 
 
 
@@ -426,7 +537,7 @@ function modFunc(ray::Ray, normal::Vec3, d::CDiffuser)
     absa = abs.(a)
     perpapprox[findfirst(isequal(minimum(absa)), absa)]=1.  #create the vector almost perpendicular to the direction
 
-    perp1 = normalize(cross(a, perpapprox))
+    perp1 = normalize!(cross(a, perpapprox))
     perp2 = cross(a, perp1)
     dir = 2 .* rand(2) .- [1., 1.]
     while norm(dir)>1.
@@ -441,25 +552,25 @@ function modFunc(ray::Ray, normal::Vec3, d::CDiffuser)
         nIn = d.refIndexIn
     end
 
-    true, normalize(a + displace), nIn
+    true, normalize!(a + displace), nIn
 end
 
 
 
 """
-    surfAmpFunc!
+    surfAmpFunc
 
 """
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::DielectricT,amp::AmpParam)
-    identityAmpMats()
+function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::DielectricT,amp::AmpParam)
+    identityAmpMats(), dirOut
 end
 
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::MirrorR,amp::AmpParam)
-    identityAmpMats()
+function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::MirrorR,amp::AmpParam)
+    identityAmpMats(), dirOut
 end
 
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::CDiffuser,amp::AmpParam)
-    identityAmpMats()
+function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::CDiffuser,amp::AmpParam)
+    identityAmpMats(), dirOut
 end
 
 attributesSurfaces = Dict{String, Any}()
@@ -790,8 +901,8 @@ function modFunc(ray::Ray, normal::Vec3, d::NoBendIndex)
     true, ray.dir, d.refIndexIn
 end
 
-function surfAmpFunc!(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, ndex::NoBendIndex,amp::NoAmpParam)
-    identityAmpMats()
+function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, ndex::NoBendIndex,amp::NoAmpParam)
+    identityAmpMats(), dirOut
 end
 
 function referencePlane(surfname::String,
