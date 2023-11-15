@@ -153,7 +153,7 @@ end
 """
 function traceGeometry!(trc, r::Ray, geo)
     #trc = Vector{Trace}(undef, length(geo)+1)
-    trc[1] = Trace!(trc[1], r, 1., 0., identityAmpMats()) #save the start ray etc
+    Trace!(trc[1], r, 1., 0., identityAmpMats()) #save the start ray etc
     curRay = r
     status = 0
     i = 1
