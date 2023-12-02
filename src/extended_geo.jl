@@ -1,5 +1,5 @@
 #extended geometry functions
-export findPerpenMap
+export findPerpenMap, updateCoordChange!
 """
     findPerpenMap(planenormal)
 Find a perpendicular to plane normal - "local x direction" by using y dir as the
@@ -67,6 +67,9 @@ function updateCoordChange(pointInPlane::Point3,
     return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir
 end
 
+function updateCoordChange!(surf)
+    -, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir = updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
+end
 
 """
     EGeo(func, baseObject, size, wavelength; dir = ZAXIS, setup = defaultSetupGeo, parameters = Dict{Any,Any}() )

@@ -125,10 +125,11 @@ end
 
 
 function printSurfNames(geo)
-    i = 1
-    for surf in geo
-        println("$i\t$(surf.surfname) $(" "^(20-length(surf.surfname))) $(surf.base.base)  $(surf.base.dir)")
-        i += 1
+    for (i, surf) in enumerate(geo)
+        base = surf.base.base
+        dir = surf.base.dir
+        strbasedir = @sprintf("(%10.5f, %10.5f, %10.5f)  (%10.5f, %10.5f, %10.5f)",base[1], base[2], base[3], dir[1], dir[2], dir[3] )
+        println("$i\t$(surf.surfname) $(" "^(20-length(surf.surfname))) $strbasedir")
     end
 end
 
@@ -148,7 +149,9 @@ end
 
 
 function printSurface(n, surf::OptSurface)
-    println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $(surf.base.base)\n$(" "^20)$(surf.aperture)  $(surf.profile)   $(surf.mod)")
+    base = surf.base.base
+    strbase = @sprintf("(%10.5f, %10.5f, %10.5f)",base[1], base[2], base[3] )
+    println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $(strbase)\n$(" "^20)$(surf.aperture)  $(surf.profile)   $(surf.mod)")
 end  
 #=
 struct ModelSurface <: AbstractSurface  #use the data to overload GemoetryBasics
@@ -164,7 +167,9 @@ struct ModelSurface <: AbstractSurface  #use the data to overload GemoetryBasics
 end
 =#
 function printSurface(n, surf::ModelSurface)
-    println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $(surf.base.base)\n$(" "^20)$(surf.aperture)  $(surf.profile)")
+    base = surf.base.base
+    strbase = @sprintf("(%10.5f, %10.5f, %10.5f)",base[1], base[2], base[3] )
+    println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $strbase\n$(" "^20)$(surf.aperture)  $(surf.profile)")
 end  
 
 function printGeo(geometry)

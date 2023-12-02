@@ -26,7 +26,7 @@ struct Ray{N} <: AbstractRay{N}
 
 end
 
-struct SurfBase{N} <: AbstractSurfBase{N}
+mutable struct SurfBase{N} <: AbstractSurfBase{N}
     base::Point{N}
     dir::Vec{N}
     ydir::Vec{N}
@@ -162,7 +162,7 @@ end
 abstract type AbstractSurface{N,T} <: GeometryBasics.GeometryPrimitive{N, T} end
 #abstract type AbstractSurface <: GeometryBasics.AbstractGeometry{3, Float64} end
 
-struct OptSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
+mutable struct OptSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
     surfname::String
     base::SurfBase{N}
     aperture::AbstractSize{T}
@@ -176,7 +176,7 @@ struct OptSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload Gemoet
     color
 end
 
-struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
+mutable struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
     surfname::String
     base::SurfBase{N}
     aperture::AbstractSize{T}
