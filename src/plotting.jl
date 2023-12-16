@@ -35,13 +35,13 @@ printFigure(fileNameStub, fig; startnum = 0, directory = "") = saveFigure(fileNa
 
 
 """
-    multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButtonColor = RGBf0(0.8, 0.94, 0.8), activeFig = 1,  resolution = (1200,900))
+    multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButtonColor = RGBf0(0.8, 0.94, 0.8), activeFig = 1,  size = (1200,900))
     sets up a stack of figures with buttons to navigate between them. Includes a button to save the figure image to a file
     returns an array of Makie figures
 """
-function multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButtonColor = RGBf(0.8, 0.94, 0.8), activeFig = 1,  resolution = (1200,900))
+function multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButtonColor = RGBf(0.8, 0.94, 0.8), activeFig = 1,  size = (1200,900))
     GLMakie.activate!(title="lens Julia", inline=false)   #this only works in GLMakie
-    figs = [Figure(resolution = resolution,backgroundcolor = RGBf(0.98, 0.98, 0.98), ) for i in 1:numFigs]
+    figs = [Figure(;size,backgroundcolor = RGBf(0.98, 0.98, 0.98)) for i in 1:numFigs]
     for (i, fig) in enumerate(figs)
         #ax1 = fig[1,1] = Axis(fig, title="Figure $i")
         fig[1, 1] = buttongrid = GridLayout(tellwidth = true, tellheight=false)
@@ -85,8 +85,8 @@ sizeOptic(aper::RectAperture) = max(aper.wclear, aper.lclear)
 sizeOpticSurface(surf::AbstractSurface) = sizeOptic(surf.aperture)
 
 
-#plotSurface3D!(scene, s::OptSurface; color=:aquamarine2)=Makie.mesh!(scene, s, color=color, fxaa = true, transparency = true, shading = true)#someday add options to display mesh
-plotSurface3D!(scene, s::OptSurface; transparency = false)=Makie.mesh!(scene, s, color=s.color, fxaa = true, transparency = transparency, shading = true)#someday add options to display mesh
+#plotSurface3D!(scene, s::OptSurface; color=:aquamarine2)=Makie.mesh!(scene, s, color=color, fxaa = true, transparency = true)#someday add options to display mesh
+plotSurface3D!(scene, s::OptSurface; transparency = false)=Makie.mesh!(scene, s, color=s.color, fxaa = true, transparency = transparency)#someday add options to display mesh
 
 function plotGeometry3D!(scene, geometry)
     for geo in geometry
@@ -97,14 +97,14 @@ end
 
 
 """
-plotGeometry3D(geometry; resolution = (1200,700))
+plotGeometry3D(geometry; size = (1200,700))
 geometry is an array of OptSurfaces
 resoltion is the initial window size
 returns a Makie Figure and LScene located at [1,1] 
 
 """
-function plotGeometry3D(geometry; resolution = (1200,700))
-    fig = Figure(resolution=resolution,)
+function plotGeometry3D(geometry; size = (1200,700))
+    fig = Figure(;size)
     ax = fig[1,1]=LScene(fig, show_axis=false, scenekw = (camera = cam3d_cad!,))
     linesegments!(ax,[Point3f0(0, 0,0) => Point3f0(0,0,1)],color=:green, linewidth=2)
     linesegments!(ax,[Point3f0(0, 0,0) => Point3f0(1,0,0)],color=:blue, linewidth=2)
@@ -132,7 +132,7 @@ function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3)
             x0 y0 0.0;
             x0 -y0 0.0]
         r1a = [s.toGlobalCoord(r1[i,1:3]) for i in 1:4]
-        Makie.poly!(scene, r1a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r1a, connect, color=s.color, fxaa = true, transparency = true)
 
     end
 
@@ -174,25 +174,25 @@ function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3)
         r2a = [s.toGlobalCoord(r2[i,1:3]) for i in 1:4]
         r3a = [s.toGlobalCoord(r3[i,1:3]) for i in 1:4]
         r4a = [s.toGlobalCoord(r4[i,1:3]) for i in 1:4]
-        Makie.poly!(scene, r1a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
-        Makie.poly!(scene, r2a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
-        Makie.poly!(scene, r3a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
-        Makie.poly!(scene, r4a, connect, color=s.color, fxaa = true, transparency = true, shading = true)
+        Makie.poly!(scene, r1a, connect, color=s.color, fxaa = true, transparency = true)
+        Makie.poly!(scene, r2a, connect, color=s.color, fxaa = true, transparency = true)
+        Makie.poly!(scene, r3a, connect, color=s.color, fxaa = true, transparency = true)
+        Makie.poly!(scene, r4a, connect, color=s.color, fxaa = true, transparency = true)
     end
 end
 
-#Makie.mesh!(scene, s, color = :orange, shading = true, transparency=true, camera=Makie.cam3d_cad!)#someday add options to display mesh
+#Makie.mesh!(scene, s, color = :orange,  transparency=true, camera=Makie.cam3d_cad!)#someday add options to display mesh
 
 function plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize = 0.3)
     if a.obscure != 0.
         Makie.mesh!(scene, Disk(s.base.base, s.base.dir,
             Float64(a.obscure),s.toGlobalCoord,s.toGlobalDir),
-            color = s.color, fxaa = true, transparency = true, shading = true)# center obscuration
+            color = s.color, fxaa = true, transparency = true)# center obscuration
     end
     if a.semiDiameter != ∞ # not just an obscuration
         Makie.mesh!(scene, Washer(s.base.base, s.base.dir,
             Float64(a.semiDiameter),s.toGlobalCoord,s.toGlobalDir),
-            color = s.color, fxaa = true, transparency = true, shading = true)
+            color = s.color, fxaa = true, transparency = true)
     end
 end
 

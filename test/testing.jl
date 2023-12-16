@@ -17,7 +17,7 @@ using Printf
 
 #set up simple geometry and plot it
 
-figs = [Figure(resolution = (1600,1200),backgroundcolor = RGBf(0.98, 0.98, 0.98), ) for i in 1:5]
+figs = [Figure(size = (1600,1200),backgroundcolor = RGBf(0.98, 0.98, 0.98), ) for i in 1:5]
 #figs=multipleFigures()
 
 ## Test the diffuser fig1
@@ -174,7 +174,7 @@ end
 @time st, trc = traceGeometryRel(Ray(ORIGIN, ZAXIS), testGeometry2)
 @time st, len = traceGeometryRel!(trc, Ray(ORIGIN, ZAXIS), testGeometry2)
 @time test(1000) 
-test(n) = [Point(0.0, 0.0, i) for i in 1:n]
+ottest(n) = [Point(0.0, 0.0, i) for i in 1:n]
 ## test OAP operation test4
 
 function testOAP(f1, f2, oapseparation, aper)

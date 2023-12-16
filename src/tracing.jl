@@ -552,7 +552,7 @@ function modFunc(ray::Ray, normal::Vec3, d::CDiffuser)
         nIn = d.refIndexIn
     end
 
-    true, normalize!(a + displace), nIn
+    true, normalize(a + displace), nIn
 end
 
 
