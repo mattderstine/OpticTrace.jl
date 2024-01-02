@@ -638,8 +638,8 @@ function refractConic(surfname::String,
     attributesSurfaces = attributesSurfaces, 
     ydir::Union{SVector{3}, Nothing}=nothing)
 
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =updateCoordChange(pointInPlane, planenormal,ydir)
-    #,toGCMat, toLCMat 
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir, toGCMat, toLCMat =updateCoordChange(pointInPlane, planenormal,ydir)
+    # 
       
 
     OptSurface(surfname,
@@ -649,7 +649,7 @@ function refractConic(surfname::String,
         DielectricT(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir ,#toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir ,toGCMat, toLCMat,
         color
         )
 end
@@ -711,8 +711,8 @@ function reflectConic(surfname::String,
     attributesSurfaces = attributesSurfaces, 
     ydir::Union{SVector{3}, Nothing}=nothing)
 
-    #,toGCMat, toLCMat
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+    #
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal,ydir)
 
     OptSurface(surfname,
@@ -722,7 +722,7 @@ function reflectConic(surfname::String,
         MirrorR(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, #toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, toGCMat, toLCMat,
         color
         )
 end
@@ -746,8 +746,8 @@ function cDiffuser(surfname::String,
     coating::APorString
     ; color = :brown, 
     ydir::Union{SVector{3}, Nothing}=nothing)
-    #,toGCMat, toLCMat
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+    #
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
@@ -756,7 +756,7 @@ function cDiffuser(surfname::String,
         NoProfile(0.),
         CDiffuser(tan(θ), rinIn, rinOut),
         AmpParam(coating),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, toGCMat, toLCMat,
         color
         )
 end
@@ -775,8 +775,8 @@ function reflectOAConic(surfname::String,
     semiDiam::Float64,
     coating::APorString
     ;color = :aquamarine2, attributesSurfaces = attributeSurfaces)
-    #,toGCMat, toLCMat
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+    #
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
@@ -786,7 +786,7 @@ function reflectOAConic(surfname::String,
         MirrorR(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, #toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, toGCMat, toLCMat,
         color
         )
 end
@@ -849,8 +849,8 @@ function refractAsphere(surfname::String,
     ;color = :aquamarine,  
     attributesSurfaces = attributesSurfaces, 
     ydir::Union{SVector{3}, Nothing}=nothing)
-    #,toGCMat, toLCMat
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+    #
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
@@ -860,7 +860,7 @@ function refractAsphere(surfname::String,
         DielectricT(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,toGCMat, toLCMat,
         color
         )
 end
@@ -884,8 +884,8 @@ function reflectAsphere(surfname::String,
     ;color = :aquamarine, 
     attributesSurfaces = attributesSurfaces, 
     ydir::Union{SVector{3}, Nothing}=nothing)
-    #,toGCMat, toLCMa
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDirt =
+    #
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
@@ -895,7 +895,7 @@ function reflectAsphere(surfname::String,
         MirrorR(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat, 
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,toGCMat, toLCMat, 
         color
         )
 end
@@ -945,8 +945,8 @@ function referencePlane(surfname::String,
     coating::APorString
     ;color = :khaki3, 
     ydir::Union{SVector{3}, Nothing}=nothing)
-    #,toGCMat, toLCMat
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+    #
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
@@ -955,7 +955,7 @@ function referencePlane(surfname::String,
         NoProfile( 0.),
         NoBendIndex(rinIn),
         NoAmpParam(coating),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,toGCMat, toLCMat,
         color
         )
 end

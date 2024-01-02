@@ -167,7 +167,7 @@ end
 abstract type AbstractSurface{N,T} <: GeometryBasics.GeometryPrimitive{N, T} end
 #abstract type AbstractSurface <: GeometryBasics.AbstractGeometry{3, Float64} end
 
-mutable struct OptSurface{N,T} <: AbstractSurface{N,T} #use the data to overload GemoetryBasics
+mutable struct OptSurface{N,T,L} <: AbstractSurface{N,T} #use the data to overload GemoetryBasics
     surfname::String
     base::SurfBase{T,N}
     aperture::AbstractSize{T}
@@ -178,12 +178,12 @@ mutable struct OptSurface{N,T} <: AbstractSurface{N,T} #use the data to overload
     toLocalCoord::AffineMap
     toGlobalDir::LinearMap
     toLocalDir::LinearMap
-    #toGCMat::SMatrix{3,3,T,9}
-    #toLCMat::SMatrix{3,3,T,9}
+    toGCMat::SMatrix{N,N,T,L}
+    toLCMat::SMatrix{N,N,T,L}
     color
 end
 
-mutable struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
+mutable struct ModelSurface{N,T,L} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
     surfname::String
     base::SurfBase{T,N}
     aperture::AbstractSize{T}
@@ -193,8 +193,8 @@ mutable struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overl
     toLocalCoord::AffineMap
     toGlobalDir::LinearMap
     toLocalDir::LinearMap
-    #toGCMat::SMatrix{3,3,T,9}
-    #toLCMat::SMatrix{3,3,T,9}
+    toGCMat::SMatrix{N,N,T,L}
+    toLCMat::SMatrix{N,N,T,L}
     color
 end
 

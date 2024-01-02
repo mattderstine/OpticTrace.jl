@@ -47,7 +47,7 @@ function roundAperture(surfname::String,
     semiDiam::Float64
     ;color = :blue, ydir::Union{SVector{3,Float64}, Nothing} = nothing)
 
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir=#,toGCMat, toLCMat =
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     ModelSurface(surfname,
@@ -55,7 +55,7 @@ function roundAperture(surfname::String,
         RoundAperture(obscure, semiDiam),
         NoProfile(0.),
         rinIn,
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, #  toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, toGCMat, toLCMat,
         color
         )
 end
@@ -74,7 +74,7 @@ function rectAperture(surfname::String,
     semiDiamy::Float64
     ;color = :blue)
 
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir = #,toGCMat, toLCMat =
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir ,toGCMat, toLCMat =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     ModelSurface(surfname,
@@ -82,7 +82,7 @@ function rectAperture(surfname::String,
         RectAperture(obscurex, obscurey, semiDiamx, semiDiamy),
         NoProfile(0.),
         rinIn,
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, toGCMat, toLCMat,
         color
         )
 end

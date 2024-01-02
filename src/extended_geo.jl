@@ -56,7 +56,7 @@ function updateCoordChange(pointInPlane::SVector{3}, planenormal::SVector{3})
     id = hcat(XAXIS, YAXIS, ZAXIS)
     toLCMat =SMatrix{3,3,Float64,9}(toLocalDir(id))
     toGCMat = SMatrix{3,3,Float64,9}(toGlobalDir(id))
-    return ydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir#, toGCMat, toLCMat
+    return ydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir, toGCMat, toLCMat
 end
 
 function updateCoordChange(pointInPlane::SVector{3}, planenormal::SVector{3}, ydir::Union{SVector{3},Nothing})
@@ -68,12 +68,11 @@ function updateCoordChange(pointInPlane::SVector{3}, planenormal::SVector{3}, yd
     id = hcat(XAXIS, YAXIS, ZAXIS)
     toLCMat =SMatrix{3,3,Float64,9}(toLocalDir(id))
     toGCMat = SMatrix{3,3,Float64,9}(toGlobalDir(id))
-    return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir#, toGCMat, toLCMat
+    return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir, toGCMat, toLCMat
 end
 
 function updateCoordChange!(surf)
-    -, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir = updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
-    #, surf.toLCMat, surf.toCGMat
+    -, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir, surf.toLCMat, surf.toCGMat= updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
 end
 
 """

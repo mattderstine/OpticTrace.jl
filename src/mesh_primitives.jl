@@ -244,14 +244,14 @@ GeometryBasics.radius(c::Disk) = gbRadius(c.semiDiameter, c.profile) #fix
 GeometryBasics.widths(c::Disk) = gbWidths(c.semiDiameter, c.profile)
 
 function GeometryBasics.coordinates(s::Disk, nvertices=60)
-   a= samplePoints(s, nvertices)
+   ap= samplePoints(s, nvertices)
    inner(t) = s.toGlobalCoord(SVector{3}(t[1], t[2] , 0.))
-   (inner(a) for a in a)
+   (inner(a) for a in ap)
 end
 
 
 function GeometryBasics.normals(s::Disk, nvertices=60)
-    a= samplePoints(s,nvertices)
-    inner(t) = s.toGlobalDir(ZAXIS)
-    (inner(a) for a in a) #isn't this the dumbest thing you've ever seen. Not taking time to fix it.
+    ap= samplePoints(s,nvertices)
+    lz = s.toGlobalDir(ZAXIS)
+    (lz for a in ap)
 end
