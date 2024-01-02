@@ -5,7 +5,7 @@ export findPerpenMap, updateCoordChange!
 Find a perpendicular to plane normal - "local x direction" by using y dir as the
 guess. 
 """
-function findPerpenMap(planenormal::Vec3)
+function findPerpenMap(planenormal::SVector{3})
     tryy = YAXIS
     newx = cross(tryy, planenormal) # if planenormal == ZAXIS this give x axis
     if norm(newx)==0. # planenormal is along y axis
@@ -14,7 +14,7 @@ function findPerpenMap(planenormal::Vec3)
     end
 
     newx=normalize(newx)
-    newy = Vec3(cross(planenormal, newx)...)
+    newy = SVector{3}(cross(planenormal, newx)...)
     newy, LinearMap(SMatrix{3,3}([newx; newy; planenormal]))
 end
 
@@ -22,7 +22,7 @@ end
     findPerpenMap(planenormal, ydir)
 Find a perpendicular in the plane to planenormal and ydir
 """
-function findPerpenMap(planenormal::Vec3, ydir::Union{Nothing, Vec3})
+function findPerpenMap(planenormal::SVector{3}, ydir::Union{Nothing, SVector{3}})
     if isnothing(ydir)
         tryy = YAXIS
         newx = cross(tryy, planenormal) # if planenormal == ZAXIS this give x axis
@@ -31,7 +31,7 @@ function findPerpenMap(planenormal::Vec3, ydir::Union{Nothing, Vec3})
             newx = cross(tryy, planenormal)
         end
         newx = normalize(newx)
-        newy = Vec3(cross(planenormal, newx)...)
+        newy = SVector{3}(cross(planenormal, newx)...)
     else
         newx = cross(ydir, planenormal) # if planenormal == ZAXIS this give x axis
         newx = normalize(newx)
@@ -47,28 +47,33 @@ end
 update the coordinate transformation functions when the location and/or
 direction changes
 """
-function updateCoordChange(pointInPlane::Point3,
-        planenormal::Vec3)
-    pip::SVector{3,Float64} = pointInPlane
+function updateCoordChange(pointInPlane::SVector{3}, planenormal::SVector{3})
+    pip = pointInPlane
     ydir, toGlobalDir = findPerpenMap(planenormal)
     toGlobalCoord = compose(Translation(pip), toGlobalDir)
     toLocalCoord = inv(toGlobalCoord)
     toLocalDir = inv(toGlobalDir)
-    return ydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir
+    id = hcat(XAXIS, YAXIS, ZAXIS)
+    toLCMat =SMatrix{3,3,Float64,9}(toLocalDir(id))
+    toGCMat = SMatrix{3,3,Float64,9}(toGlobalDir(id))
+    return ydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir#, toGCMat, toLCMat
 end
 
-function updateCoordChange(pointInPlane::Point3,
-        planenormal::Vec3, ydir::Union{Vec3,Nothing})
-    pip::SVector{3,Float64} = pointInPlane
+function updateCoordChange(pointInPlane::SVector{3}, planenormal::SVector{3}, ydir::Union{SVector{3},Nothing})
+    pip = pointInPlane
     myydir, toGlobalDir = findPerpenMap(planenormal, ydir)
     toGlobalCoord = compose(Translation(pip), toGlobalDir)
     toLocalCoord = inv(toGlobalCoord)
     toLocalDir = inv(toGlobalDir)
-    return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir
+    id = hcat(XAXIS, YAXIS, ZAXIS)
+    toLCMat =SMatrix{3,3,Float64,9}(toLocalDir(id))
+    toGCMat = SMatrix{3,3,Float64,9}(toGlobalDir(id))
+    return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir#, toGCMat, toLCMat
 end
 
 function updateCoordChange!(surf)
     -, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir = updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
+    #, surf.toLCMat, surf.toCGMat
 end
 
 """

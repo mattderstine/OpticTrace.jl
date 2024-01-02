@@ -5,7 +5,7 @@ export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
 export referencePlane, planeMirror, modFunc
 export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
 export sag, randomPointOnSquare, randomPointOnDisk
-export attributesSurfaces, surfNormal
+export attributesSurfaces, surfNormal, Trace!
 
 """
     sag - compute the z coordinate in local coordinates for decendants of
@@ -63,7 +63,7 @@ end
     returns a unit vector
     returns normal in LOCAL coordinates
 """
-function surfNormal(r::Point3, s::SurfProfileConic)
+function surfNormal(r::SVector{3}, s::SurfProfileConic)
     #println("sag = $(sag(r[1],r[2],s))")
 
     if s.ϵ == 1
@@ -80,16 +80,15 @@ function surfNormal(r::Point3, s::SurfProfileConic)
             denomI = 1/sqrt(denomsq)
         end
     end
-    Vec3(-s.curv * r[1]*denomI, -s.curv * r[2]*denomI,
-        (1.0 - s.curv * s.ϵ * r[3])*denomI )
+    SVector{3}(-s.curv * r[1]*denomI, -s.curv * r[2]*denomI,(1.0 - s.curv * s.ϵ * r[3])*denomI )
 end
 
-function surfNormal(r::Point3, s::SurfProfileOAConic)
+function surfNormal(r::SVector{3}, s::SurfProfileOAConic)
     #println("OA r = $r offset = $(s.offset) net = $(r .- s.offset)")
     surfNormal(r .- s.offset, SurfProfileConic(s.curv, s.ϵ))
 end
 
-function surfNormal(rr::Point3, s::SurfProfileAsphere)
+function surfNormal(rr::SVector{3}, s::SurfProfileAsphere)
     x = rr[1]
     y = rr[2]
     z = rr[3]
@@ -99,7 +98,7 @@ function surfNormal(rr::Point3, s::SurfProfileAsphere)
     normalize!([-x * (s.curv + aspheresum), -y*(s.curv +aspheresum), 1-s.curv * s.ϵ * z])
 end
 
-function surfNormal(r::Point3, s::SurfProfileCyl)
+function surfNormal(r::SVector{3}, s::SurfProfileCyl)
     #println("sag = $(sag(r[1],r[2],s))")
 
     if s.ϵ == 1
@@ -116,7 +115,7 @@ function surfNormal(r::Point3, s::SurfProfileCyl)
             denomI = 1/sqrt(denomsq)
         end
     end
-    Vec3(0., -s.curv * r[2]*denomI, (1.0 - s.curv * s.ϵ * r[3])*denomI )
+    SVector{3}(0., -s.curv * r[2]*denomI, (1.0 - s.curv * s.ϵ * r[3])*denomI )
 end
 
 """
@@ -171,7 +170,11 @@ end
 function traceGeometryRel(rr::Ray, geo)
     trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
-    curRay=Ray(surf1.toGlobalCoord(rr.base), surf1.toGlobalDir(rr.dir))
+    globalbase = surf1.toGlobalCoord(rr.base)
+    globaldir = surf1.toGlobalDir(rr.dir)
+    #globalbase = SVector{3}(matmul3(surf1.toGCMat, rr.base))+surf1.base.base
+    #globaldir = SVector{3}(matmul3(surf1.toGCMat, rr.dir))
+    curRay=Ray(globalbase, globaldir)
     trc[1] = Trace(curRay, 1., 0., identityAmpMats()) #save the start ray etc
     status = 0
     i = 1
@@ -189,10 +192,26 @@ end
 function traceGeometryRel!(trc, rr::Ray, geo)
     #trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
-    curRay=Ray(surf1.toGlobalCoord(rr.base), surf1.toGlobalDir(rr.dir))
+    globalbase = surf1.toGlobalCoord(rr.base)
+    globaldir = surf1.toGlobalDir(rr.dir)
+
+    #globalbase = SVector{3}(matmul3(surf1.toGCMat, rr.base))+surf1.base.base
+    #globaldir = SVector{3}(matmul3(surf1.toGCMat, rr.dir))
+    curRay=Ray(globalbase, globaldir)
     traceGeometry!(trc, curRay, geo)
 end
 
+"""
+matmul3(array, vector)
+
+fast 3 element matrix vector multiplication w/ no allocations
+"""
+function matmul3(a, b)
+    x = a[1,1]*b[1]+a[1,2]*b[2]+a[1,3]*b[3]
+    y = a[2,1]*b[1]+a[2,2]*b[2]+a[2,3]*b[3]
+    z = a[3,1]*b[1]+a[3,2]*b[2]+a[3,3]*b[3]
+    return (x,y,z)
+end
 
 """
     traceSurf
@@ -215,6 +234,9 @@ end
 function traceSurf(r::Ray,s::OptSurface)
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
+    
+    #localRayDir = matmul3(s.toLCMat, r.dir)
+    #@time localRayStart = matmul3(s.toLCMat, r.base-s.base.base)
 
     delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
     #=
@@ -227,11 +249,12 @@ function traceSurf(r::Ray,s::OptSurface)
         return (1, Trace(r, NaN, delta, identityAmpMats()) )
     end
     newRayBase = r.base + r.dir * delta
-    newLocalBase = localRayStart + localRayDir * delta
+    newLocalBase = localRayStart .+ localRayDir .* delta
 
     lnormal = surfNormal(newLocalBase, s.profile)
 
     normal = s.toGlobalDir(lnormal)
+    #normal =SVector{3}(matmul3(s.toGCMat, lnormal))
     #=
     if debugFlag
         println("local normal = $lnormal  global normal = $normal")
@@ -264,6 +287,8 @@ end
 function traceSurf!(trc, r::Ray,s::OptSurface)
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
+    #localRayDir = SVector{3}(matmul3(s.toLCMat, r.dir))
+    #localRayStart = SVector{3}(matmul3(s.toLCMat, r.base-s.base.base))
 
     delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
     #=
@@ -279,8 +304,9 @@ function traceSurf!(trc, r::Ray,s::OptSurface)
     newLocalBase = localRayStart + localRayDir * delta
 
     lnormal = surfNormal(newLocalBase, s.profile)
-
     normal = s.toGlobalDir(lnormal)
+    #normal = SVector{3}(matmul3(s.toGCMat, lnormal))
+
     #=
     if debugFlag
         println("local normal = $lnormal  global normal = $normal")
@@ -304,7 +330,9 @@ end
 
 function traceSurf(r::Ray,s::ModelSurface)
     localRayStart=s.toLocalCoord(r.base)
-    localRayDir = s.toLocalDir(r.dir)
+    @time localRayDir = s.toLocalDir(r.dir)
+    #localRayDir = SVector{3}(matmul3(s.toLCMat, r.dir))
+    #localRayStart = SVector{3}(matmul3(s.toLCMat, r.base-s.base.base))
     #println("\ntraceSurf - ModelSurface  name = $(s.surfname)")
     #println("aperture = $(s.aperture)")
 
@@ -328,6 +356,8 @@ end
 function traceSurf!(trc, r::Ray,s::ModelSurface)
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
+    #localRayDir = SVector{3}(matmul3(s.toLCMat, r.dir))
+    #localRayStart = SVector{3}(matmul3(s.toLCMat, r.base-s.base.base))
     #println("\ntraceSurf - ModelSurface  name = $(s.surfname)")
     #println("aperture = $(s.aperture)")
 
@@ -481,7 +511,7 @@ end
 
 """
 function identityAmpMats()
-    identity = [[1.0, 0.0, 0.0] [ 0.0, 1.0, 0.0] [ 0.0, 0.0, 1.0]]
+    identity =SMatrix{3,3,Float64,9}( [[1.0, 0.0, 0.0] [ 0.0, 1.0, 0.0] [ 0.0, 0.0, 1.0]])
     AmpData(identity, identity, 1.)
     #retirm matrices for P & O and unity transmission
 end
@@ -490,7 +520,7 @@ end
     modFunc
 
 """
-function modFunc(ray::Ray, normal::Vec3, d::AbstractBendDielectric)
+function modFunc(ray::Ray, normal::SVector{3}, d::AbstractBendDielectric)
     r = ray.base
     a = ray.dir
 
@@ -517,7 +547,7 @@ end
 
 
 
-function modFunc(ray::Ray, normal::Vec3, d::AbstractBendMirror)
+function modFunc(ray::Ray, normal::SVector{3}, d::AbstractBendMirror)
     r = ray.base
     a = ray.dir
     cosI = a ⋅ normal
@@ -530,7 +560,7 @@ function modFunc(ray::Ray, normal::Vec3, d::AbstractBendMirror)
     true, (a - (2. * (cosI)) .* normal), nIn  # Welford 4.46
 end
 
-function modFunc(ray::Ray, normal::Vec3, d::CDiffuser)
+function modFunc(ray::Ray, normal::SVector{3}, d::CDiffuser)
     r = ray.base
     a = ray.dir
     perpapprox = zeros(Float64,3)
@@ -561,15 +591,15 @@ end
     surfAmpFunc
 
 """
-function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::DielectricT,amp::AmpParam)
+function surfAmpFunc(dirIn::SVector{3}, dirOut::SVector{3}, normal::SVector{3}, newLocalBase::SVector{3}, sndex::DielectricT,amp::AmpParam)
     identityAmpMats(), dirOut
 end
 
-function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::MirrorR,amp::AmpParam)
+function surfAmpFunc(dirIn::SVector{3}, dirOut::SVector{3}, normal::SVector{3}, newLocalBase::SVector{3}, ndex::MirrorR,amp::AmpParam)
     identityAmpMats(), dirOut
 end
 
-function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::CDiffuser,amp::AmpParam)
+function surfAmpFunc(dirIn::SVector{3}, dirOut::SVector{3}, normal::SVector{3}, newLocalBase::SVector{3}, ndex::CDiffuser,amp::AmpParam)
     identityAmpMats(), dirOut
 end
 
@@ -596,8 +626,8 @@ end
         coating)
 """
 function refractConic(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
@@ -606,10 +636,11 @@ function refractConic(surfname::String,
     coating::APorString
     ;color = :yellow, 
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{SVector{3}, Nothing}=nothing)
 
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(pointInPlane, planenormal,ydir)
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =updateCoordChange(pointInPlane, planenormal,ydir)
+    #,toGCMat, toLCMat 
+      
 
     OptSurface(surfname,
         SurfBase(pointInPlane, planenormal, ydir),
@@ -618,7 +649,7 @@ function refractConic(surfname::String,
         DielectricT(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir ,#toGCMat, toLCMat,
         color
         )
 end
@@ -633,15 +664,15 @@ end
         coating)
 """
 function refractSphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
     semiDiam::Float64,
     coating::APorString
     ;color = :aquamarine2, 
-    attributesSurfaces = attributesSurfaces, ydir::Union{Vec3, Nothing}=nothing)
+    attributesSurfaces = attributesSurfaces, ydir::Union{SVector{3}, Nothing}=nothing)
 
     refractConic(surfname,
         pointInPlane,
@@ -668,8 +699,8 @@ end
         coating)
 """
 function reflectConic(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
@@ -678,8 +709,9 @@ function reflectConic(surfname::String,
     coating::APorString
     ;color = :aquamarine2,
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{SVector{3}, Nothing}=nothing)
 
+    #,toGCMat, toLCMat
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal,ydir)
 
@@ -690,7 +722,7 @@ function reflectConic(surfname::String,
         MirrorR(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, #toGCMat, toLCMat,
         color
         )
 end
@@ -705,16 +737,16 @@ end
         coating)
 """
 function cDiffuser(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     θ::Float64,
     semiDiam::Float64,
     coating::APorString
     ; color = :brown, 
-    ydir::Union{Vec3, Nothing}=nothing)
-
+    ydir::Union{SVector{3}, Nothing}=nothing)
+    #,toGCMat, toLCMat
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
@@ -724,7 +756,7 @@ function cDiffuser(surfname::String,
         NoProfile(0.),
         CDiffuser(tan(θ), rinIn, rinOut),
         AmpParam(coating),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
         color
         )
 end
@@ -732,10 +764,10 @@ end
 
 
 function reflectOAConic(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    ydir::Vec3,
-    offset::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
+    ydir::SVector{3},
+    offset::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
@@ -743,7 +775,7 @@ function reflectOAConic(surfname::String,
     semiDiam::Float64,
     coating::APorString
     ;color = :aquamarine2, attributesSurfaces = attributeSurfaces)
-
+    #,toGCMat, toLCMat
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
@@ -754,7 +786,7 @@ function reflectOAConic(surfname::String,
         MirrorR(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, #toGCMat, toLCMat,
         color
         )
 end
@@ -763,9 +795,9 @@ end
     convention is that rotation around z axis, ray going -z direction reflects to +y dir
 """
 reflectOAP(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    ydir::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
+    ydir::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
@@ -776,7 +808,7 @@ reflectOAP(surfname::String,
                         pointInPlane,
                         planenormal,
                         ydir,
-                        Vec3(0, 1/c, -0.5/c),
+                        SVector{3}(0, 1/c, -0.5/c),
                         rinIn,
                         rinOut,
                         c,
@@ -805,8 +837,8 @@ Overloads for referencePlane
 
 """
 function refractAsphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
@@ -816,8 +848,8 @@ function refractAsphere(surfname::String,
     coating::APorString
     ;color = :aquamarine,  
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
-
+    ydir::Union{SVector{3}, Nothing}=nothing)
+    #,toGCMat, toLCMat
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
@@ -828,7 +860,7 @@ function refractAsphere(surfname::String,
         DielectricT(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
         color
         )
 end
@@ -840,8 +872,8 @@ end
 
 """
 function reflectAsphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     c::Float64,
@@ -851,9 +883,9 @@ function reflectAsphere(surfname::String,
     coating::APorString
     ;color = :aquamarine, 
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
-
-    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+    ydir::Union{SVector{3}, Nothing}=nothing)
+    #,toGCMat, toLCMa
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDirt =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
     OptSurface(surfname,
@@ -863,7 +895,7 @@ function reflectAsphere(surfname::String,
         MirrorR(rinIn, rinOut),
         #AmpParam(coating),
         getAmpParams(coating; attributesSurfaces),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir, 
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat, 
         color
         )
 end
@@ -881,8 +913,8 @@ function gbWidths(a::SizeLens, p::NoProfile)
     SVector(diam, diam, 0.)
 end
 
-function surfNormal(r::Point3, s::NoProfile)
-    Vec3(0., 0., 1.)
+function surfNormal(r::SVector{3}, s::NoProfile)
+    SVector{3}(0., 0., 1.)
 end
 
 function deltaToSurf(r::Ray, p::NoProfile)
@@ -897,23 +929,23 @@ function deltaToSurf(r::Ray, p::NoProfile)
     Δ
 end
 
-function modFunc(ray::Ray, normal::Vec3, d::NoBendIndex)
+function modFunc(ray::Ray, normal::SVector{3}, d::NoBendIndex)
     true, ray.dir, d.refIndexIn
 end
 
-function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, ndex::NoBendIndex,amp::NoAmpParam)
+function surfAmpFunc(dirIn::SVector{3}, dirOut::SVector{3}, normal::SVector{3}, newRayBase::SVector{3}, ndex::NoBendIndex,amp::NoAmpParam)
     identityAmpMats(), dirOut
 end
 
 function referencePlane(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     semiDiam::Float64,
     coating::APorString
     ;color = :khaki3, 
-    ydir::Union{Vec3, Nothing}=nothing)
-
+    ydir::Union{SVector{3}, Nothing}=nothing)
+    #,toGCMat, toLCMat
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
 
@@ -923,7 +955,7 @@ function referencePlane(surfname::String,
         NoProfile( 0.),
         NoBendIndex(rinIn),
         NoAmpParam(coating),
-        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,#toGCMat, toLCMat,
         color
         )
 end
@@ -935,15 +967,15 @@ end
     potentially overload other functions
 """
 function planeMirror(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
+    pointInPlane::SVector{3},
+    planenormal::SVector{3},
     rinIn::Float64,
     rinOut::Float64,
     semiDiam::Float64,
     coating::APorString
     ;color = :blue, 
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{SVector{3}, Nothing}=nothing)
 
     reflectConic(surfname,
         pointInPlane,

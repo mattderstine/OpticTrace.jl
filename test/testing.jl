@@ -31,8 +31,8 @@ function testDiffuser(fig; pnts=20)
     distance = testradius / tan(10.0 * π/180.)
     testDiffGeo = [
         referencePlane("start", ORIGIN, ZAXIS, 1., 5., "nocoating"; ydir = nothing),
-        cDiffuser("diff", Point3(0., 0., 2.), ZAXIS, 1., 1., 10.0 * π/180., 5., "nocoating"),
-        referencePlane("end", Point3(0., 0., distance+2), ZAXIS, 1., 5., "nocoating" ; ydir = Vec3(sin(π/2), cos(π/2), 0.))
+        cDiffuser("diff", SVector{3,Float64}(0., 0., 2.), ZAXIS, 1., 1., 10.0 * π/180., 5., "nocoating"),
+        referencePlane("end", SVector{3,Float64}(0., 0., distance+2), ZAXIS, 1., 5., "nocoating" ; ydir = SVector{3,Float64}(sin(π/2), cos(π/2), 0.))
     ]
 
     outer_padding = 30
@@ -51,7 +51,7 @@ function testDiffuser(fig; pnts=20)
 
 
 #should produce a circle with radius "testradius".
-    aa()=traceGeometryRel(Ray(Point(0.,0., 0.),ZAXIS), testDiffGeo)
+    aa()=traceGeometryRel(Ray(SVector{3,Float64}(0.,0., 0.),ZAXIS), testDiffGeo)
     pnts = [SVector{2}(aa()[2][4].ray.base[1:2]) for i in 1:100000]
     scatter!(ax1,pnts)
 
@@ -69,23 +69,23 @@ display(figDiffuserTest)
 
 testgeo = [
     refractSphere("first", ORIGIN,ZAXIS,1., 1.5, 0., 5., "testcoat";ydir = nothing),
-    refractSphere("second", Point3(0., 0., 3.), ZAXIS, 1.5, 1., -0.1, 5., "testcoat"),
+    refractSphere("second", SVector{3,Float64}(0., 0., 3.), ZAXIS, 1.5, 1., -0.1, 5., "testcoat"),
 
-    refractSphere("third", Point3(0., 0., 3.5), ZAXIS, 1., 1.5, 0.1, 5., "testcoat"; ydir = Vec3(sin(π/2), cos(π/2), 0.)),
-    refractSphere("fourth", Point3(0., 0., 6.5), ZAXIS, 1.5, 1., 0., 5., "testcoat"; ydir = Vec3(sin(π/2), cos(π/2), 0.)),
+    refractSphere("third", SVector{3,Float64}(0., 0., 3.5), ZAXIS, 1., 1.5, 0.1, 5., "testcoat"; ydir = SVector{3,Float64}(sin(π/2), cos(π/2), 0.)),
+    refractSphere("fourth", SVector{3,Float64}(0., 0., 6.5), ZAXIS, 1.5, 1., 0., 5., "testcoat"; ydir = SVector{3,Float64}(sin(π/2), cos(π/2), 0.)),
 
 #    refractSphere("last", SVector(0., 0., 15.), ZAXIS, 1. , 1. , 0., 10., "testcoat")
-    referencePlane("RP-last",Point3(0., 0., 15.), ZAXIS, 1. , 7., "testcoat")
+    referencePlane("RP-last",SVector{3,Float64}(0., 0., 15.), ZAXIS, 1. , 7., "testcoat")
 
 ]
 
 refIndexDefault = 1. 
 
 testGeometry = [
-    referencePlane("start",Point3(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
-    refractSphere("Lens1i", Point3(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
-    refractSphere("Lens10", Point3(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
-    referencePlane("image", Point3(0., 0., 50.), ZAXIS, refIndexDefault, 3., "testcoat")
+    referencePlane("start",SVector{3,Float64}(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
+    refractSphere("Lens1i", SVector{3,Float64}(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
+    refractSphere("Lens10", SVector{3,Float64}(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
+    referencePlane("image", SVector{3,Float64}(0., 0., 50.), ZAXIS, refIndexDefault, 3., "testcoat")
 ]
 
 
@@ -97,7 +97,7 @@ function test2(fig)
 
     scene1 = plotGeometry3D!(lscene, testgeo)
 
-    scene2 = trcAndPrintPlotRay!(lscene, Ray(Point3(0., 5.0, -10.), Vec3(0., 0., 1.)), testgeo )
+    scene2 = trcAndPrintPlotRay!(lscene, Ray(SVector{3,Float64}(0., 5.0, -10.), SVector{3,Float64}(0., 0., 1.)), testgeo )
 
     #refPlane = referencePlane("test reference plane",ORIGIN,YAXIS, 1., 5., "testCoating")
     lscene2 = LScene(fig[1,3], scenekw = (camera = cam3d_cad!, raw = false))
@@ -107,9 +107,9 @@ function test2(fig)
 
     scene3 = plotGeometry3D!(lscene2, testGeometry)
 
-    scene4 = trcAndPrintPlotRay!(lscene2, Ray(Point3(0., 10.0, -50.), Vec3(0., 0., 1.)), testGeometry)
+    scene4 = trcAndPrintPlotRay!(lscene2, Ray(SVector{3,Float64}(0., 10.0, -50.), SVector{3,Float64}(0., 0., 1.)), testGeometry)
 
-    scene5 = trcAndPrintPlotRay!(lscene2, Ray(Point3(0., 10.0, -50.), Vec3(0., -10.0/50., sqrt(1-(10.0/50.)^2))), testGeometry)
+    scene5 = trcAndPrintPlotRay!(lscene2, Ray(SVector{3,Float64}(0., 10.0, -50.), SVector{3,Float64}(0., -10.0/50., sqrt(1-(10.0/50.)^2))), testGeometry)
     fig
 end
 
@@ -117,28 +117,28 @@ display(test2(figs[2]))
 
 ## test 3
 
-l2i = refractSphere("Lens2i", Point3(-131., 0., 40.), XAXIS, refIndexDefault,
+l2i = refractSphere("Lens2i", SVector{3,Float64}(-131., 0., 40.), XAXIS, refIndexDefault,
     1.5, 0., 20., "coatingTransmitFresnel") # gaussian power of 1/100
-l2o = refractSphere("Lens2o", Point3(-141., 0., 40.), XAXIS, 1.5,
+l2o = refractSphere("Lens2o", SVector{3,Float64}(-141., 0., 40.), XAXIS, 1.5,
     refIndexDefault, 1.0 /50., 20., "coatingTransmitFresnel")
 
 testGeometry2 = [
-    referencePlane("start",Point3(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
-    refractSphere("Lens1i", Point3(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
-    refractSphere("Lens10", Point3(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
-    planeMirror("Mirror", Point3(0., 0., 40.), Vec3(cos(π /4), 0., sin(π/4)),
+    referencePlane("start",SVector{3,Float64}(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
+    refractSphere("Lens1i", SVector{3,Float64}(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
+    refractSphere("Lens10", SVector{3,Float64}(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
+    planeMirror("Mirror", SVector{3,Float64}(0., 0., 40.), SVector{3,Float64}(cos(π /4), 0., sin(π/4)),
     refIndexDefault, 1.5, 8., "coatingReflectFresnel"),
-    roundAperture("App", Point3(-20., 0., 40.), XAXIS, refIndexDefault, 0., 5.; ydir = Vec3(sin(π/2), cos(π/2), 0.)),
-    roundAperture("Hole", Point3(-20., -2.5, 40.), XAXIS, refIndexDefault,1., ∞;ydir = nothing),
-    rectAperture("RectApp", Point3(-120., -5., 40.), XAXIS,
-    Vec3(0., sqrt(2.)/2, sqrt(2.)/2), refIndexDefault, 1.0, 2.0, 5., 10.),
+    roundAperture("App", SVector{3,Float64}(-20., 0., 40.), XAXIS, refIndexDefault, 0., 5.; ydir = SVector{3,Float64}(sin(π/2), cos(π/2), 0.)),
+    roundAperture("Hole", SVector{3,Float64}(-20., -2.5, 40.), XAXIS, refIndexDefault,1., ∞;ydir = nothing),
+    rectAperture("RectApp", SVector{3,Float64}(-120., -5., 40.), XAXIS,
+    SVector{3,Float64}(0., sqrt(2.)/2, sqrt(2.)/2), refIndexDefault, 1.0, 2.0, 5., 10.),
     l2i, l2o,
-    planeMirror("Mirror", Point3(-161., 0., 40.), XAXIS, refIndexDefault,
+    planeMirror("Mirror", SVector{3,Float64}(-161., 0., 40.), XAXIS, refIndexDefault,
         1.5, 8., "coatingTransmitFresnel"),
     # test going backwards through refractive surfaces
     l2o, l2i,
 
-    referencePlane("end", Point3(50., 0., 40.), XAXIS, refIndexDefault, 3., "testcoat")
+    referencePlane("end", SVector{3,Float64}(50., 0., 40.), XAXIS, refIndexDefault, 3., "testcoat")
 ]
 
 #
@@ -151,30 +151,7 @@ Makie.update_cam!(scene6.scene)
 display(fig6)
 
 
-function testrace(n)
-    sts = zeros(Int64, n)
-    - , trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
-    for i in 1:n
-        sts[i], trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
-    end
-    sts
-end
 
-function testrace2(n)
-    sts = zeros(Int64, n)
-    - , trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
-    for i in 1:n
-        sts[i], len = traceGeometryRel!(trc,Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometry2)
-    end
-    sts
-end
-
-@time testrace(10000)
-@time testrace2(10000)
-@time st, trc = traceGeometryRel(Ray(ORIGIN, ZAXIS), testGeometry2)
-@time st, len = traceGeometryRel!(trc, Ray(ORIGIN, ZAXIS), testGeometry2)
-@time test(1000) 
-ottest(n) = [Point(0.0, 0.0, i) for i in 1:n]
 ## test OAP operation test4
 
 function testOAP(f1, f2, oapseparation, aper)
@@ -186,11 +163,11 @@ function testOAP(f1, f2, oapseparation, aper)
     aper = 38.1 * 0.5 #from NewportMKS catalog
 =#
     sourceplane = ORIGIN
-    mirror1 = Point3(sourceplane .+ (vefl1) .* ZAXIS...)
+    mirror1 = SVector{3}(sourceplane .+ (vefl1) .* ZAXIS)
     println("mirror1 base = $mirror1")
-    mirror2 = Point3(mirror1 .+ oapseparation .* YAXIS...)
+    mirror2 = SVector{3}(mirror1 .+ oapseparation .* YAXIS)
     println("mirror2 base = $mirror2")
-    imageplane = Point3(mirror2 .+ vefl .* ZAXIS...)
+    imageplane = SVector{3}(mirror2 .+ vefl .* ZAXIS)
     println("image plane = $imageplane")
 
     c = 1.0/vefl
@@ -230,7 +207,7 @@ function offAxisParabolaTest(fig)
 
     plotGeometry3D!(lscene, parabolageometry3)
 
-    testProfile = SurfProfileOAConic(1/25.0 ,  0.0 , Vec3(0.0, 25.0, -25.0 * 0.5))
+    testProfile = SurfProfileOAConic(1/25.0 ,  0.0 , SVector{3,Float64}(0.0, 25.0, -25.0 * 0.5))
 
     #θ = 0.3
     θ = 0.
@@ -265,16 +242,16 @@ diffusergeo =
     [
 
     cDiffuser("diffuser", ORIGIN, ZAXIS, refIndexDefault, refIndexDefault, 25.0*π / 180., 12.5, "nocoating"),
-    roundAperture("aperture", Point3(0., 0., 100.), ZAXIS, 1.0, 0.0, 20.0, color = :green3),
-    refractSphere("Lens1i", Point3(0., 0., 100.), ZAXIS, 1.0, 101., 0., 20., "testcoat"),
-    refractSphere("Lens10", Point3(0., 0., 101.), ZAXIS, 101., 1., -1. / 5000., 20., "testcoat"),
-    referencePlane("image",Point3(149.969 .* ZAXIS...), ZAXIS, refIndexDefault , 50., "testcoat")
+    roundAperture("aperture", SVector{3,Float64}(0., 0., 100.), ZAXIS, 1.0, 0.0, 20.0, color = :green3),
+    refractSphere("Lens1i", SVector{3,Float64}(0., 0., 100.), ZAXIS, 1.0, 101., 0., 20., "testcoat"),
+    refractSphere("Lens10", SVector{3,Float64}(0., 0., 101.), ZAXIS, 101., 1., -1. / 5000., 20., "testcoat"),
+    referencePlane("image",149.969 .* ZAXIS, ZAXIS, refIndexDefault , 50., "testcoat")
     ]
 
 fig7, scenediff = plotGeometry3D(diffusergeo)
 begin
     for i in 1:100
-        trcAndPlotRay!(scenediff, Ray(ORIGIN, Vec3(normalize([0., 0., .9])...)), diffusergeo, color=:blue)
+        trcAndPlotRay!(scenediff, Ray(ORIGIN, SVector{3,Float64}(normalize([0., 0., .9]))), diffusergeo, color=:blue)
     end
 end
 

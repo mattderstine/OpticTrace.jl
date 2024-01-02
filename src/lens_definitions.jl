@@ -6,30 +6,35 @@ export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface, A
 export AmpData
 
 
-abstract type AbstractRay{N} end
-abstract type AbstractSurfBase{N} end
+abstract type AbstractRay{T<:Real,N} end
+abstract type AbstractSurfBase{T<:Real,N} end
 
 abstract type AbstractSize{T<:Real} end
 abstract type AbstractSurfProfile{T<:Real} end
 abstract type AbstractAmplitudeParam end
 abstract type AbstractBendType{T<:Real} end #some info on how to do the bending
-abstract type AbstractBendDielectric{T} <: AbstractBendType{T} end
-abstract type AbstractBendMirror{T} <: AbstractBendType{T} end
+abstract type AbstractBendDielectric{T<:Real} <: AbstractBendType{T} end
+abstract type AbstractBendMirror{T<:Real} <: AbstractBendType{T} end
 abstract type AbstractOpticalObject{T<:Real} end
-abstract type AbstractTrace{T<:Real} end
+abstract type AbstractTrace{T<:Real,N} end
 
 APorString = Union{AbstractAmplitudeParam, String}
 
-struct Ray{N} <: AbstractRay{N}
-    base::Point{N}
-    dir::Vec{N}
-
+struct Ray{T,N} <: AbstractRay{T,N}
+    base::SVector{N,T}
+    dir::SVector{N,T}
 end
 
-mutable struct SurfBase{N} <: AbstractSurfBase{N}
-    base::Point{N}
-    dir::Vec{N}
-    ydir::Vec{N}
+#=
+function Ray(b, d)
+    Ray(Point{3}(b), Vec{3}(d))
+end
+=#
+
+mutable struct SurfBase{T, N} <: AbstractSurfBase{T,N}
+    base::SVector{N,T}
+    dir::SVector{N,T}
+    ydir::SVector{N,T}
 end
 
 
@@ -65,7 +70,7 @@ end
 struct SurfProfileOAConic{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
-    offset::Vec3
+    offset::SVector{3, T}
 end
 
 struct SurfProfileAsphere{T} <: AbstractSurfProfile{T}
@@ -95,11 +100,11 @@ struct AmpParam <: AbstractAmplitudeParam
     type::String
 end
 
-abstract type AbstractAmpData{T <:Real} end
+abstract type AbstractAmpData{T <:Real, N} end
 
-mutable struct AmpData{T} <: AbstractAmpData{T}
-    p::Matrix{T}
-    o::Matrix{T}
+mutable struct AmpData{T,N,M, L} <: AbstractAmpData{T,N}
+    p::SMatrix{N,M,T, L}
+    o::SMatrix{N,M,T, L}
     trans::T #for intensity systems, the "transmission" coefficient of the surface
 end
 
@@ -112,11 +117,11 @@ end
         delta   length of ray leaving surface
         pmatrix polarization p & o matrices
 """
-mutable struct Trace{T} <:AbstractTrace{T}
-    ray::Ray{3}
+mutable struct Trace{T,N} <:AbstractTrace{T,N}
+    ray::Ray{T,N}
     nIn::T
     delta::T
-    pmatrix::AbstractAmpData{T}
+    pmatrix::AbstractAmpData{T,N}
 end
 
 #=
@@ -162,9 +167,9 @@ end
 abstract type AbstractSurface{N,T} <: GeometryBasics.GeometryPrimitive{N, T} end
 #abstract type AbstractSurface <: GeometryBasics.AbstractGeometry{3, Float64} end
 
-mutable struct OptSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
+mutable struct OptSurface{N,T} <: AbstractSurface{N,T} #use the data to overload GemoetryBasics
     surfname::String
-    base::SurfBase{N}
+    base::SurfBase{T,N}
     aperture::AbstractSize{T}
     profile::AbstractSurfProfile{T}
     mod::AbstractBendType{T}
@@ -173,12 +178,14 @@ mutable struct OptSurface{N,T} <: AbstractSurface{N,T}  #use the data to overloa
     toLocalCoord::AffineMap
     toGlobalDir::LinearMap
     toLocalDir::LinearMap
+    #toGCMat::SMatrix{3,3,T,9}
+    #toLCMat::SMatrix{3,3,T,9}
     color
 end
 
 mutable struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overload GemoetryBasics
     surfname::String
-    base::SurfBase{N}
+    base::SurfBase{T,N}
     aperture::AbstractSize{T}
     profile::AbstractSurfProfile{T}
     refIndex::T #needed for OPD calculations
@@ -186,6 +193,8 @@ mutable struct ModelSurface{N,T} <: AbstractSurface{N,T}  #use the data to overl
     toLocalCoord::AffineMap
     toGlobalDir::LinearMap
     toLocalDir::LinearMap
+    #toGCMat::SMatrix{3,3,T,9}
+    #toLCMat::SMatrix{3,3,T,9}
     color
 end
 

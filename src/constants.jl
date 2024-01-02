@@ -1,8 +1,8 @@
 
-const ORIGIN = Point3(0., 0., 0.)
-const ZAXIS = Vec3(0., 0., 1.)
-const YAXIS = Vec3(0.,1.,0.)
-const XAXIS = Vec3(1.,0.,0.)
+const ORIGIN = SVector{3}(0., 0., 0.)
+const ZAXIS = SVector{3}(0., 0., 1.)
+const YAXIS = SVector{3}(0.,1.,0.)
+const XAXIS = SVector{3}(1.,0.,0.)
 
 const ∞ = Inf
 

@@ -363,7 +363,7 @@ end
     current version assumes telecentric pupil/stop (i.e. reference ray θ=0)
 
 """
-function plotRayFan!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
+function plotRayFan!(scene, r::SVector{3}, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
     raysy = Vector{SVector{3, Float64}}(undef, points)
     raysx = Vector{SVector{3, Float64}}(undef, points)
     surfnum = surfnumFromName(surfview, geo)
@@ -623,7 +623,7 @@ function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", colo
     radiusRefSphere = (baseImage[3]-zExitPupilLoc+offset)/dirImage[3]
     curvRefSphere = 1.0/radiusRefSphere
     #should have x & y = 0 if exitpupil unless telecentric system
-    baseExitPupil = Point3(0., 0., zExitPupilLoc)
+    baseExitPupil = SVector{3}(0., 0., zExitPupilLoc)
 
     println("zExitPupilLoc = $zExitPupilLoc  radiusRefSphere = $radiusRefSphere")
 
@@ -673,7 +673,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     sizeO = h * sizeOptic(egeo.surfaceObject.aperture) # h is 0 to 1
     sizeP = sizeOptic(usedgeo[1].aperture)
 
-    r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
+    r = SVector{3}(0., sizeO, egeo.surfaceObject.base.base[3])
     z = usedgeo[1].base.base[3]
 
     dirRef = normalize!(usedgeo[1].base.base .- r)
@@ -707,7 +707,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     radiusRefSphere = (baseImage[3]-zExitPupilLoc+focusOffset)/dirImage[3]
     curvRefSphere = 1.0/radiusRefSphere
     #should have x & y = 0 if exitpupil unless telecentric system
-    baseExitPupil = Point3(0., 0., zExitPupilLoc)
+    baseExitPupil = SVector{3}(0., 0., zExitPupilLoc)
 
     #println("zExitPupilLoc = $zExitPupilLoc  radiusRefSphere = $radiusRefSphere")
 
@@ -758,7 +758,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     sizeO = h * sizeOptic(egeo.surfaceObject.aperture) # h is 0 to 1
     sizeP = sizeOptic(usedgeo[1].aperture)
 
-    r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
+    r = SVector{3}(0., sizeO, egeo.surfaceObject.base.base[3])
 
     dirRef = normalize!(usedgeo[1].base.base .- r)
     #println("r = $r  dirRef = $dirRef")
@@ -791,7 +791,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     radiusRefSphere = (baseImage[3]-zExitPupilLoc+focusOffset)/dirImage[3]
     curvRefSphere = 1.0/radiusRefSphere
     #should have x & y = 0 if exitpupil unless telecentric system
-    baseExitPupil = Point3(0., 0., zExitPupilLoc)
+    baseExitPupil = SVector{3}(0., 0., zExitPupilLoc)
 
     #println("zExitPupilLoc = $zExitPupilLoc  radiusRefSphere = $radiusRefSphere")
 
@@ -809,7 +809,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     z = finalgeo[1].base.base[3]
 
     wl = egeo.wavelength[1] * 1e-3
-    opdfunc(xi, yi) = opdRel(Ray(Point3(xi, yi, 0.), normalize(Vec3(xi, yi, z).-r)), refTrace, finalgeo)/wl
+    opdfunc(xi, yi) = opdRel(Ray(SVector{3}(xi, yi, 0.), normalize(SVector{3}(xi, yi, z).-r)), refTrace, finalgeo)/wl
     opd = [opdfunc(xi, yi) for xi in x, yi in y]
 
     

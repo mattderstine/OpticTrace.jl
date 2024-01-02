@@ -1,18 +1,18 @@
 #beamlet decomposition
 
-struct Beamlet
-    base::SurfBase
-    amp::Float64
-    wx::Float64
-    wy::Float64
-    ϕ::Float64
-    curvx::Float64
-    curvy::Float64
-    chief::Ray
-    rayWx::Ray
-    rayWy::Ray
-    rayDx::Ray
-    rayDy::Ray
+struct Beamlet{T,N}
+    base::SurfBase{T,N}
+    amp::T
+    wx::T
+    wy::T
+    ϕ::T
+    curvx::T
+    curvy::T
+    chief::Ray{T,N}
+    rayWx::Ray{T,N}
+    rayWy::Ray{T,N}
+    rayDx::Ray{T,N}
+    rayDy::Ray{T,N}
 end
 
 #=
@@ -47,5 +47,8 @@ gaussBeamParams(base, dir, w, curv, λ)
 
     Returns 
 """
-function gaussBeamParams()
+function gaussBeamParams(base, dir, w, curv, λ)
+
+end
+
     
