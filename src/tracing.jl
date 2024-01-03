@@ -133,6 +133,7 @@ function traceGeometry(r::Ray, geo)
     i = 1
     for surf in geo
         i += 1 #first element in trace is [2] in array
+        println(surf.surfname)
         status, trc[i] = traceSurf(curRay, surf)
         if status != 0
             break
@@ -158,6 +159,7 @@ function traceGeometry!(trc, r::Ray, geo)
     i = 1
     for surf in geo
         i += 1 #first element in trace is [2] in array
+        println(surf.surfname)
         status, - = traceSurf!(trc[i], curRay, surf)
         if status != 0
             break
@@ -170,16 +172,17 @@ end
 function traceGeometryRel(rr::Ray, geo)
     trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
-    globalbase = surf1.toGlobalCoord(rr.base)
-    globaldir = surf1.toGlobalDir(rr.dir)
-    #globalbase = SVector{3}(matmul3(surf1.toGCMat, rr.base))+surf1.base.base
-    #globaldir = SVector{3}(matmul3(surf1.toGCMat, rr.dir))
+    #globalbase = surf1.toGlobalCoord(rr.base)
+    #globaldir = surf1.toGlobalDir(rr.dir)
+    globalbase = SVector{3}(matmul3(surf1.toGCMat, rr.base))+surf1.base.base
+    globaldir = SVector{3}(matmul3(surf1.toGCMat, rr.dir))
     curRay=Ray(globalbase, globaldir)
     trc[1] = Trace(curRay, 1., 0., identityAmpMats()) #save the start ray etc
     status = 0
     i = 1
     for surf in geo
         i += 1 #first element in trace is [2] in array
+        println(surf.surfname)
         status, trc[i] = traceSurf(curRay, surf)
         if status != 0
             break
@@ -192,11 +195,11 @@ end
 function traceGeometryRel!(trc, rr::Ray, geo)
     #trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
-    globalbase = surf1.toGlobalCoord(rr.base)
-    globaldir = surf1.toGlobalDir(rr.dir)
+    #globalbase = surf1.toGlobalCoord(rr.base)
+    #globaldir = surf1.toGlobalDir(rr.dir)
 
-    #globalbase = SVector{3}(matmul3(surf1.toGCMat, rr.base))+surf1.base.base
-    #globaldir = SVector{3}(matmul3(surf1.toGCMat, rr.dir))
+    globalbase = SVector{3}(matmul3(surf1.toGCMat, rr.base))+surf1.base.base
+    globaldir = SVector{3}(matmul3(surf1.toGCMat, rr.dir))
     curRay=Ray(globalbase, globaldir)
     traceGeometry!(trc, curRay, geo)
 end
@@ -232,13 +235,13 @@ end
     used in plotting and to continue a nonsequential raytrace
 """
 function traceSurf(r::Ray,s::OptSurface)
-    localRayStart=s.toLocalCoord(r.base)
-    localRayDir = s.toLocalDir(r.dir)
+    #localRayStart=s.toLocalCoord(r.base)
+    #localRayDir = s.toLocalDir(r.dir)
     
-    #localRayDir = matmul3(s.toLCMat, r.dir)
-    #@time localRayStart = matmul3(s.toLCMat, r.base-s.base.base)
-
-    delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
+    localRayDir = SVector{3}(matmul3(s.toLCMat, r.dir))
+    localRayStart = SVector{3}(matmul3(s.toLCMat, r.base-s.base.base))
+    println("delta")
+    @time delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
     #=
     if debugFlag
         println("traceSurf...  Δ = $delta")
@@ -250,17 +253,19 @@ function traceSurf(r::Ray,s::OptSurface)
     end
     newRayBase = r.base + r.dir * delta
     newLocalBase = localRayStart .+ localRayDir .* delta
+    println("lnormal")
+    @time lnormal = surfNormal(newLocalBase, s.profile)
 
-    lnormal = surfNormal(newLocalBase, s.profile)
-
-    normal = s.toGlobalDir(lnormal)
-    #normal =SVector{3}(matmul3(s.toGCMat, lnormal))
+    println("normal")
+    #normal = s.toGlobalDir(lnormal)
+    @time normal =SVector{3}(matmul3(s.toGCMat, lnormal))
     #=
     if debugFlag
         println("local normal = $lnormal  global normal = $normal")
     end
     =#
-    t, newRayDir, nIn = modFunc(Ray(newRayBase, r.dir), normal, s.mod)
+    println("modfunc")
+    @time t, newRayDir, nIn = modFunc(Ray(newRayBase, r.dir), normal, s.mod)
     if !t
         return (2, Trace(Ray(newRayBase, newRayDir), nIn, delta, identityAmpMats()))
     end
@@ -270,8 +275,8 @@ function traceSurf(r::Ray,s::OptSurface)
     end
     =#
     # can modify amplitude/polarization and direction of the ray, can't change intersection
-
-    ampMats, newRayDir = surfAmpFunc(r.dir, newRayDir, normal, newLocalBase, s.mod, s.coating)
+    println("surfampfunc")
+    @time ampMats, newRayDir = surfAmpFunc(r.dir, newRayDir, normal, newLocalBase, s.mod, s.coating)
 
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
@@ -329,10 +334,10 @@ function traceSurf!(trc, r::Ray,s::OptSurface)
 end
 
 function traceSurf(r::Ray,s::ModelSurface)
-    localRayStart=s.toLocalCoord(r.base)
-    @time localRayDir = s.toLocalDir(r.dir)
-    #localRayDir = SVector{3}(matmul3(s.toLCMat, r.dir))
-    #localRayStart = SVector{3}(matmul3(s.toLCMat, r.base-s.base.base))
+    #localRayStart=s.toLocalCoord(r.base)
+    #localRayDir = s.toLocalDir(r.dir)
+    localRayDir = SVector{3}(matmul3(s.toLCMat, r.dir))
+    localRayStart = SVector{3}(matmul3(s.toLCMat, r.base-s.base.base))
     #println("\ntraceSurf - ModelSurface  name = $(s.surfname)")
     #println("aperture = $(s.aperture)")
 
@@ -520,7 +525,7 @@ end
     modFunc
 
 """
-function modFunc(ray::Ray, normal::SVector{3}, d::AbstractBendDielectric)
+function modFunc(ray::Ray{T,N}, normal::SVector{N,T}, d::D) where {N,T,D<:AbstractBendDielectric{T}}
     r = ray.base
     a = ray.dir
 
@@ -547,7 +552,7 @@ end
 
 
 
-function modFunc(ray::Ray, normal::SVector{3}, d::AbstractBendMirror)
+function modFunc(ray::Ray{T,N}, normal::SVector{N, T}, d::D) where {N,T,D<:AbstractBendMirror}
     r = ray.base
     a = ray.dir
     cosI = a ⋅ normal
@@ -560,7 +565,7 @@ function modFunc(ray::Ray, normal::SVector{3}, d::AbstractBendMirror)
     true, (a - (2. * (cosI)) .* normal), nIn  # Welford 4.46
 end
 
-function modFunc(ray::Ray, normal::SVector{3}, d::CDiffuser)
+function modFunc(ray::Ray{T,N}, normal::SVector{N, T}, d::CDiffuser) where {N,T}
     r = ray.base
     a = ray.dir
     perpapprox = zeros(Float64,3)

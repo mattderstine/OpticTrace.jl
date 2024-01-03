@@ -12,30 +12,30 @@ attributesSurfaces = Dict{String, Any}()
 ##
 
 testGeometrytime = [
-    referencePlane("start",Point3(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
-    refractSphere("Lens1i", Point3(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
-    refractSphere("Lens10", Point3(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
+    referencePlane("start",SVector{3,Float64}(0., 0., -50.), ZAXIS, refIndexDefault , 10., "testcoat"),
+    refractSphere("Lens1i", SVector{3,Float64}(0., 0., 0.), ZAXIS, refIndexDefault, 1.5, 1. / 50., 20., "testcoat"),
+    refractSphere("Lens10", SVector{3,Float64}(0., 0., 10.), ZAXIS, 1.5, refIndexDefault, -1. /50., 20., "testcoat"),
 
 
-    referencePlane("end", Point3(0.,0, 40.), ZAXIS, refIndexDefault, 3., "testcoat")
+    referencePlane("end", SVector{3,Float64}(0.,0, 40.), ZAXIS, refIndexDefault, 3., "testcoat")
 ]
 figt, scenet = plotGeometry3D(testGeometrytime)
 display(figt)
 
 function testrace(n)
     sts = zeros(Int64, n)
-    - , trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
+    - , trc = traceGeometryRel(Ray(SVector{3,Float64}(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
     for i in 1:n
-        sts[i], trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
+        sts[i], trc = traceGeometryRel(Ray(SVector{3,Float64}(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
     end
     sts
 end
 
 function testrace2(n)
     sts = zeros(Int64, n)
-    - , trc = traceGeometryRel(Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
+    - , trc = traceGeometryRel(Ray(SVector{3,Float64}(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
     for i in 1:n
-        sts[i], len = traceGeometryRel!(trc,Ray(Point3(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
+        sts[i], len = traceGeometryRel!(trc,Ray(SVector{3,Float64}(0.0, rand(), 0.0), ZAXIS), testGeometrytime)
     end
     sts
 end
@@ -103,7 +103,7 @@ end
 @time testmatmul(ZAXIS)
 
 function tt!(dir)
-    dir =  dd*dir
+    dir =  dds*dir
 end
 ttt = ZAXIS
 @time tt!(ttt)
@@ -155,14 +155,14 @@ multest3(dds)
 o = (0.0,0.0,0.0)
 d = (1.0, 0.0, 0.0)
 
-osv = Point3(o)
-dsv = Vec3(d)
+osv = SVector{3,Float64}(o)
+dsv = SVector{3,Float64}(d)
 
 function rayalloctest()
-    osv = Point3(rand(3))
-    dsv = Vec3(rand(3))
+    osv = SVector{3,Float64}(rand(3))
+    dsv = SVector{3,Float64}(rand(3))
     @timev a = Ray(osv,dsv)
-    return (a.base[1])
+    return (a)
 end
 
 rayalloctest()
