@@ -173,7 +173,6 @@ end
 @time testrace2(10000)
 @time st, trc = traceGeometryRel(Ray(ORIGIN, ZAXIS), testGeometry2)
 @time st, len = traceGeometryRel!(trc, Ray(ORIGIN, ZAXIS), testGeometry2)
-@time test(1000) 
 ottest(n) = [Point(0.0, 0.0, i) for i in 1:n]
 ## test OAP operation test4
 

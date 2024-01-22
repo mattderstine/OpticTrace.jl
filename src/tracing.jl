@@ -481,8 +481,8 @@ end
 
 """
 function identityAmpMats()
-    identity = [[1.0, 0.0, 0.0] [ 0.0, 1.0, 0.0] [ 0.0, 0.0, 1.0]]
-    AmpData(identity, identity, 1.)
+    #identity = [[1.0, 0.0, 0.0] [ 0.0, 1.0, 0.0] [ 0.0, 0.0, 1.0]]
+    AmpData(identityPol, identityPol, [1.])
     #retirm matrices for P & O and unity transmission
 end
 

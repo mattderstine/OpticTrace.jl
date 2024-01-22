@@ -97,10 +97,10 @@ end
 
 abstract type AbstractAmpData{T <:Real} end
 
-mutable struct AmpData{T} <: AbstractAmpData{T}
-    p::Matrix{T}
-    o::Matrix{T}
-    trans::T #for intensity systems, the "transmission" coefficient of the surface
+struct AmpData{T} <: AbstractAmpData{T}
+    p::SMatrix{3,3,T}
+    o::SMatrix{3,3,T}
+    trans::Array{T,1} #for intensity systems, the "transmission" coefficient of the surface
 end
 
 
