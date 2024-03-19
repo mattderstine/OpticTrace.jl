@@ -573,11 +573,11 @@ function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Poin
     identityAmpMats(), dirOut
 end
 
-attributesSurfaces = Dict{String, Any}()
+attributesSurfaces::Dict{String,Any} = Dict{String, Any}()
 
 function getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
-    tupleParam = get!(attributesSurfaces, s, (AmpParam, s))
-    return tupleParam[1](tupleParam[2:end]...)
+    amp = get!(attributesSurfaces, s, AmpParam(s))
+    return amp
 end
 
 function getAmpParams(s::AbstractAmplitudeParam; attributesSurfaces=attributesSurfaces)
@@ -942,7 +942,7 @@ function planeMirror(surfname::String,
     semiDiam::Float64,
     coating::APorString
     ;color = :blue, 
-    attributesSurfaces = attributesSurfaces, 
+    attributesSurfaces = attributesSurfaces,  #attributesSurfaces is a global dictionary
     ydir::Union{Vec3, Nothing}=nothing)
 
     reflectConic(surfname,
