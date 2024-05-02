@@ -2,32 +2,52 @@
 
 
 export printTrcCoords, trcAndPrintRay, trcAndPrintRayRel, printTrcLen
-export opdRel, trcAndPrintLengthsRel, trcAndPrintLengths, surfnumFromName
+export opdRel, trcAndPrintLengthsRel, trcAndPrintLengths, tracenumFromName, surfaceFromName
 export printSurfNames, printMissed, printGeo, printSurface, printTrcStatus
+export numsurfFromName
 
 
 """
-    surfFromName(surfview, geo)
-    surfview -string with user defined name of the surface
-    geo - geometry
+    tracenumFromName(surfview, geo)
+        surfview -string with user defined name of the surface
+        geo - geometry
+
+    returns the index into an Array{Trace} corresponding to geo for the first surface with that name.
+"""
+tracenumFromName(surfview, geo) = numsurfFromName(surfview, geo)+1
+
+
+
+"""
+    numsurfFromName(surfview, geo)
+
+        surfview -string with user defined name of the surface
+        geo - geometry
 
     returns the surface number +1. This indexes properly for Trace results
+TBW
 """
-function surfnumFromName(surfview, geo)
+function numsurfFromName(surfview, geo)
     if (surfview == "end")
-        surfnum = length(geo)+1
+        surfnum = length(geo)
     else
         surfnum = findfirst(x->x.surfname==surfview, geo)
         if isnothing(surfnum)
             println("Surface: $surfview not found. Default to end")
-            surfnum = length(geo)+1
-        else
-            surfnum = surfnum +1
+            surfnum = length(geo)
         end
     end
     surfnum
 end
 
+"""
+    surfaceFromName(surfview, geo)
+    surfview -string with user defined name of the surface
+    geo - geometry
+
+    returns the surface corresponding to the name
+"""
+surfaceFromName(name, geo)= geo[tracenumFromName(name,geo)-1]
 
 """
 printTrcCoords(ray::Ray, geo; color=:blue, clipmsg=false)
@@ -124,12 +144,18 @@ function trcAndPrintLengths(ray::Ray, geo)
 end
 
 
-function printSurfNames(geo)
+function printSurfNames(geo; fulldir = :false)
     for (i, surf) in enumerate(geo)
         base = surf.base.base
         dir = surf.base.dir
+        ydir = surf.base.ydir
         strbasedir = @sprintf("(%10.5f, %10.5f, %10.5f)  (%10.5f, %10.5f, %10.5f)",base[1], base[2], base[3], dir[1], dir[2], dir[3] )
-        println("$i\t$(surf.surfname) $(" "^(20-length(surf.surfname))) $strbasedir")
+        if fulldir
+            strydir = @sprintf("  (%10.5f, %10.5f, %10.5f)",ydir[1], ydir[2], ydir[3] )
+        else
+            strydir =""
+        end
+        println("$i\t$(surf.surfname) $(" "^(20-length(surf.surfname))) $strbasedir $strydir")
     end
 end
 
@@ -147,6 +173,7 @@ function printMissed(m, geo)
     end
 end
 
+printSurface(surf) = printSurface(1, surf)
 
 function printSurface(n, surf::OptSurface)
     base = surf.base.base

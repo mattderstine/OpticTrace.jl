@@ -5,7 +5,7 @@ export reflectOAConic, reflectOAP, refractAsphere, reflectAsphere
 export referencePlane, planeMirror, modFunc
 export lensSinglet, lensASinglet, traceMonteCarloRays, conmputeRearFocalPlane
 export sag, randomPointOnSquare, randomPointOnDisk
-export attributesSurfaces, surfNormal
+export attributesSurfaces, surfNormal, traceLoss
 
 """
     sag - compute the z coordinate in local coordinates for decendants of
@@ -253,7 +253,7 @@ function traceSurf(r::Ray,s::OptSurface)
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
-function Trace!(trc, ray, index, delta, ampdata)
+function Trace!(trc::Trace{T}, ray, index, delta, ampdata) where T
     trc.ray = ray
     trc.nIn = index
     trc.delta = delta
@@ -1147,3 +1147,17 @@ function computeRearFocalPlane(geo; epsilon = 0.001)
 
     return (0, fly, flx, yplane, xplane)
 end
+
+
+"""
+    traceLoss(trc, l = 1.0)
+    calculate the loss of an Array{Trace}
+TBW
+"""
+function traceLoss(trc, l = 1.0)
+    for t in trc
+        l *= t.pmatrix.trans[1]
+    end
+    return l
+end
+

@@ -366,7 +366,7 @@ end
 function plotRayFan!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
     raysy = Vector{SVector{3, Float64}}(undef, points)
     raysx = Vector{SVector{3, Float64}}(undef, points)
-    surfnum = surfnumFromName(surfview, geo)
+    surfnum = tracenumFromName(surfview, geo)
     s = geo[surfnum-1]  #surfnum is defined for traces
 
     #find the reference local reference intercept coordinates
@@ -475,7 +475,7 @@ end
 function perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, points::Int64, geo;surfview = "end")
     trcStatMsg=("Normal","Missed","TIR","Clipped")
     rays = Vector{Ray}(undef, points)
-    surfnum = surfnumFromName(surfview, geo)
+    surfnum = tracenumFromName(surfview, geo)
 
     i = 1
     for ϕ in LinRange(0., 2pi, points)
@@ -537,7 +537,7 @@ end
 
 
 function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
-    surfnumStop = surfnumFromName("stop", geo)-1
+    surfnumStop = tracenumFromName("stop", geo)-1
     locgeo = geo[surfnumStop:end]
     status,trc = traceGeometryRel(Ray(ORIGIN, SVector(0., sin(epsilon), cos(epsilon))), locgeo)
     #check to make sure all made it through
@@ -591,7 +591,7 @@ function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", colo
 
     #surfview is assumed to be an image plane
 
-    surfnum = surfnumFromName(surfview, geo)
+    surfnum = tracenumFromName(surfview, geo)
     localgeo = geo[1:surfnum-1]  #surfnum is defined for traces
 
     #find the reference local reference intercept coordinates
@@ -667,7 +667,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
         return
     end
     localgeo = geo
-    surfnum = surfnumFromName(surfview, localgeo)
+    surfnum = tracenumFromName(surfview, localgeo)
     usedgeo = geo[1:surfnum-1]  #surfnum is defined for traces
     #these are just for test
     sizeO = h * sizeOptic(egeo.surfaceObject.aperture) # h is 0 to 1
@@ -752,7 +752,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
         return
     end
     localgeo = geo
-    surfnum = surfnumFromName(surfview, localgeo)
+    surfnum = tracenumFromName(surfview, localgeo)
     usedgeo = geo[1:surfnum-1]  #surfnum is defined for traces
     #these are just for test
     sizeO = h * sizeOptic(egeo.surfaceObject.aperture) # h is 0 to 1
