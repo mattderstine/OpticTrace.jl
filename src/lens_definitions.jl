@@ -71,7 +71,7 @@ end
 struct SurfProfileAsphere{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
-    a::Array{T} #hope this works...
+    a::Vector{T} #hope this works...
 end
 
 struct SurfProfileCyl{T} <: AbstractSurfProfile{T}

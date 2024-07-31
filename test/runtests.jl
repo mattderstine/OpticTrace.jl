@@ -1,5 +1,5 @@
 using OpticTrace
-using Test
+using BenchMarkTools
 
 
 
@@ -9,5 +9,6 @@ using Test
     # Write your tests here.
 
 include("testing.jl")
+
 
 end

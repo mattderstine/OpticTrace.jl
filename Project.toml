@@ -4,6 +4,7 @@ authors = ["Matthew Derstine"]
 version = "0.1.0-DEV"
 
 [deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"

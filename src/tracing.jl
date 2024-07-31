@@ -40,7 +40,7 @@ function sag(x::Float64, y::Float64, s::SurfProfileAsphere)
     r2 = (x^2+y^2)
     r = sqrt(r2)
     sqrtarg = 1-s.ϵ * s.curv^2 * r2
-    sg = s.curv * r2 /(1+ sqrt(1-s.ϵ * s.curv^2 * r2))+sum([s.a[i] * r2 * r^i for i in 1:length(s.a)])
+    sg = s.curv * r2 /(1+ sqrt(sqrtarg))+sum([ss * r2 * r^i for (i,s) in enumerate(s)])
     sg
 end
 
