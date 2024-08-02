@@ -48,4 +48,4 @@ gaussBeamParams(base, dir, w, curv, λ)
     Returns 
 """
 function gaussBeamParams()
-    
+end
