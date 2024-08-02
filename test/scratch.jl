@@ -34,3 +34,7 @@ trc = [Trace(r, 1., 0., OpticTrace.identityAmpMats()) for i in 1:length(testGeom
 r=Ray(Point3(0., 10.0, -50.), Vec3(0., -10.0/50., sqrt(1-(10.0/50.)^2)))
 OpticTrace.Trace!(trc[1], r, 1., 0., OpticTrace.identityAmpMats()) #save the start ray etc
 @benchmark traceGeometry!(trc, r, geo ) setup=(trc = [Trace(Ray(Point3(0., 10.0, -50.), Vec3(0., -10.0/50., sqrt(1-(10.0/50.)^2))), 1., 0., OpticTrace.identityAmpMats()) for i in 1:length(testGeometry)+1]; r=Ray(Point3(0., 10.0, -50.), Vec3(0., -10.0/50., sqrt(1-(10.0/50.)^2))); geo=testGeometry)
+
+using StaticArrays
+
+a = StaticArrays.Vec3(0, 0, 0)
