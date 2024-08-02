@@ -253,7 +253,7 @@ function traceSurf(r::Ray,s::OptSurface)
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
-function Trace!(trc::Trace{T}, ray, index, delta, ampdata) where T
+function Trace!(trc::Trace, ray, index, delta, ampdata) 
     trc.ray = ray
     trc.nIn = index
     trc.delta = delta
@@ -475,22 +475,26 @@ function deltaToSurf(r::Ray, profile::SurfProfileCyl)
 end
 
 
-
+const AMPPERFECTSURFACE = AmpData(identityPol, identityPol, [1.])
 """
     identityAmpMats
 
 """
+identityAmpMats() = AMPPERFECTSURFACE
+#=
 function identityAmpMats()
     #identity = [[1.0, 0.0, 0.0] [ 0.0, 1.0, 0.0] [ 0.0, 0.0, 1.0]]
     AmpData(identityPol, identityPol, [1.])
     #retirm matrices for P & O and unity transmission
 end
+=#
 
 """
     modFunc
 
 """
-function modFunc(ray::Ray, normal::Vec3, d::AbstractBendDielectric)
+function modFunc(ray::Ray, normal::Vec3, d::T) where T <: AbstractBendDielectric
+
     r = ray.base
     a = ray.dir
 
@@ -517,7 +521,7 @@ end
 
 
 
-function modFunc(ray::Ray, normal::Vec3, d::AbstractBendMirror)
+function modFunc(ray::Ray, normal::Vec3, d::T) where T <: AbstractBendMirror
     r = ray.base
     a = ray.dir
     cosI = a ⋅ normal
@@ -561,10 +565,11 @@ end
     surfAmpFunc
 
 """
-function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::DielectricT,amp::AmpParam)
+function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::B, amp) where {T<:Real, B <: AbstractBendType{T}}
     identityAmpMats(), dirOut
 end
 
+#=
 function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, ndex::MirrorR,amp::AmpParam)
     identityAmpMats(), dirOut
 end
@@ -573,6 +578,8 @@ function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Poin
     identityAmpMats(), dirOut
 end
 
+=#
+
 attributesSurfaces::Dict{String,Any} = Dict{String, Any}()
 
 function getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
@@ -580,7 +587,7 @@ function getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
     return amp
 end
 
-function getAmpParams(s::AbstractAmplitudeParam; attributesSurfaces=attributesSurfaces)
+function getAmpParams(s::S; attributesSurfaces=attributesSurfaces) where S <: AbstractAmplitudeParam
     return s
 end
 
@@ -901,9 +908,11 @@ function modFunc(ray::Ray, normal::Vec3, d::NoBendIndex)
     true, ray.dir, d.refIndexIn
 end
 
+#=
 function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3, ndex::NoBendIndex,amp::NoAmpParam)
     identityAmpMats(), dirOut
 end
+=#
 
 function referencePlane(surfname::String,
     pointInPlane::Point3,
