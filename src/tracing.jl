@@ -14,7 +14,9 @@ export attributesSurfaces, surfNormal, traceLoss
     returns z in local coordinates
 """
 function sag(x::Float64, y::Float64, s::SurfProfileConic)
-    if s.ϵ == 0. || s.curv == 0.
+    if s.curv ==0
+        z = 0.
+    elseif s.ϵ == 0. 
         z=s.curv * (x^2 + y^2) * 0.5
     else
         z=(1 - sqrt(1 - s.curv^2 * s.ϵ * (x^2 + y^2)))/(s.curv*s.ϵ)
@@ -36,11 +38,10 @@ function sag(x::Float64, y::Float64, s::SurfProfileOAConic)
 end
 
 function sag(x::Float64, y::Float64, s::SurfProfileAsphere)
-    #println("at sag for SurfProfileOAConic - offset = $(s.offset)")
     r2 = (x^2+y^2)
     r = sqrt(r2)
     sqrtarg = 1-s.ϵ * s.curv^2 * r2
-    sg = s.curv * r2 /(1+ sqrt(sqrtarg))+sum([ss * r2 * r^i for (i,s) in enumerate(s)])
+    sg = s.curv * r2 /(1+ sqrt(sqrtarg))+sum([ss * r2 * r^i for (i,ss) in enumerate(s.a)])
     sg
 end
 
@@ -96,7 +97,8 @@ function surfNormal(rr::Point3, s::SurfProfileAsphere)
     r2 = (x^2+y^2)
     r = sqrt(r2)
     aspheresum = sum([i * r^(i-2) * s.a[i-2]  for i in 3:2+length(s.a)])
-    normalize!([-x * (s.curv + aspheresum), -y*(s.curv +aspheresum), 1-s.curv * s.ϵ * z])
+    norm= normalize([-x * (s.curv + aspheresum), -y*(s.curv +aspheresum), 1-s.curv * s.ϵ * z])
+    Vec3(norm[1], norm[2], norm[3])
 end
 
 function surfNormal(r::Point3, s::SurfProfileCyl)
@@ -1002,6 +1004,9 @@ function lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, thick
     ri = riFunc(lambda)
     # should check if the input is really an asphere. if not make the surface spherical #ToDo
     base1 = base + thick .* dir
+    if (order !="reverse" && order != "forward")
+        error("order must be 'forward' or 'reverse', got $order")
+    end
     if (order != "reverse" )
         lens = [
         refractAsphere("$(lensname)_1", base, dir, refIndexDefault, ri,

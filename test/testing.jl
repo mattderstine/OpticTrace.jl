@@ -66,7 +66,6 @@ display(figDiffuserTest)
 
 ## test 2
 
-
 testgeo = [
     refractSphere("first", ORIGIN,ZAXIS,1., 1.5, 0., 5., "testcoat";ydir = nothing),
     refractSphere("second", Point3(0., 0., 3.), ZAXIS, 1.5, 1., -0.1, 5., "testcoat"),
@@ -91,9 +90,9 @@ testGeometry = [
 
 function test2(fig)
     lscene = LScene(fig[1,2], scenekw = (camera = cam3d_cad!, raw = false))
-    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
-    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
-    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f(0, 0,0) => Makie.Point3f(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f(0, 0,0) => Makie.Point3f(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f(0, 0,0) => Makie.Point3f(0,1,0)],color=:red, linewidth=2)
 
     scene1 = plotGeometry3D!(lscene, testgeo)
 
@@ -101,9 +100,9 @@ function test2(fig)
 
     #refPlane = referencePlane("test reference plane",ORIGIN,YAXIS, 1., 5., "testCoating")
     lscene2 = LScene(fig[1,3], scenekw = (camera = cam3d_cad!, raw = false))
-    linesegments!(lscene2,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
-    linesegments!(lscene2,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
-    linesegments!(lscene2,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+    linesegments!(lscene2,[Makie.Point3f(0, 0,0) => Makie.Point3f(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene2,[Makie.Point3f(0, 0,0) => Makie.Point3f(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene2,[Makie.Point3f(0, 0,0) => Makie.Point3f(0,1,0)],color=:red, linewidth=2)
 
     scene3 = plotGeometry3D!(lscene2, testGeometry)
 
@@ -223,9 +222,9 @@ function offAxisParabolaTest(fig)
     parabolageometry3 = testOAP(1.0, 1.0, 50., 38.1/2)
     outer_padding = 30
     lscene = LScene(fig[1,2], scenekw = (camera = cam3d_cad!, raw = false))
-    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,0,1)],color=:green, linewidth=2)
-    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(1,0,0)],color=:blue, linewidth=2)
-    linesegments!(lscene,[Makie.Point3f0(0, 0,0) => Makie.Point3f0(0,1,0)],color=:red, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f(0, 0,0) => Makie.Point3f(0,0,1)],color=:green, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f(0, 0,0) => Makie.Point3f(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(lscene,[Makie.Point3f(0, 0,0) => Makie.Point3f(0,1,0)],color=:red, linewidth=2)
 
     plotGeometry3D!(lscene, parabolageometry3)
 
@@ -259,7 +258,7 @@ end
 
 
 
-##
+## test 5
 diffusergeo =
     [
 
@@ -326,3 +325,33 @@ end
 display(surfacetest2())
 =#
 
+## test 6
+# Test a 4f system with two TLF357775_405 lenses
+
+
+function funcfourf()
+    bfl = 4.0 # focal length in mm
+    λ = 405.0e-3 # wavelength in μm
+    ffl = 1.9+0.25/1.57+ 0.25 # estimated front focal lenght
+    geo = [
+        [referencePlane("object",ORIGIN, ZAXIS, refIndexDefault , 1., "testcoat")]
+        lens_TLF357775_405(Point3(0.,0., ffl), ZAXIS,  λ; order = "forward", lensname = "L1")
+        [roundAperture("aperture", Point3(0., 0., ffl+thickTL357775_405+bfl), ZAXIS, 1.0, 0.0, 3.5/2, color = :green3)]
+        lens_TLF357775_405(Point3(0.,0., ffl+thickTL357775_405+bfl+bfl), ZAXIS,  λ; order = "reverse", lensname = "L2")
+        [referencePlane("image",Point3(0., 0., 2*(ffl+thickTL357775_405+bfl)), ZAXIS, refIndexDefault , 1., "testcoat")]
+    ]
+    return geo
+end
+
+fourfgeo = funcfourf()
+
+
+fig7, scenediff = plotGeometry3D(fourfgeo)
+begin
+    for x in -0.4:0.1:0.4
+        trcAndPlotRay!(scenediff, Ray(ORIGIN, Vec3(x, 0., sqrt(1.0-x*2))), fourfgeo, color=:blue)
+    end
+end
+
+
+display(fig7)

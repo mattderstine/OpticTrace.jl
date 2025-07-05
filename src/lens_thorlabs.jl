@@ -5,7 +5,7 @@
 
 =#
 
-export lensAC508180AB, lensAC127050A, lens_ACL12708U, lens_TLF220APC
+export lensAC508180AB, lensAC127050A, lens_ACL12708U, lens_TLF220APC, lens_TLF357775_405
 
 
 
@@ -377,7 +377,7 @@ const thickF220APC = 5.031595527853
 const osurf1C_F220APC = 0.0
 const osurf2C_F220APC = -1.555661881368497800E-001
 const osurf2ϵ_F220APC = 1-7.31283599511E-1 #converted to ecentricity
-const osurf2ASP_F220APC = [0.0, -8.924167336705E-5, -4.384364140114E-7]
+const osurf2ASP_F220APC = [0.0, -8.924167336705E-5,0.,-4.384364140114E-7]
 const glass_F220APC="D-ZK3"
 
 
@@ -385,5 +385,31 @@ function lens_TLF220APC(base, dir,  λ; order = "forward", lensname = "TL_F220AP
     riD_ZK3 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-ZK3.yml")
 
     lensASinglet(base, dir, 0.0, 0.0, [0.], osurf2C_F220APC, osurf2ϵ_F220APC, osurf2ASP_F220APC, thickF220APC, λ, riD_ZK3, semiDiamF220APC; order = order, lensname = lensname)
+end
+
+# From TL Zemax file: 357775-405-Zemax(ZMX).zmx 
+
+const semiDiamTL357775_405 = 2.4
+const thickTL357775_405 = 2.8983318458129999
+export semiDiamTL357775_405, thickTL357775_405
+
+
+"""
+    lens_TLF357775_405(base, dir, λ; order = "forward", lensname = "TL_357775_405")
+    
+    Creates a lens with the characteristics of the Thorlabs TL357775-405 lens.
+    located at base in the direction dir with wavelength λ.
+
+    Option parameters are order ("forward" or "reverse") and lensname (default "TL_357775_405").
+
+"""
+function lens_TLF357775_405(base, dir,  λ; order = "forward", lensname = "TL_357775_405")
+
+    osurf1C_TL357775_405 = -3.497173380949716859E-01
+    osurf1ϵ_TL357775_405 = 1-1.035706996427 #converted to ecentricity
+    osurf1ASP_TL357775_405 = [0., -0.0027459145825400001, 0., -3.9169060086760001e-05, 0., 2.0239651316750001e-08, 0., 1.867865008283e-07]
+    riD_LAK6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-LAK6.yml")
+
+    lensASinglet(base, dir, 0.0, 0.0, [0.], osurf1C_TL357775_405, osurf1ϵ_TL357775_405, osurf1ASP_TL357775_405, thickTL357775_405, λ, riD_LAK6, semiDiamTL357775_405; order = order, lensname = lensname)
 end
 
