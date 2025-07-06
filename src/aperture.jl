@@ -38,6 +38,18 @@ end
 """
 define a round aperture
 
+    roundAperture(surfname, pointInPlane, planenormal,rinIn,obscure, semiDiam
+        ;color, ydir)
+
+        surfname::String       - name to identify the surface
+        pointInPlane::Point3   - point in the plane of the surface
+        planenormal::Vec3      - normal vector of the surface
+        rinIn::Float64         - refractive index of the surface
+        obscure::Float64       - radius of an round obscuration
+        semiDiam::Float64      - radius of the round aperture
+        ;color = :blue,        - color of the surface
+        ydir                   - direction of the y-axis (or nothing if not specified)
+
 """
 function roundAperture(surfname::String,
     pointInPlane::Point3,

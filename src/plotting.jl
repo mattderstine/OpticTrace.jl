@@ -106,9 +106,9 @@ returns a Makie Figure and LScene located at [1,1]
 function plotGeometry3D(geometry; size = (1200,700))
     fig = Figure(;size)
     ax = fig[1,1]=LScene(fig, show_axis=false, scenekw = (camera = cam3d_cad!,))
-    linesegments!(ax,[Point3f0(0, 0,0) => Point3f0(0,0,1)],color=:green, linewidth=2)
-    linesegments!(ax,[Point3f0(0, 0,0) => Point3f0(1,0,0)],color=:blue, linewidth=2)
-    linesegments!(ax,[Point3f0(0, 0,0) => Point3f0(0,1,0)],color=:red, linewidth=2)
+    linesegments!(ax,[Point3f(0, 0,0) => Point3f(0,0,1)],color=:green, linewidth=2)
+    linesegments!(ax,[Point3f(0, 0,0) => Point3f(1,0,0)],color=:blue, linewidth=2)
+    linesegments!(ax,[Point3f(0, 0,0) => Point3f(0,1,0)],color=:red, linewidth=2)
     plotGeometry3D!(ax, geometry)
     fig,ax
 end
@@ -494,17 +494,17 @@ end
 
 function plotPerimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)
-    Makie.arrows([Makie.Point3f0(a.base) for a in pr], [Makie.Point3f0(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
+    Makie.arrows([Makie.Point3f(a.base) for a in pr], [Makie.Point3f(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
 end
 
 function plotPerimeterRays!(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)
-    Makie.arrows!([Makie.Point3f0(a.base) for a in pr], [Makie.Point3f0(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
+    Makie.arrows!([Makie.Point3f(a.base) for a in pr], [Makie.Point3f(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
 end
 
 function plotPerimeterRays!(scene, r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)
-    Makie.arrows!(scene, [Makie.Point3f0(a.base) for a in pr], [Makie.Point3f0(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
+    Makie.arrows!(scene, [Makie.Point3f(a.base) for a in pr], [Makie.Point3f(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
 end
 
 
