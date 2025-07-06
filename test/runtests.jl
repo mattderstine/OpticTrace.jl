@@ -1,6 +1,7 @@
 using OpticTrace
 using BenchmarkTools
 using Test
+using GeometryBasics
 
 
 
