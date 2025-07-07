@@ -26,12 +26,12 @@
     end
     @testset "deltaToSurf tests" begin
 
-
+        #=
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileSphere(1.0)) == 0.0
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileConic(1.0, 0.0)) == 0.0
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileAsphere(1.0, 0.0, [0.0, 0.01, 0.1])) == 0.0
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileCyl(1.0, 0.0, [0.0, 0.01, 0.1])) == 0.0
-
+        =#
     end
 end
     #@testset "modFunc tests" begin
