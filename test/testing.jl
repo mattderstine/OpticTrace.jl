@@ -20,6 +20,7 @@ using Printf
 figs = [Figure(size = (1600,1200),backgroundcolor = RGBf(0.98, 0.98, 0.98), ) for i in 1:5]
 #figs=multipleFigures()
 
+
 ## Test the diffuser fig1
 
 """test the diffuser
@@ -349,9 +350,15 @@ fourfgeo = funcfourf()
 fig7, scenediff = plotGeometry3D(fourfgeo)
 begin
     for x in -0.4:0.1:0.4
-        trcAndPlotRay!(scenediff, Ray(ORIGIN, Vec3(x, 0., sqrt(1.0-x*2))), fourfgeo, color=:blue)
+        trcAndPlotRay!(scenediff, Ray(ORIGIN, Vec3(x, 0., sqrt(1.0-x^2))), fourfgeo, color=:blue)
     end
 end
 
 
 display(fig7)
+##
+
+
+
+status, fly, flx, yplane, xplane = computeRearFocalPlane(fourfgeo)
+println("status = $status  fly = $fly  flx = $flx  yplane = $yplane  xplane = $xplane")
