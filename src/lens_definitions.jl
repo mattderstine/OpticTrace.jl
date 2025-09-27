@@ -56,6 +56,7 @@ struct SurfProfileSphere{T} <: AbstractSurfProfile{T}
     curv :: T
 end
 
+conicToϵ(c) = 1 + c #convert the conic constant to ϵ used in Welford
 
 struct SurfProfileConic{T} <: AbstractSurfProfile{T}
     curv :: T
@@ -68,10 +69,20 @@ struct SurfProfileOAConic{T} <: AbstractSurfProfile{T}
     offset::Vec{3, T}
 end
 
-struct SurfProfileAsphere{T} <: AbstractSurfProfile{T}
+abstract type AbstractAsphericProfile{T} <: AbstractSurfProfile{T} end
+
+
+struct SurfProfileAsphere{T} <: AbstractAsphericProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
     a::Vector{T} #hope this works...
+end
+
+
+struct SurfProfileEvenAsphere{T} <: AbstractAsphericProfile{T}
+    curv :: T
+    ϵ::T #see Welford for definition of ϵ
+    a::Vector{T} #even terms starting with 4th order
 end
 
 struct SurfProfileCyl{T} <: AbstractSurfProfile{T}

@@ -13,13 +13,10 @@ const curvAC508180_1= 6.923078165548776121E-03
 const glassAC508180_1 = "N-LAK22"
 const thickAC508180_1 = 9.5
 const semiDiamAC508180 = 25.4
-
 const curvAC508180_2= -8.663404145164059142E-03
 const glassAC508180_2 = "N-SF6"
 const thickAC508180_2 = 4.
-
 const curvAC508180_3= -3.046912099599362322E-03
-
 const thickAC508180 = thickAC508180_1 + thickAC508180_2
 const bflAC508180= 173.09544577349999
 
@@ -157,114 +154,61 @@ function lensAC127019AB(base, dir, lambda; order = "forward", lensname = "AC1270
     lens
 end
 
-
-#=
-SURF 1
-  TYPE STANDARD
-  CURV 0.0 0 0 0 0 ""
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 5
-  DISZ 5.0
-  DIAM 5.715 0 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0
-SURF 2
-  STOP
-  TYPE EVENASPH
-  CURV 2.103879571162499400E-001 0 0 0 0 ""
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 4
-  PARM 1 0
-  PARM 2 5.3324182908E-4
-  PARM 3 1.116288700581E-5
-  PARM 4 -3.745566605609E-7
-  PARM 5 -7.634201667258E-9
-  PARM 6 1.360220018284E-10
-  PARM 7 0
-  PARM 8 0
-  DISZ 7.5
-  GLAS B270 0 0 1.5 4.0E+1 0 0 0 0 0 0 
-  CONI -1.205070933941
-  DIAM 6.35 1 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0
-  FLAP 0 6.35 0
-SURF 3
-  TYPE STANDARD
-  CURV -6.390020150881667300E-002 0 0 0 0 ""
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 2
-  DISZ 3.722068442237
-  DIAM 6.35 1 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0
-  FLAP 0 6.35 0
-SURF 4
-  TYPE STANDARD
-  CURV 0.0 0 0 0 0 ""
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 3
-  DISZ 0
-  DIAM 3.45888519431E-3 0 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0
-=#
-
 const semiDiamACL12708U = 12.7/2
 const thickACL12708U = 7.5
 const bflACL12708U = 3.7
 const osurf2C_ACL12708U = -6.390020150881667300E-002
 const osurf1C_ACL12708U = 2.103879571162499400E-001
-const osurf1ϵ_ACL12708U = 1-1.205070933941 #converted to ecentricity
-const osurf1ASP_ACL12708U = [0., 5.3324182908E-4, 0., 1.116288700581E-5, 0.,  -3.745566605609E-7,0., -7.634201667258E-9,0. ,1.360220018284E-10]
+const osurf1ϵ_ACL12708U = conicToϵ(-1.205070933941 )
+const osurf1ASP_ACL12708U = [ 5.3324182908E-4, 1.116288700581E-5,  -3.745566605609E-7, -7.634201667258E-9, 1.360220018284E-10]
 
 const semiDiamACL108U = 10.0/2
 const thickACL108U = 5.8
 const bflACL108U = 4.
 const osurf2C_ACL108U = 0.0
 const osurf1C_ACL108U = 2.389486260454002600E-001
-const osurf1ϵ_ACL108U = 1-6.027E-1 #converted to ecentricity
-const osurf1ASP_ACL108U = [0.,  2.21E-4]
+const osurf1ϵ_ACL108U = conicToϵ( -6.027E-1) 
+const osurf1ASP_ACL108U = [ 2.21E-4]
 
 const semiDiamACL1512U= 15.0/2
 const thickACL1512U = 8.
 const bflACL1512U = 7.
 const osurf2C_ACL1512U = 0.0
 const osurf1C_ACL1512U = 1.593117731400350600E-001
-const osurf1ϵ_ACL1512U = 1-6.139E-1 #converted to ecentricity
-const osurf1ASP_ACL1512U = [0.,6.8E-5]
+const osurf1ϵ_ACL1512U = conicToϵ( -6.139E-1 )
+const osurf1ASP_ACL1512U = [0., 0., 0., 6.8E-5]
 
 const semiDiamACL1815U= 18.0/2
 const thickACL1815U = 8.2
 const bflACL1815U = 10.
 const osurf2C_ACL1815U = 0.0
 const osurf1C_ACL1815U = 1.279099513942184900E-001
-const osurf1ϵ_ACL1815U = 1-1.8165 #converted to ecentricity
-const osurf1ASP_ACL1815U = [0., 2.933E-4]
+const osurf1ϵ_ACL1815U = conicToϵ( -1.8165) 
+const osurf1ASP_ACL1815U = [ 2.933E-4]
 
 const semiDiamACL2018U= 20.0/2
 const thickACL2018U = 8.
 const bflACL2018U = 13.
 const osurf2C_ACL2018U = 0.0
 const osurf1C_ACL2018U = 1.062089767827176800E-001
-const osurf1ϵ_ACL2018U = 1 -6.3916E-1 #converted to ecentricity
-const osurf1ASP_ACL2018U = [0.,1.7E-5]
+const osurf1ϵ_ACL2018U = conicToϵ( -6.3916E-1 )
+const osurf1ASP_ACL2018U = [1.7E-5]
 
 const semiDiamACL25416U= 25.4/2
 const thickACL25416U = 14.
 const bflACL25416U = 7.3
 const osurf2C_ACL25416U = -1.428581996804618000E-002
 const osurf1C_ACL25416U = 1.134018728240511100E-001
-const osurf1ϵ_ACL25416U = 1 -9.991715230203E-1 #converted to ecentricity
-const osurf1ASP_ACL25416U = [0.,8.68216737142E-5, 0.,  6.376012336251E-8, 0., 2.407308400812E-9, 0., -1.718902114185E-11]
+const osurf1ϵ_ACL25416U = conicToϵ( -9.991715230203E-1 )
+const osurf1ASP_ACL25416U = [ 8.68216737142E-5, 0.,  6.376012336251E-8, 0., 2.407308400812E-9, 0., -1.718902114185E-11]
 
 const semiDiamLP357775 = 6.33/2
 const thickP357775 = 2.9
 const bflP357775 = 1.862919035852 + .25/1.5+ .3
 const osurf2C_P357775 = 0.0
 const osurf1C_P357775 = 3.497173380949716859E-01
-const osurf1ϵ_P357775 = 1-1.035706996427 #converted to ecentricity
-const osurf1ASP_P357775 = [0.,  0.0027459145825400001, 0., 3.9169060086760001e-05, 0., -2.0239651316750001e-08, 0., -1.867865008283e-07]
+const osurf1ϵ_P357775 = conicToϵ( -1.035706996427) 
+const osurf1ASP_P357775 = [0.0027459145825400001, 0., 3.9169060086760001e-05, 0., -2.0239651316750001e-08, 0., -1.867865008283e-07]
 const glassP357775="D-LAK6M"
 
 
@@ -306,85 +250,25 @@ function lens_ACL12708U(base, dir, wl)
     [
         refractSphere("ACL12708i", base, dir, refIndexDefault,wl,
             -osurf2C_ACL12708U, semiDiamACL12708U, "testcoat"),
-        refractAsphere("ACL12708o", base .+thickACL12708U*dir, dir, wl, refIndexDefault,
+        refractEvenAsphere("ACL12708o", base .+thickACL12708U*dir, dir, wl, refIndexDefault,
              -osurf1C_ACL12708U, osurf1ϵ_ACL12708U, .-osurf1ASP_ACL12708U, semiDiamACL12708U, "testcoat")
     ]
 end
-
-"""
-SURF 1
-  COMM F220APC-1550
-  TYPE STANDARD
-  FIMP 
-  CURV 0.0 0 0 0 0 ""
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 1
-  DISZ 8.11325756959
-  DIAM 0 0 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0
-SURF 2
-  COMM  
-  STOP
-  TYPE STANDARD
-  FIMP 
-  CURV 0.0 0 0 0 0 ""
-  COAT THORA
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 5
-  DISZ 5.031595527853
-  GLAS D-ZK3M 0 0 0 0 0 0 0 0 0 0 
-  DIAM 2.75 1 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0
-  FLAP 0 2.75 0
-SURF 3
-  TYPE EVENASPH
-  FIMP 
-  CURV -1.555661881368497800E-001 0 0 0 0 ""
-  COAT THORA
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 6
-  PARM 1 0
-  PARM 2 -8.924167336705E-5
-  PARM 3 -4.384364140114E-7
-  PARM 4 0
-  PARM 5 0
-  PARM 6 0
-  PARM 7 0
-  PARM 8 0
-  DISZ 7.822211559227
-  CONI -7.31283599511E-1
-  DIAM 2.75 1 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0
-  FLAP 0 2.75 0
-SURF 4
-  TYPE STANDARD
-  FIMP 
-  CURV 0.0 0 0 0 0 ""
-  HIDE 0 0 0 0 0 0 0 0 0 0
-  MIRR 2 0
-  SLAB 3
-  DISZ 0
-  DIAM 1.580668698324 0 0 0 1 ""
-  POPS 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0
-"""
 
 const semiDiamF220APC = 2.75
 const thickF220APC = 5.031595527853
 #const bflF220APC = 4.
 const osurf1C_F220APC = 0.0
 const osurf2C_F220APC = -1.555661881368497800E-001
-const osurf2ϵ_F220APC = 1-7.31283599511E-1 #converted to ecentricity
-const osurf2ASP_F220APC = [0.0, -8.924167336705E-5,0.,-4.384364140114E-7]
+const osurf2ϵ_F220APC = conicToϵ(-7.31283599511E-1 )
+const osurf2ASP_F220APC = [0.0, 0. ,0. , -8.924167336705E-5,0.,-4.384364140114E-7]
 const glass_F220APC="D-ZK3"
 
 
 function lens_TLF220APC(base, dir,  λ; order = "forward", lensname = "TL_F220APC")
     riD_ZK3 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-ZK3.yml")
 
-    lensASinglet(base, dir, 0.0, 0.0, [0.], osurf2C_F220APC, osurf2ϵ_F220APC, osurf2ASP_F220APC, thickF220APC, λ, riD_ZK3, semiDiamF220APC; order = order, lensname = lensname)
+    lensEASinglet(base, dir, 0.0, 0.0, [0.], osurf2C_F220APC, osurf2ϵ_F220APC, osurf2ASP_F220APC, thickF220APC, λ, riD_ZK3, semiDiamF220APC; order = order, lensname = lensname)
 end
 
 # From TL Zemax file: 357775-405-Zemax(ZMX).zmx 
@@ -406,10 +290,10 @@ export semiDiamTL357775_405, thickTL357775_405
 function lens_TLF357775_405(base, dir,  λ; order = "forward", lensname = "TL_357775_405")
 
     osurf1C_TL357775_405 = -3.497173380949716859E-01
-    osurf1ϵ_TL357775_405 = 1-1.035706996427 #converted to ecentricity
-    osurf1ASP_TL357775_405 = [0., -0.0027459145825400001, 0., -3.9169060086760001e-05, 0., 2.0239651316750001e-08, 0., 1.867865008283e-07]
+    osurf1ϵ_TL357775_405 = conicToϵ(-1.035706996427)
+    osurf1ASP_TL357775_405 = [-0.0027459145825400001, -3.9169060086760001e-05, 2.0239651316750001e-08, 1.867865008283e-07]
     riD_LAK6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-LAK6.yml")
 
-    lensASinglet(base, dir, 0.0, 0.0, [0.], osurf1C_TL357775_405, osurf1ϵ_TL357775_405, osurf1ASP_TL357775_405, thickTL357775_405, λ, riD_LAK6, semiDiamTL357775_405; order = order, lensname = lensname)
+    lensEASinglet(base, dir, 0.0, 0.0, [0.], osurf1C_TL357775_405, osurf1ϵ_TL357775_405, osurf1ASP_TL357775_405, thickTL357775_405, λ, riD_LAK6, semiDiamTL357775_405; order = order, lensname = lensname)
 end
 
