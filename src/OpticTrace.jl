@@ -26,5 +26,5 @@ include("aperture.jl")
 include("extended_geo.jl")
 include("lens_edmund.jl")
 include("lens_thorlabs.jl")
-include("charaterization.jl")
+include("characterization.jl")
 end

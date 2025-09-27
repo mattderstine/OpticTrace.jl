@@ -25,11 +25,21 @@ spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
         @test sag_value ≈ 1.0  
 
 
+        asphere_coeff1 = 0.1
+        asphere_coeff2 = 0.01
+        factor1 = 4.0
+        factor2 = 8.0
+
         sag_value = sag(1.0, 1.0, spsAsphere)
-        @test sag_value ≈ 4.0 * 0.1 + 8.0 * 0.01
+        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
 
         sag_value = sag(1.0, 1.0, spsEAsphere)
-        @test sag_value ≈ 4.0 * 0.1 + 8.0 * 0.01
+        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
+        sag_value = sag(1.0, 1.0, spsAsphere)
+        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
+
+        sag_value = sag(1.0, 1.0, spsEAsphere)
+        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
 
         #=
         spsC = OpticTrace.SurfProfileCyl(1.0, 0.0, [0.00, 0.1, 0.0, 0.01])
