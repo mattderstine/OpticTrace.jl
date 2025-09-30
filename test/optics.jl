@@ -79,4 +79,12 @@ spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
         @test normal ≈ [0.0, 0.0, 1.0]
     end
 
+    @testset "Lens Tests" begin
+        
+        g = [referencePlane(ORIGIN, ZAXIS, 10.0),
+            lens_TLAC254_060( Point(0.0, 0.0, 10.0), ZAXIS,  0.45; order = "forward", lensname = "TL_AC254-060"),
+            referencePlane(Point(0.0, 0.0, ),   ZAXIS, 10.0)
+        ]
+    end
+
 end

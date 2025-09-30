@@ -358,7 +358,7 @@ end
 display(fig7)
 ##
 
+g = lens_TLAC254_060(ORIGIN, ZAXIS,  0.45; order = "forward", lensname = "TL_AC254-060")
+fig8, scenediff = plotGeometry3D(g)
+display(fig8)
 
-
-status, fly, flx, yplane, xplane = computeRearFocalPlane(fourfgeo)
-println("status = $status  fly = $fly  flx = $flx  yplane = $yplane  xplane = $xplane")

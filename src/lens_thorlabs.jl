@@ -6,23 +6,27 @@
 =#
 
 export lensAC508180AB, lensAC127050A, lens_ACL12708U, lens_TLF220APC, lens_TLF357775_405
+export lens_TLAC254_060
 
 
 
-const curvAC508180_1= 6.923078165548776121E-03
-const glassAC508180_1 = "N-LAK22"
-const thickAC508180_1 = 9.5
-const semiDiamAC508180 = 25.4
-const curvAC508180_2= -8.663404145164059142E-03
-const glassAC508180_2 = "N-SF6"
-const thickAC508180_2 = 4.
-const curvAC508180_3= -3.046912099599362322E-03
-const thickAC508180 = thickAC508180_1 + thickAC508180_2
-const bflAC508180= 173.09544577349999
 
 
 function lensAC508180AB(base, dir, lambda; order = "forward", lensname = "AC508180AB")
     #compute the refractive indexes
+
+
+    curvAC508180_1= 6.923078165548776121E-03
+    glassAC508180_1 = "N-LAK22"
+    thickAC508180_1 = 9.5
+    semiDiamAC508180 = 25.4
+    curvAC508180_2= -8.663404145164059142E-03
+    glassAC508180_2 = "N-SF6"
+    thickAC508180_2 = 4.
+    curvAC508180_3= -3.046912099599362322E-03
+    thickAC508180 = thickAC508180_1 + thickAC508180_2
+    bflAC508180= 173.09544577349999
+
     riN_LAK22 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK22.yml")
     riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")
     riLens1 = riN_LAK22(lambda)
@@ -40,7 +44,7 @@ function lensAC508180AB(base, dir, lambda; order = "forward", lensname = "AC5081
         refractSphere("$(lensname)_3", base2, dir, riLens2, refIndexDefault,
             curvAC508180_3, semiDiamAC508180, "testcoat")
         ]
-    else
+    elseif (order == "reverse" )
         base1 = base + thickAC508180_2 .* dir
         base2 = base1 + thickAC508180_1 .* dir
 
@@ -52,6 +56,8 @@ function lensAC508180AB(base, dir, lambda; order = "forward", lensname = "AC5081
         refractSphere("$(lensname)_1", base2, dir, riLens1, refIndexDefault,
             -curvAC508180_1, semiDiamAC508180, "testcoat")
         ]
+    else
+        error("lensAC508180AB: order must be 'forward' or 'reverse'")
     end
     lens
 end
@@ -89,7 +95,7 @@ function lensAC127050A(base, dir, lambda; order = "forward", lensname = "AC12705
         refractSphere("$(lensname)_3", base2, dir, riLens2, refIndexDefault,
             curvAC127050A_3, semiDiamAC127050A, "testcoat")
         ]
-    else
+    elseif (order == "reverse" )
         base1 = base + thickAC127050A_2 .* dir
         base2 = base1 + thickAC127050A_1 .* dir
 
@@ -101,6 +107,8 @@ function lensAC127050A(base, dir, lambda; order = "forward", lensname = "AC12705
         refractSphere("$(lensname)_1", base2, dir, riLens1, refIndexDefault,
             -curvAC127050A_1, semiDiamAC127050A, "testcoat")
         ]
+    else
+        error("lensAC127050A: order must be 'forward' or 'reverse'")
     end
     lens
 end
@@ -295,5 +303,59 @@ function lens_TLF357775_405(base, dir,  λ; order = "forward", lensname = "TL_35
     riD_LAK6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-LAK6.yml")
 
     lensEASinglet(base, dir, 0.0, 0.0, [0.], osurf1C_TL357775_405, osurf1ϵ_TL357775_405, osurf1ASP_TL357775_405, thickTL357775_405, λ, riD_LAK6, semiDiamTL357775_405; order = order, lensname = lensname)
+end
+
+"""
+    lens_TLAC254_060(base, dir, λ; order = "forward", lensname = "TL_AC254-060")
+    
+    Creates a lens with the characteristics of the Thorlabs AC254-060
+    located at base in the direction dir with wavelength λ.
+
+    Option parameters are order ("forward" or "reverse") and lensname (default "TL_254_060").
+
+"""
+function lens_TLAC254_060(base, dir,  λ; order = "forward", lensname = "TL_AC254-060")
+
+    surf1C = 2.398656752218759900E-002
+    surf2C = -3.863987635239570000E-002    
+    surf3C = -4.334633723450400300E-003
+    surf1t = 8.0
+    surf2t = 2.5
+    semiDiam = 25.4/2
+    glass1 = "glass/hoya/BAF11.yml"
+    glass2 = "glass/hoya/E-FD10.yml"
+
+    ri_glass1 = getRefractiveIndexFunc(dirBaseRefractiveIndex, glass1)
+    ri_glass2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, glass2)
+    riLens1 = ri_glass1(λ)
+    riLens2 = ri_glass2(λ)
+    if (order == "forward" )
+        base1 = base + surf1t .* dir
+        base2 = base1 + surf2t .* dir
+
+        lens = [
+        refractSphere("$(lensname)_1", base, dir, refIndexDefault,riLens1,
+            surf1C, semiDiam, "testcoat"),
+        refractSphere("$(lensname)_2", base1, dir, riLens1,riLens2,
+            surf2C, semiDiam, "testcoat"),
+        refractSphere("$(lensname)_3", base2, dir, riLens2, refIndexDefault,
+            surf3C, semiDiam, "testcoat")
+        ]
+    elseif (order == "reverse" )
+        base1 = base + surf2t .* dir
+        base2 = base1 + surf1t .* dir
+
+        lens = [
+        refractSphere("$(lensname)_3", base, dir, refIndexDefault, riLens2,
+            -surf3C, semiDiam, "testcoat"),
+        refractSphere("$(lensname)_2", base1, dir, riLens2, riLens1,
+            -surf2C, semiDiam, "testcoat"),
+        refractSphere("$(lensname)_1", base2, dir, riLens1, refIndexDefault,
+            -surf1C, semiDiam, "testcoat")
+        ]
+    else
+        error("lens_TLAC254_060: order must be 'forward' or 'reverse'")
+    end
+    lens
 end
 
