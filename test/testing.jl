@@ -359,6 +359,17 @@ display(fig7)
 ##
 
 g = lens_TLAC254_060(ORIGIN, ZAXIS,  0.45; order = "forward", lensname = "TL_AC254-060")
+gp = lens_TLAC254_060(ORIGIN, ZAXIS,  0.45; order = "reverse", lensname = "TL_AC254-060")
 fig8, scenediff = plotGeometry3D(g)
 display(fig8)
+
+rfp,fl = findRFP(g)
+rfpp, flp = findRFP(gp)
+
+println("RFP = $rfp   fl = $fl")
+println("RPP = $rfpp   fl = $flp")
+bfd = rfp.base.base[3] - g[end].base.base[3]
+ffd = rfpp.base.base[3] - gp[end].base.base[3]
+printGeo([rfp])
+printGeo([rfpp])
 

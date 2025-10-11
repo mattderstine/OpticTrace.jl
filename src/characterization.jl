@@ -2,7 +2,7 @@
 
 
 export sag, randomPointOnSquare, randomPointOnDisk, traceMonteCarloRays, computeRearFocalPlane, traceLoss
-
+export findRFP, surfClosestApproach, distClosestApproach
 
 function randomPointOnSquare(xhalf)
     r = 2.0* rand(2) .- (1., 1.)
@@ -19,6 +19,68 @@ function randomPointOnDisk(rmax)
     a=rmax * r
     (a[1], a[2], 0.)
 end
+
+"""
+    surfClosestApproach(ray1, ray2; semiDiam = 5.0, ri=refIndexDefault, surfname="closest"))
+    Given two rays, find the point of closest approach
+    return a surface along ray1 at that point and
+    the distance along ray1 to that point
+    semiDiam is the semi-diameter of the returned surface
+
+"""
+function surfClosestApproach(ray1::Ray, ray2::Ray; semiDiam = 5.0, ri=refIndexDefault, surfname="closest")
+    t1,t2 = distClosestApproach(ray1, ray2)
+ 
+
+    closep1 =ray1.base .+ t1 * ray1.dir
+    #println("closest point on ray1 = $closep1  t1 = $t1")
+    refSurf = referencePlane(surfname, closep1, ray1.dir, ri, semiDiam, "none")
+    return refSurf, t1
+end
+
+function surfClosestApproach(ray1::Ray, ray2::Ray, ray3::Ray; semiDiam = 5.0, ri=refIndexDefault, surfname="closest")
+    t1,t2 = distClosestApproach(ray1, ray2)
+
+    if ray1.dir != ray3.dir
+        error("boresight and ytrace not parallel at start")
+    end
+
+    closep1 =ray3.base .+ t1 * ray3.dir
+    #println("closest point on ray1 = $closep1  t1 = $t1")
+    refSurf = referencePlane(surfname, closep1, ray3.dir, ri, semiDiam, "none")
+    return refSurf, t1
+end
+
+
+function distClosestApproach(ray1::Ray, ray2::Ray)
+    p1 = ray1.base
+    d1 = ray1.dir
+    p2 = ray2.base
+    d2 = ray2.dir
+
+    dp = p2 .- p1
+    d1d1 = 1.0 #directions are normalized
+    d2d2 = 1.0
+    d1d2 = dot(d1, d2)
+    dpd1 = dot(dp, d1)
+    dpd2 = dot(dp, d2)
+
+    denom = d1d1 * d2d2 - d1d2 * d1d2
+    if abs(denom) < 1e-10
+        println("rays are parallel")
+        return Inf
+    end
+
+    num1 = dpd1 * d2d2 - dpd2 * d1d2
+    num2 = dpd1 * d1d2 - dpd2 * d1d1
+
+    t1 = num1 / denom
+    t2 = num2 / denom
+
+
+    return t1,t2
+end
+
 
 """
     rays,cnt,missed= traceMonteCarloRays(radiusfunc,anglefunc, radius::Float64, θmax::Float64,
@@ -155,4 +217,49 @@ function traceLoss(trc, l = 1.0)
     end
     return l
 end
+"""
+    findRFP(geo; epsilon = 0.001, ydir = YAXIS)
+        geo - geometry
 
+    returns
+        surfRFP - surface at rear focal plane
+        fl - focal length
+"""
+
+function findRFP(geo; epsilon = 0.001, ydir = YAXIS)
+    statusb,bore = traceGeometryRel(Ray(ORIGIN, ZAXIS), geo)
+    statusy,ytrace = traceGeometryRel(Ray(ORIGIN+ epsilon * ydir, ZAXIS), geo)
+
+    println("computeRearFocalPlane\nBore")
+    printTrcCoords(statusb, bore, geo)
+    println("ytrace")
+    printTrcCoords(statusy, ytrace, geo)
+
+    #check to make sure all made it through
+    if statusb !=0 || statusy !=0
+        return(1, NaN, NaN, ORIGIN, ORIGIN)
+    end
+
+    #compute intersection of bore and ytrace, xtrace
+    #get last ray, rotate input rays to direction of bore, find when length that y, x are zero
+
+    rayb = bore[end].ray
+    rayy = ytrace[end].ray
+
+    surfRFP, t1 = surfClosestApproach(rayb, rayy, semiDiam=5.0, surfname="RFP")
+    if surfRFP == nothing
+        error("rays are parallel")
+    end
+
+    rayyb = ytrace[begin].ray
+    raybb = bore[begin].ray
+    surfRPP, t2 = surfClosestApproach(rayyb, rayy, raybb, semiDiam=5.0, surfname="RPP")
+    if surfRPP == nothing
+        error("rays are parallel")
+    end
+
+    fl = norm(surfRFP.base.base - surfRPP.base.base) #may not have the right sign
+    println("findRFP  fl = $fl")    
+
+    return surfRFP, fl
+end
