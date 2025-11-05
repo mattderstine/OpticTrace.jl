@@ -13,6 +13,7 @@ using StatsBase
 using GeometryBasics
 using GLMakie
 using Printf
+using MeshIO
 
 
 #set up simple geometry and plot it
@@ -115,6 +116,10 @@ end
 
 display(test2(figs[2]))
 
+
+gbmsh = merge(GeometryBasics.mesh.(testgeo))
+
+save("test/testgeo.stl", gbmsh)
 ## test 3
 
 l2i = refractSphere("Lens2i", Point3(-131., 0., 40.), XAXIS, refIndexDefault,

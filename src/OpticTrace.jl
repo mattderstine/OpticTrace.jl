@@ -28,4 +28,6 @@ include("extended_geo.jl")
 include("lens_edmund.jl")
 include("lens_thorlabs.jl")
 include("characterization.jl")
+include("zemax.jl")
+include("surface_manipulation.jl")
 end

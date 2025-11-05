@@ -56,7 +56,7 @@ function sag(x::Float64, y::Float64, s::SurfProfileAsphere)
     for ss in Iterators.reverse(s.a)
         asp = (asp + ss) * r
     end
-    asp *= r2
+    asp *= r2 #apsehreic coefficients array starts at r3
     sg = s.curv * r2 /(1+ sqrt(sqrtarg))+asp
 
     sg
@@ -75,7 +75,7 @@ function sag(x::Float64, y::Float64, s::SurfProfileEvenAsphere)
     for ss in Iterators.reverse(s.a)
         asp = (asp + ss) * r2
     end
-    asp *= r2
+    asp *= r2 # s starts at order 4 unlike zemax which starts at order 2
     sg = s.curv * r2 /(1+ sqrt(sqrtarg))+asp
 
     sg

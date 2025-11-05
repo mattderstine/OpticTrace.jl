@@ -11,7 +11,7 @@ export plotTrace!
 
 
 """
-    printFigure(fileNameStub, fig; startnum = 0, directory = "")
+    saveFigure(fileNameStub, fig; startnum = 0, directory = "")
     saves Makie figure to a file
     returns the fig object
 
@@ -20,18 +20,24 @@ export plotTrace!
 
     fileNameStub    string with base name for files to be stored
     fig             Makie figure object
-    startnum        number to append to the stub. If 0, nothing is appended unless files exist
+    startnum        number to append to the stub. If 0, nothing is appended 
     directory       location of where to store the figure image
 
 """
 function saveFigure(fileNameStub, fig; startnum = 0, directory = "")
-    filename = fileNameStub * ".png"
+    if startnum > 0
+        fileNameStub = fileNameStub * string(startnum)
+    end
+    filename = joinpath(directory, fileNameStub * ".png")
     save(filename, fig)
     display(fig)
 end
 
 #try to depricate this name
-printFigure(fileNameStub, fig; startnum = 0, directory = "") = saveFigure(fileNameStub, fig; startnum=startnum, directory = directory)
+function printFigure(fileNameStub, fig; startnum = 0, directory = "") 
+    println("printFigure is depricated. Use saveFigure instead.")
+    saveFigure(fileNameStub, fig; startnum, directory)
+end
 
 
 """

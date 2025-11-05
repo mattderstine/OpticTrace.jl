@@ -30,6 +30,8 @@ spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
         factor1 = 4.0
         factor2 = 8.0
 
+        #r = sqrt(2) r2=2, r4 = 4, r6 = 8
+
         sag_value = sag(1.0, 1.0, spsAsphere)
         @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
 

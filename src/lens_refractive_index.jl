@@ -5,7 +5,8 @@ Functions to get refractive index from the RefractiveIndex.info website
 =#
 
 
-export getRefractiveIndexFunc, setDirectoryBaseRefractiveIndex
+export getRefractiveIndexFunc, setDirectoryBaseRefractiveIndex, loadRICatalog, getDirectoryBaseRI
+export loadRICatalog!
 
 global dirBaseRefractiveIndex::String ="/Users/matt/Development/Projects/refractiveindex/database/data"
 
@@ -16,6 +17,8 @@ end
 function setDirectoryBaseRefractiveIndex(dir::AbstractString)
     global dirBaseRefractiveIndex= dir
 end
+
+getDirectoryBaseRI() = dirBaseRefractiveIndex
 
 #=
 
@@ -90,7 +93,11 @@ function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
     record = YAML.load_file(pth)
     data = record["DATA"][1]
     typeData = data["type"]
-    coefs = map(x->parse(Float64,x),split(data["coefficients"]))
+    coefentries = get(data, "coefficients", nothing)
+    if coefentries == nothing
+        return nothing
+    end
+    coefs = map(x->parse(Float64,x),split(coefentries))
     f(x) = funcs[typeData](x, coefs)
     f
 end
@@ -99,3 +106,39 @@ end
 #riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")
 #riN_SF2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF2.yml")
 #riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
+
+
+function loadRICatalog(pth::AbstractString; basepath::AbstractString = dirBaseRefractiveIndex)
+    dictforpath = Dict{AbstractString, Any}()
+    dictforpath["DEFAULT"]= rInDef
+    loadRICatalog!(dictforpath, pth::AbstractString; basepath)
+end
+
+function loadRICatalog!(dictforpath::Dict{AbstractString, Any}, pth::AbstractString; basepath::AbstractString = dirBaseRefractiveIndex)
+    path = joinpath(basepath,pth)
+
+    for (path, dirs, files) in walkdir(path)
+        #println("Files in $path")
+        for file in files
+            #println(file) # path to files
+            glassname, ext = splitext(file)
+            if ext == ".yml"
+                riFunc = getRefractiveIndexFunc(path, file)
+                if riFunc==nothing
+                    println("Skipping $(joinpath(path,file)): no dispersion function found")
+                    continue
+                end
+                dictforpath[glassname] = riFunc
+                sfile = split(glassname, "-")
+                if length(sfile)==2
+                    dictforpath[sfile[2]] = riFunc #remove the manufacturer specific prefix and add the glass
+                end
+
+            else
+                println("Additional file found: $(joinpath(path,file))")
+            end
+
+        end
+    end
+    return dictforpath
+end
