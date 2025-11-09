@@ -29,6 +29,10 @@ end
 
 """
 function surfClosestApproach(ray1::Ray, ray2::Ray; semiDiam = 5.0, ri=refIndexDefault, surfname="closest")
+    println("surfClosestApproach")
+    println("ray1 = $ray1")
+    println("ray2 = $ray2") 
+
     t1,t2 = distClosestApproach(ray1, ray2)
  
 
@@ -66,9 +70,8 @@ function distClosestApproach(ray1::Ray, ray2::Ray)
     dpd2 = dot(dp, d2)
 
     denom = d1d1 * d2d2 - d1d2 * d1d2
-    if abs(denom) < 1e-10
-        println("rays are parallel")
-        return Inf
+    if abs(denom) < 1e-14
+        error("rays are parallel")
     end
 
     num1 = dpd1 * d2d2 - dpd2 * d1d2

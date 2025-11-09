@@ -3,22 +3,24 @@
 
 export reverseGeo
 
-function reverseGeo(geo::Vector{AbstractSurface})
-    g = deepcopy(geo)
+function reverseGeo(geo::Vector{T}) where T<:AbstractSurface
+
     if geo[1].base.dir != geo[end].base.dir
         error("Can only reverse geometry if first and last surface directions are the same")
     end
+    g = reverse!(deepcopy(geo))
     beginpoint = geo[1].base.base
     endpoint = geo[end].base.base
     lengthgeo = norm(endpoint - beginpoint)
 
     for s in g
-        reverseSurface!(s, beginpoint, lengthgeo)
+        reverseSurface!(s, beginpoint, endpoint)
     end
     g
 end
 
 function reverseSurface!(surf::OpticTrace.OptSurface, bpoint, epoint)
+    #println("reverseSurface!:  bpoint: $bpoint epoint: $epoint")
     reverseBase!(surf.base, bpoint, epoint)
     # Reverse the surface profile if needed
     reverseProfile!(surf.profile)
@@ -34,9 +36,9 @@ function reverseSurface!(surf::OpticTrace.OptSurface, bpoint, epoint)
 end
 
 function reverseBase!(base::SurfBase, bpoint, epoint)
-    base.dir = -base.dir
-    base.ydir = -base.ydir
+    #println("epoint: $epoint bpoint: $bpoint base before: $(base.base)")
     base.base = bpoint + epoint - base.base
+    #println("base after: $(base.base)")
     return base
 end
 
@@ -73,7 +75,10 @@ function reverseProfile!(profile::SurfProfileCyl)
     return profile
 end
 
-function reverseMod!(mod::AbstractBendType)
+function reverseMod!(mod::T) where T<:AbstractBendType
+    #println("Reversing bend type: $(typeof(mod))")
+    #println("Before reversal: rinIn=$(mod.refIndexIn) rinOut=$(mod.refIndexOut)")
     mod.refIndexIn, mod.refIndexOut = mod.refIndexOut, mod.refIndexIn
+    #println("After reversal: rinIn=$(mod.refIndexIn) rinOut=$(mod.refIndexOut)")
     return mod
 end

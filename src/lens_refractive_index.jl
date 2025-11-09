@@ -20,6 +20,9 @@ end
 
 getDirectoryBaseRI() = dirBaseRefractiveIndex
 
+global defaultGlassCatalog = Dict{AbstractString, Any}()
+defaultGlassCatalog["DEFAULT"]= rInDef
+
 #=
 
 fusedSilica = (0.696166300, 0.407942600, 0.897479400, 4.67914826E-3,
@@ -141,4 +144,8 @@ function loadRICatalog!(dictforpath::Dict{AbstractString, Any}, pth::AbstractStr
         end
     end
     return dictforpath
+end
+
+function loadRICatalog!(pth::AbstractString; basepath::AbstractString = dirBaseRefractiveIndex)
+    loadRICatalog!(defaultGlassCatalog, pth; basepath)
 end

@@ -33,18 +33,18 @@ mutable struct SurfBase{N, T} <: AbstractSurfBase{N, T}
 end
 
 
-struct SizeLens{T} <: AbstractSize{T}  #size for round optics
+mutable struct SizeLens{T} <: AbstractSize{T}  #size for round optics
     semiDiameter::T
 end
 
 abstract type TrueAperture{T} <: AbstractSize{T} end
 
-struct RoundAperture{T} <: TrueAperture{T}
+mutable struct RoundAperture{T} <: TrueAperture{T}
     obscure::T
     semiDiameter::T
 end
 
-struct RectAperture{T} <: TrueAperture{T}
+mutable struct RectAperture{T} <: TrueAperture{T}
     wo::T
     lo::T
     wclear::T
@@ -52,18 +52,18 @@ struct RectAperture{T} <: TrueAperture{T}
 end
 
 
-struct SurfProfileSphere{T} <: AbstractSurfProfile{T}
+mutable struct SurfProfileSphere{T} <: AbstractSurfProfile{T}
     curv :: T
 end
 
 conicToϵ(c) = 1 + c #convert the conic constant to ϵ used in Welford
 
-struct SurfProfileConic{T} <: AbstractSurfProfile{T}
+mutable struct SurfProfileConic{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
 end
 
-struct SurfProfileOAConic{T} <: AbstractSurfProfile{T}
+mutable struct SurfProfileOAConic{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
     offset::Vec{3, T}
@@ -72,37 +72,37 @@ end
 abstract type AbstractAsphericProfile{T} <: AbstractSurfProfile{T} end
 
 
-struct SurfProfileAsphere{T} <: AbstractAsphericProfile{T}
+mutable struct SurfProfileAsphere{T} <: AbstractAsphericProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
     a::Vector{T} #hope this works...
 end
 
 
-struct SurfProfileEvenAsphere{T} <: AbstractAsphericProfile{T}
+mutable struct SurfProfileEvenAsphere{T} <: AbstractAsphericProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ
     a::Vector{T} #even terms starting with 4th order
 end
 
-struct SurfProfileCyl{T} <: AbstractSurfProfile{T}
+mutable struct SurfProfileCyl{T} <: AbstractSurfProfile{T}
     curv :: T
     ϵ::T #see Welford for definition of ϵ    
 #   ϵy::T #see Welford for definition of ϵ
     a::Vector{T} #hope this works...
 end
 
-struct SurfProfileToroid{T} <: AbstractSurfProfile{T}
+mutable struct SurfProfileToroid{T} <: AbstractSurfProfile{T}
     curvY :: T
     curvX :: T 
 end
 
-struct NoProfile{T} <: AbstractSurfProfile{T}
+mutable struct NoProfile{T} <: AbstractSurfProfile{T}
     curv :: T #but never used
 end
 
 
-struct AmpParam <: AbstractAmplitudeParam
+mutable struct AmpParam <: AbstractAmplitudeParam
     type::String
 end
 
@@ -137,23 +137,23 @@ AbstractBendTypes
 =#
 
 
-struct DielectricT{T} <: AbstractBendDielectric{T}
+mutable struct DielectricT{T} <: AbstractBendDielectric{T}
     refIndexIn :: T
     refIndexOut :: T
 end
 
-struct MirrorR{T} <: AbstractBendMirror{T}
+mutable struct MirrorR{T} <: AbstractBendMirror{T}
     refIndexIn :: T
     refIndexOut :: T
 end
 
-struct CDiffuser{T} <: AbstractBendType{T}
+mutable struct CDiffuser{T} <: AbstractBendType{T}
     tanθ::T
     refIndexIn::T
     refIndexOut::T
 end
 
-struct NoBendIndex{T} <: AbstractBendType{T}
+mutable struct NoBendIndex{T} <: AbstractBendType{T}
     refIndexIn :: T
     refIndexOut::T
 end
@@ -166,7 +166,7 @@ function NoBendIndex(n::Float64)
 end
 =#
 
-struct NoAmpParam <: AbstractAmplitudeParam
+mutable struct NoAmpParam <: AbstractAmplitudeParam
     type::String
 end
 
@@ -216,7 +216,7 @@ end
         parameters  dictionary for parameters used by funcSetup and funcGeo
 
 """
-struct ExtendedGeometry
+mutable struct ExtendedGeometry
     geo::Array{AbstractSurface}  #needs to be changed to AbstractOpticalObject
     funcGeo
     funcSetup

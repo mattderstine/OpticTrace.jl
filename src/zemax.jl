@@ -2,10 +2,11 @@
     read a zemax file and return the data as a geometry object
 
 =#
-export readZemax, printZemaxSurfs, zemaxsurfsToGeo
+export readZemax, printZemaxSurfs, zemaxsurfsToGeo, viewZemaxFile
 
 #=
 
+# Python version for reference from 
     
 def zmx_to_system(data, item=None):
     s = System()
@@ -179,7 +180,7 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
         end
 
         if startswith(entries[1], "SURF")
-            println("SURF line: $curline")
+            #println("SURF line: $curline")
             surfnum = parse(Int, entries[2])
             if surfnum > 0
                 # Finalize the previous surface before starting a new one
@@ -293,7 +294,7 @@ function zemaxsurfToSurface(num, rinIn::Float64, rinOut::Float64, basept::Point,
     return basept + s.distance * dir, rinOut, newsurf
 end
 
-function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64, glassCatalog::Dict{AbstractString, Any} )
+function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64; glassCatalog::Dict{AbstractString, Any} =defaultGlassCatalog)
     geo = Vector{AbstractSurface}()
     rinIn = rInDef()
     for (i,zsurf) in enumerate(zemaxsurfs)
@@ -304,3 +305,14 @@ function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64, glassCatalo
     return geo
 end
 
+function viewZemaxFile(filename; glassCatalog=defaultGlassCatalog)
+    zgeo, name, units, wave = readZemax(filename; basept = ORIGIN, dir = ZAXIS)
+    println("Zemax System Name: $name Units: $units")
+    printZemaxSurfs(zgeo)
+    geo = zemaxsurfsToGeo(zgeo[2:end], ORIGIN, ZAXIS, 0.5; glassCatalog)
+
+    fig,a = plotGeometry3D(geo)
+    display(fig)
+    printGeo(geo)
+    return geo
+end
