@@ -5,6 +5,7 @@ using GeometryBasics
 using BenchmarkTools
 using Test
 using StaticArrays
+using GLMakie
 ##
 #=
 
@@ -131,3 +132,42 @@ asurf=OpticTrace.OptSurface("old asph", geo[1].base, geo[1].aperture, OpticTrace
         :blue)
 
 plotGeometry3D!(a, [asurf])
+
+function to_bytes(n::Integer; bigendian=true, len=sizeof(n))
+    bytes = Array{UInt8}(undef, len)
+    for byte in (bigendian ? (1:len) : reverse(1:len))
+        bytes[byte] = n & 0xff
+        n >>= 8
+    end
+    return bytes
+end
+
+ZAR = ".zar"
+ZIP = ".zip"
+ZAR_VERSION_LENGTH = 2  # in bytes
+EARLIER_CONTENT_OFFSET = 0x14C - ZAR_VERSION_LENGTH
+EARLIER_PACKED_FILE_SIZE_BEGIN = 0xC - ZAR_VERSION_LENGTH
+EARLIER_PACKED_FILE_SIZE_END = 0x10 - ZAR_VERSION_LENGTH
+EARLIER_PACKED_FILE_NAME_OFFSET = 0x20 - ZAR_VERSION_LENGTH
+EARLIER_VERSION = to_bytes(0xEA00,len=2)
+LATEST_VERSION = to_bytes(0xEC03, len = 2)
+LATEST_CONTENT_OFFSET = 0x288 - ZAR_VERSION_LENGTH
+LATEST_PACKED_FILE_SIZE_BEGIN = 0x10 - ZAR_VERSION_LENGTH
+LATEST_PACKED_FILE_SIZE_END = 0x18 - ZAR_VERSION_LENGTH
+LATEST_PACKED_FILE_NAME_OFFSET = 0x30 - ZAR_VERSION_LENGTH
+
+rIN_MgF2 = getRefractiveIndexFunc("main/MgF2/Li-o.yml")
+rIN_MgF2e = getRefractiveIndexFunc("main/MgF2/Li-e.yml")
+rIN_MgF2d = getRefractiveIndexFunc("main/MgF2/Dodge-o.yml")
+rIN_MgF2de = getRefractiveIndexFunc("main/MgF2/Dodge-e.yml")
+
+rIN_MgF2(0.2)
+rIN_MgF2(1.)
+
+x = LinRange(0.115, 1.0, 200)
+y = rIN_MgF2.(x)
+lines(x, rIN_MgF2.(x))
+#lines!(x, rIN_MgF2e.(x), color=:red)
+lines!(x, rIN_MgF2d.(x), color=:green)
+#lines!(x, rIN_MgF2de.(x), color=:orange)
+rIN_MgF2(0.115) - rIN_MgF2d(0.115)
