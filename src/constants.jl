@@ -7,6 +7,7 @@ const YAXIS = Vec3(0.,1.,0.)
 const XAXIS = Vec3(1.,0.,0.)
 
 const ∞ = Inf
+const EPSILON = 1e-7
 
 global refIndexDefault::Float64 = 1.0
 

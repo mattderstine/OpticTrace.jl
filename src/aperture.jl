@@ -98,3 +98,17 @@ function rectAperture(surfname::String,
         color
         )
 end
+
+
+"""
+function radiusAperture(aperture::AbstractSize)
+    return semiDiameter for RoundAperture
+    return norm([semiDiamx, semiDimy]) for RectAperture
+"""
+function radiusAperture(aperture::AbstractSize)
+    return aperture.semiDiameter
+end
+
+function radiusAperture(aperture::RectAperture)
+    return norm([aperture.wclear, aperture.lclear])
+end

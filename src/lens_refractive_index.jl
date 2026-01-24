@@ -91,7 +91,7 @@ riN_LAK22(0.5)
 
 
 function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
-    funcs = Dict("formula 2"=>riFormula2, "formula 1"=> riFormula2, "formula 3"=>riFormula3)
+    funcs = Dict("formula 2"=>riFormula2, "formula 1"=> riFormula1, "formula 3"=>riFormula3)
     pth = joinpath(basepath,path)
     record = YAML.load_file(pth)
     data = record["DATA"][1]
@@ -104,6 +104,11 @@ function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
     f(x) = funcs[typeData](x, coefs)
     f
 end
+
+function getRefractiveIndexFunc(path::AbstractString; basepath::AbstractString = dirBaseRefractiveIndex)
+    getRefractiveIndexFunc(basepath, path)
+end
+
 
 #riN_LAK22 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-LAK22.yml")
 #riN_SF6 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF6.yml")

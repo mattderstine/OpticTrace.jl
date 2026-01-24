@@ -287,7 +287,7 @@ function traceSurf(r::Ray,s::OptSurface)
         println("start = $(r.base)")
     end
     =#
-    if delta == NaN
+    if delta == NaN #missed
         return (1, Trace(r, NaN, delta, identityAmpMats()) )
     end
     newRayBase = r.base + r.dir * delta
@@ -302,7 +302,7 @@ function traceSurf(r::Ray,s::OptSurface)
     end
     =#
     t, newRayDir, nIn = modFunc(Ray(newRayBase, r.dir), normal, s.mod)
-    if !t
+    if !t #TIR or other failure
         return (2, Trace(Ray(newRayBase, newRayDir), nIn, delta, identityAmpMats()))
     end
     #=

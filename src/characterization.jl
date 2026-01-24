@@ -2,7 +2,7 @@
 
 
 export sag, randomPointOnSquare, randomPointOnDisk, traceMonteCarloRays, computeRearFocalPlane, traceLoss
-export findRFP, surfClosestApproach, distClosestApproach
+export findRFP, surfClosestApproach, distClosestApproach, spotDiagramHex
 
 function randomPointOnSquare(xhalf)
     r = 2.0* rand(2) .- (1., 1.)
@@ -29,9 +29,9 @@ end
 
 """
 function surfClosestApproach(ray1::Ray, ray2::Ray; semiDiam = 5.0, ri=refIndexDefault, surfname="closest")
-    println("surfClosestApproach")
-    println("ray1 = $ray1")
-    println("ray2 = $ray2") 
+    #println("surfClosestApproach")
+    #println("ray1 = $ray1")
+    #println("ray2 = $ray2") 
 
     t1,t2 = distClosestApproach(ray1, ray2)
  
@@ -147,13 +147,15 @@ function computeRearFocalPlane(geo; epsilon = 0.001)
     statusb,bore = traceGeometryRel(Ray(ORIGIN, ZAXIS), geo)
     statusy,ytrace = traceGeometryRel(Ray(Point(0., epsilon, 0.), ZAXIS), geo)
     statusx,xtrace = traceGeometryRel(Ray(Point(epsilon, 0., 0.), ZAXIS), geo)
-
+    #=
     println("computeRearFocalPlane\nBore")
     printTrcCoords(statusb, bore, geo)
     println("ytrace")
     printTrcCoords(statusy, ytrace, geo)
     println("xtrace")
     printTrcCoords(statusx, xtrace, geo)
+
+    =#
     #check to make sure all made it through
     if statusb !=0 || statusy !=0 || statusx !=0
         return(1, NaN, NaN, ORIGIN, ORIGIN)
@@ -229,14 +231,16 @@ end
         fl - focal length
 """
 
-function findRFP(geo; epsilon = 0.001, ydir = YAXIS)
+function findRFP(geo; epsilon = 0.001, ydir = YAXIS, debug = false)
     statusb,bore = traceGeometryRel(Ray(ORIGIN, ZAXIS), geo)
     statusy,ytrace = traceGeometryRel(Ray(ORIGIN+ epsilon * ydir, ZAXIS), geo)
 
-    println("computeRearFocalPlane\nBore")
-    printTrcCoords(statusb, bore, geo)
-    println("ytrace")
-    printTrcCoords(statusy, ytrace, geo)
+    if debug
+        println("computeRearFocalPlane\nBore")
+        printTrcCoords(statusb, bore, geo)
+        println("ytrace")
+        printTrcCoords(statusy, ytrace, geo)
+    end
 
     #check to make sure all made it through
     if statusb !=0 || statusy !=0
@@ -262,7 +266,68 @@ function findRFP(geo; epsilon = 0.001, ydir = YAXIS)
     end
 
     fl = norm(surfRFP.base.base - surfRPP.base.base) #may not have the right sign
-    println("findRFP  fl = $fl")    
+    if debug
+        println("findRFP  fl = $fl")    
+    end
 
     return surfRFP, fl
 end
+
+"""
+    spotDiagramHex(geo, basept, pupil, rings)
+    plot spot diagram for rays from basept through geo 
+    rings = number of rings of rays to trace
+    pupil is an surface defining the entrance pupil
+
+"""
+function spotDiagramHex(geo, basept::Point{3,T}, pupil::P, rings::I) where {T<:Real, P<:OpticTrace.AbstractSurface{3, T}, I<:Integer}
+    ROUNDINGCONTROL = 0.99
+    toloc = geo[end].toLocalCoord
+    if rings < 1
+        error("rings must be >= 1")
+    end
+    pts = Vector{Point{2, Float64}}(undef, 0)
+    baseap = pupil.base.base
+    radius = ROUNDINGCONTROL * OpticTrace.radiusAperture(pupil.aperture)
+    
+    #trace the center ray from basept through the center of the pupil
+    centerdir = Vec3(normalize(baseap .- basept))
+    statusc, trccenter = traceGeometryRel(Ray(basept, centerdir), geo)
+    if statusc == 3 
+        nocenterray = true
+    elseif statusc != 0
+        error("Center ray did not make it through the system")
+    else
+        nocenterray = false
+        #println("base = $(toloc(trccenter[end].ray.base))")
+        push!(pts, toloc(trccenter[end].ray.base)[1:2])
+    end
+    #compute the distance between rings
+    d = radius * 2sin(2pi/(rings * 6.0))
+    deltad = radius/rings
+    deltarhoj = 1.0/rings
+    for rhoj in deltarhoj:deltarhoj:(1.0+EPSILON)
+        r = rhoj * radius
+        deltaangle = pi/(3rhoj * rings)
+        for angle in 0.0:deltaangle:(2pi - EPSILON)
+            dir = Vec3(normalize(pupil.toGlobalCoord(Point3(r * cos(angle), r * sin(angle), 0.)) .- basept))
+            #println("tracing ray at angle = $angle  dir = $dir")
+            #println("x = $(r*cos(angle))  y = $(r*sin(angle))")
+            status, trc = traceGeometry(Ray(basept, dir), geo)
+            if status == 0
+                #thepoint = toloc(trc[end].ray.base)
+                #println("  hit at point = $thepoint")
+                push!(pts, toloc(trc[end].ray.base)[1:2])
+            end
+        end
+    end
+    center = centroidofpoints(pts)
+    rmsradius = rmsradiusofpoints(pts, center)
+    return pts, center, rmsradius
+end
+
+centroidofpoints(pts::Vector{Point{2, T}}) where {T<:Real} =
+    Point{2, T}(sum(p[1] for p in pts)/length(pts), sum(p[2] for p in pts)/length(pts))
+
+rmsradiusofpoints(pts::Vector{Point{2, T}}, center::Point{2, T}) where {T<:Real} =
+    sqrt(sum(( (p[1]-center[1])^2 + (p[2]-center[2])^2 ) for p in pts)/length(pts))

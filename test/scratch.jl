@@ -1,5 +1,6 @@
 4+4
 
+
 using OpticTrace
 using GeometryBasics
 using BenchmarkTools
@@ -156,6 +157,8 @@ LATEST_PACKED_FILE_SIZE_BEGIN = 0x10 - ZAR_VERSION_LENGTH
 LATEST_PACKED_FILE_SIZE_END = 0x18 - ZAR_VERSION_LENGTH
 LATEST_PACKED_FILE_NAME_OFFSET = 0x30 - ZAR_VERSION_LENGTH
 
+##
+
 rIN_MgF2 = getRefractiveIndexFunc("main/MgF2/Li-o.yml")
 rIN_MgF2e = getRefractiveIndexFunc("main/MgF2/Li-e.yml")
 rIN_MgF2d = getRefractiveIndexFunc("main/MgF2/Dodge-o.yml")
@@ -164,10 +167,101 @@ rIN_MgF2de = getRefractiveIndexFunc("main/MgF2/Dodge-e.yml")
 rIN_MgF2(0.2)
 rIN_MgF2(1.)
 
-x = LinRange(0.115, 1.0, 200)
+x = LinRange(0.12, 1.0, 200)
 y = rIN_MgF2.(x)
-lines(x, rIN_MgF2.(x))
+
+f = Figure()
+ax = Axis(f[1, 1],
+    title = "MgF2",
+    xlabel = "Wavelength (µm)",
+    ylabel = "Refractive Index",
+)
+lines!(ax, x, rIN_MgF2.(x), label = "Li o")
 #lines!(x, rIN_MgF2e.(x), color=:red)
-lines!(x, rIN_MgF2d.(x), color=:green)
+lines!(ax, x, rIN_MgF2d.(x), color=:green, label="Dodge o")
 #lines!(x, rIN_MgF2de.(x), color=:orange)
+axislegend(ax, position = :rt)
 rIN_MgF2(0.115) - rIN_MgF2d(0.115)
+
+f1(n,r) = r/(n-1)
+g1(lambda, r) = f1(rIN_MgF2(lambda), r)
+
+
+rmirror = 10.0
+radlens = 200.0
+
+frac(.12)
+
+g0 = g1(.12, radlens)
+u = rmirror/g1(.12, radlens)
+
+na = rmirror/g0
+
+
+
+function filter(rmirror, radlenslist)
+    x = LinRange(0.12, 1.0, 200)
+    fig =Figure()
+    ax = Axis(fig[1, 1],
+        xlabel = "Wavelength (µm)",
+        ylabel = "Focal Length",
+    )
+
+    ax2 = Axis(fig[1, 2],
+        xlabel = "Wavelength (µm)",
+        ylabel = "log(T)",
+    )
+
+
+    y1(lambda, g0, radlens) = rmirror-(rmirror/g1(lambda, radlens))* g0
+    r1(lambda, g0, radlens) = y1(lambda, g0, radlens) + 0.02
+    frac(lambda, g0, radlens) = (r1(0.12, g0, radlens)/r1(lambda, g0, radlens))^2
+    for radlens in radlenslist
+        g0 = g1(.12, radlens)
+        println("Rad lens: $radlens, g0: $g0")
+        na = rmirror/g0
+        lines!(ax, x, g1.(x, radlens))
+        lines!(ax2, x, log.(frac.(x, g0, radlens)),label = "R=$radlens")
+    end
+    axislegend(ax2, position = :rt)
+    fig
+end
+
+
+
+filter(1.0, [10.0, 50.0, 100., 200.0, 300.0, 400.0, 500.0])
+
+
+##
+
+geosimple = [roundAperture("pupil", Point3(0., 0., 10.), ZAXIS, 1.0, 0.0, 5.0, color = :green3)]
+
+
+
+
+pts, center, rmsradius= spotDiagramHex(geosimple, Point3(0., 0., 0.), geosimple[1],9)
+f,a,p =scatter(pts)
+a.aspect = DataAspect()
+display(f)
+
+println("Centroid: $center RMS radius: $rmsradius")
+
+x = [p[1] for p in pts]
+y = [p[2] for p in pts]
+f,a,p = scatter(x, y)
+display(f)
+
+points = Point2.(x,y)
+f,a,p = scatter(points)
+display(f)
+
+fig9, scene = plotGeometry3D(geosimple)
+fig9
+
+
+ax = fig9[1,2] = Axis(fig9, title = "Spot Diagram")
+scatter!(ax, pts, markersize=2, color=:red)
+ax.aspect = DataAspect()
+display(fig9)
+
+

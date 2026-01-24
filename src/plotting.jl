@@ -363,36 +363,67 @@ end
 =#
 
 """
+    getrefbase(point, geo, surfview)
+    returns the local coodinates of the reference ray intersection at surfview
+
+"""
+
+function getrefbase(r::Point3, geo, surfview)
+    surfnum = tracenumFromName(surfview, geo)
+    s = geo[surfnum-1]  #surfnum is defined for traces
+
+    #find mapping of local coordinates
+    status, trc = traceGeometryRel(Ray(r, ZAXIS), geo) #ZAXIS is default local direction
+    if status != 0 && surfnum >0 && length(trc)<surfnum
+        #println(trcStatMsg[status+1])
+        error("Ray did not intersect surface: $surfview")
+    else
+        reforigin = s.toLocalCoord(surfnum <0 ? trc[end].ray.base : trc[surfnum].ray.base)
+    end
+    reforigin
+end
+
+
+const SKEWLIMIT = 0.1  #cos(θ) limit for skew rays in rayfan calculation
+
+"""
     plotRayFan!(scene, point, max angle, geometry; color=:blue ,surfview=Surface Name, points=33, θmin = min angle )
     returns Makie scene of plot of rayfan
 
     current version assumes telecentric pupil/stop (i.e. reference ray θ=0)
 
 """
-function plotRayFan!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
+function plotRayFan!(fig, r::Point3, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, printTrace=false, rayscene=nothing )
     raysy = Vector{SVector{3, Float64}}(undef, points)
     raysx = Vector{SVector{3, Float64}}(undef, points)
     surfnum = tracenumFromName(surfview, geo)
     s = geo[surfnum-1]  #surfnum is defined for traces
 
-    #find the reference local reference intercept coordinates
-    #println("base = $r")
-    status, trc = traceGeometryRel(Ray(r, ZAXIS), geo) #ZAXIS is default local direction
-    if status != 0 && surfnum >0 && length(trc)<surfnum
-        #println(trcStatMsg[status+1])
-        println("Reference ray did not intersect surface: $surfview")
-        return
-    else
-        refbase = s.toLocalCoord(surfnum <0 ? trc[end].ray.base : trc[surfnum].ray.base)
-    end
-    θm = isnan(θmin) ? -θmax : θmin
+    #find mapping of local coordinates
 
+    reforigin = getrefbase(ORIGIN, geo, surfview)
+    refxdir = normalize(getrefbase(Point3(0.1, 0.0, 0.0), geo, surfview) - reforigin)
+    refydir = normalize(getrefbase(Point3(0.0, 0.1, 0.0), geo, surfview) - reforigin)
+    if refxdir ⋅ refydir > SKEWLIMIT
+        println("signficant skew distortion in rayfan calculation: cos(Δθ) = $(refxdir ⋅ refydir)")
+    #=
+    else
+        println("refxdir = $refxdir   refydir = $refydir   cos(Δθ) = $(refxdir ⋅ refydir)")
+        println("θx = $(s.toLocalDir(refxdir)⋅XAXIS)   θy = $(s.toLocalDir(refydir)⋅YAXIS)")
+    =#
+    end
+    
+
+    #find the reference local reference intercept coordinates
+    refbase = getrefbase(r, geo, surfview)
+
+    θm = isnan(θmin) ? -θmax : θmin
     θr =  LinRange(θm, θmax, points)
 
     i = 1
     for θ in θr
         #println("dir = $([0.,sin(θ), cos(θ)])")
-        status, trc = traceGeometryRel(Ray(r, [0.,sin(θ), cos(θ)]), geo)
+        status, trc = traceGeometryRel(Ray(r, Vec3(0.,sin(θ), cos(θ))), geo)
         if printTrace
             println("\ny $θ   -----------------------")
             printTrcCoords(status, trc, geoOpticChannelLensOnly(λ0); format="normal")
@@ -407,7 +438,7 @@ function plotRayFan!(scene, r::Point3, θmax::Float64, geo; surfview = "end", co
             raysy[i] = s.toLocalCoord(surfnum <0 ? trc[end].ray.base : trc[surfnum].ray.base) - refbase
         end
 
-        status, trc = traceGeometryRel(Ray(r, [sin(θ), 0., cos(θ)]), geo)
+        status, trc = traceGeometryRel(Ray(r, Vec3(sin(θ), 0., cos(θ))), geo)
         if printTrace
             println("\nx $θ   -----------------------")
             printTrcCoords(status, trc, geoOpticChannelLensOnly(λ0); format="normal")
@@ -423,16 +454,25 @@ function plotRayFan!(scene, r::Point3, θmax::Float64, geo; surfview = "end", co
         end
         i += 1
     end
-    #find the largest of x & y at the edge and use it for the sign
-    yv = abs(raysy[end][1]) > abs(raysy[end][2]) ? 1 : 2
-    xv = abs(raysx[end][1]) > abs(raysx[end][2]) ? 1 : 2
+
+    #=
+    the right way to do this is to either:
+    a) assume the final surface has the yaxis aligned properly to the input rays <- use this one!
+    b) find the axis directions from the intersection points of the x&y rays. 
+    
+    =#
+    #find the largest of x & y at the edge and use it for the sign (this gives the wrong answer in some situations)
+    #yv = abs(raysy[end][1]) > abs(raysy[end][2]) ? 1 : 2
+    #xv = abs(raysx[end][1]) > abs(raysx[end][2]) ? 1 : 2
     #println("yv = $yv   xv = $xv")
-    y = [sign(t[yv])*norm(t) for t in raysy] #use norm in case the output intersections are not on an axis
-    x = [sign(t[xv])*norm(t) for t in raysx]
+    #y = [sign(t[yv])*norm(t) for t in raysy] #use norm in case the output intersections are not on an axis
+    #x = [sign(t[xv])*norm(t) for t in raysx]
 
+    y = [t[2] for t in raysy] 
+    x = [t[1] for t in raysx]
 
-    Makie.lines!(scene, θr, x, color=color, linestyle = :dash)
-    Makie.lines!(scene, θr, y , color=color)
+    a,p= Makie.lines(fig, θr, y, color=color, linestyle = :solid)
+    Makie.lines!(a, θr, x , color=color, linestyle = :dash)
     refbase
 end
 
@@ -569,6 +609,14 @@ function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
      end
 =#
 
+#=
+ TBD should calculate the distance in local coordinates rather than assume the global Z direction
+ something like
+
+    localdir = geo[end].toLocalDir(dirb)
+    localbase = geo[end].toLocalCoord(baseb)
+    
+=#
     if dirb[2] != 0.
         lenzero = -baseb[2]/dirb[2]
     else

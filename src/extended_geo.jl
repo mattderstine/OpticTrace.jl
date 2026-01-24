@@ -67,9 +67,15 @@ function updateCoordChange(pointInPlane::Point3,
     return myydir,toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir
 end
 
-function updateCoordChange!(surf)
-    -, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir = updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
+function updateCoordChange!(surf::T) where T<:OpticTrace.AbstractSurface
+    surf.base.ydir, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir = updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
 end
+
+function updateCoordChange!(surf::T, newbase::SurfBase, newydir::Union{Vec3,Nothing}=nothing) where T<:OpticTrace.AbstractSurface
+    surf.base = newbase
+    surf.base.ydir, surf.toGlobalCoord, surf.toLocalCoord, surf.toGlobalDir, surf.toLocalDir = updateCoordChange(surf.base.base, surf.base.dir, newydir)
+end
+
 
 """
     EGeo(func, baseObject, size, wavelength; dir = ZAXIS, setup = defaultSetupGeo, parameters = Dict{Any,Any}() )
