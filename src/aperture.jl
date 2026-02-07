@@ -1,11 +1,11 @@
 
 export  roundAperture, rectAperture, isAperture
 
-function isAperture(a::AbstractSize)
+function isAperture(a::AbstractSize{T}) where T<:Real
     false
 end
 
-function isAperture(a::TrueAperture)
+function isAperture(a::TrueAperture{T}) where T<:Real
     true
 end
 """
@@ -18,7 +18,7 @@ clipAperture(interceptPoint, aperture)
     A single function has both obscuration and aperture. 
 
 """
-function clipAperture(localBase::Point3, aperture::RoundAperture)
+function clipAperture(localBase::Point3{T}, aperture::RoundAperture{T}) where T<:Real
     #println("\nclipAperture\nlocalBase = $localBase  aperture=$aperture")
     r2 = localBase[1]^2 + localBase[2]^2 #z is supposed to be zero
     t = (r2 < aperture.obscure^2 )|| (r2 > aperture.semiDiameter^2 )
@@ -26,7 +26,7 @@ function clipAperture(localBase::Point3, aperture::RoundAperture)
     t
 end
 
-function clipAperture(localBase::Point3, aperture::RectAperture)
+function clipAperture(localBase::Point3{T}, aperture::RectAperture{T}) where T<:Real
     x = localBase[1] #width
     y = localBase[2] #length
     #println("x = $x  y = $y  $(aperture.wo)  $(aperture.wclear)  $(aperture.lo)  $(aperture.lclear)")
@@ -52,12 +52,12 @@ define a round aperture
 
 """
 function roundAperture(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    obscure::Float64,
-    semiDiam::Float64
-    ;color = :blue, ydir::Union{Vec3, Nothing} = nothing)
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    obscure::T,
+    semiDiam::T
+    ;color = :blue, ydir::Union{Vec3{T}, Nothing} = nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -76,15 +76,15 @@ end
 define a rectangular aperture
 """
 function rectAperture(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    ydir::Vec3,
-    rinIn::Float64,
-    obscurex::Float64,
-    obscurey::Float64,
-    semiDiamx::Float64,
-    semiDiamy::Float64
-    ;color = :blue)
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    ydir::Vec3{T},
+    rinIn::T,
+    obscurex::T,
+    obscurey::T,
+    semiDiamx::T,
+    semiDiamy::T
+    ;color = :blue) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -99,7 +99,7 @@ function rectAperture(surfname::String,
         )
 end
 
-
+#=
 """
 function radiusAperture(aperture::AbstractSize)
     return semiDiameter for RoundAperture
@@ -112,3 +112,5 @@ end
 function radiusAperture(aperture::RectAperture)
     return norm([aperture.wclear, aperture.lclear])
 end
+
+=#

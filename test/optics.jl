@@ -7,6 +7,12 @@ sps = OpticTrace.SurfProfileSphere(sqrt(0.5))
 spsAsphere = OpticTrace.SurfProfileAsphere(0.0, 0.0, [0.00, 0.1, 0.0, 0.01])
 spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
 
+simplesystem = [[referencePlane("object",ORIGIN, ZAXIS, 1.0, 10.0, "test coating")]
+            lens_TLAC254_060( Point(0.0, 0.0, 10.0), ZAXIS,  0.45; order = "forward", lensname = "TL_AC254-060")
+            [referencePlane("image",Point(0.0, 0.0, 70.0),   ZAXIS, 1.0, 10.0, "test coating")]
+            ]
+        
+
 @testset "optics.jl" begin
     # Write your tests here.
     #sag tests
@@ -38,10 +44,10 @@ spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
         sag_value = sag(1.0, 1.0, spsEAsphere)
         @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
         sag_value = sag(1.0, 1.0, spsAsphere)
-        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
+        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
 
         sag_value = sag(1.0, 1.0, spsEAsphere)
-        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
+        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
 
         #=
         spsC = OpticTrace.SurfProfileCyl(1.0, 0.0, [0.00, 0.1, 0.0, 0.01])
@@ -57,10 +63,12 @@ spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
     end
     @testset "deltaToSurf tests" begin
 
+        @test OpticTrace.deltaToSurf(Ray(Point(0.0, 0.0, -1.0), Vec(0.0, 0.0, 1.0)), spsAsphere) == 1.0
+
         #=
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileSphere(1.0)) == 0.0
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileConic(1.0, 0.0)) == 0.0
-        @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileAsphere(1.0, 0.0, [0.0, 0.01, 0.1])) == 0.0
+   
         @test OpticTrace.deltaToSurf(0.0, OpticTrace.SurfProfileCyl(1.0, 0.0, [0.0, 0.01, 0.1])) == 0.0
         =#
     end
@@ -75,18 +83,46 @@ spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
         @test dT.refIndexOut * dir[2] ≈ dT.refIndexIn * ray.dir[2]
 
     end
+    #=
+        a test set for surfNormal methods
+        The tests checks that the normal vector of different surfaces and different intersection points are correct.
+        
+        This is done by comparing the normal vector obtained from the surfNormal method
+        with the expected normal vector found using the gradient of the sag methods found using and autodiff package.
+        The first step for this is to find the intersection point of the ray with the surface, then find the sag value at that point,
+             and then find the gradient of the sag value at that point. The normal vector is then obtained by normalizing the gradient vector.
+    =#
 
+    """
+    define function to compute the normal vector using the gradient of the sag function
+     This function takes a ray and a surface profile as input, and returns the normal vector at the intersection point of the ray with the surface.
+    The function first finds the intersection point of the ray with the surface using the deltaToSurf method, then finds the sag value at the intersection point, and finally finds the gradient of the sag value at the intersection point using an autodiff package. The normal vector is then obtained by normalizing the gradient vector.
+    """
+    function normal_from_sag(ray::Ray, surfProfile)
+        # find the intersection point of the ray with the surface using the deltaToSurf method
+        delta = OpticTrace.deltaToSurf(ray, surfProfile)
+        intersection_point = ray.origin + delta * ray.dir
+        # find the gradient of the sag value at the intersection point using an autodiff package
+        grad_sag = ForwardDiff.gradient((x) -> sag(x[1], x[2], surfProfile), intersection_point[1:2])
+        # the normal vector is then obtained by normalizing the gradient vector
+        normal_vector = normalize(Vec3(grad_sag[1], grad_sag[2], -1.0))
+        return normal_vector
+    end
+
+  
     @testset "surfNormal tests" begin
         normal = OpticTrace.surfNormal(ORIGIN, spsAsphere)
         @test normal ≈ [0.0, 0.0, 1.0]
+
+
+
+        
+
     end
 
     @testset "Lens Tests" begin
         
-        g = [referencePlane(ORIGIN, ZAXIS, 10.0),
-            lens_TLAC254_060( Point(0.0, 0.0, 10.0), ZAXIS,  0.45; order = "forward", lensname = "TL_AC254-060"),
-            referencePlane(Point(0.0, 0.0, ),   ZAXIS, 10.0)
-        ]
+
     end
 
 end

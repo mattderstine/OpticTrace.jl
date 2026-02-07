@@ -7,6 +7,7 @@ using BenchmarkTools
 using Test
 using StaticArrays
 using GLMakie
+using ForwardDiff
 ##
 #=
 
@@ -236,32 +237,82 @@ filter(1.0, [10.0, 50.0, 100., 200.0, 300.0, 400.0, 500.0])
 
 geosimple = [roundAperture("pupil", Point3(0., 0., 10.), ZAXIS, 1.0, 0.0, 5.0, color = :green3)]
 
-
-
-
-pts, center, rmsradius= spotDiagramHex(geosimple, Point3(0., 0., 0.), geosimple[1],9)
-f,a,p =scatter(pts)
-a.aspect = DataAspect()
+pts, center, rmsradius, deltaZ = spotDiagramHex(geosimple, Point3(0., 0., 0.), geosimple[1],9, bestFocus = false)
+f = Figure(;size=(1200, 700))
+plotGeometry3D(f[1,1], geosimple)
+plotSpotDiagram(f[1,2], pts, center, rmsradius, deltaZ; title="Spot Diagram")
 display(f)
 
 println("Centroid: $center RMS radius: $rmsradius")
 
-x = [p[1] for p in pts]
-y = [p[2] for p in pts]
-f,a,p = scatter(x, y)
-display(f)
+##
 
-points = Point2.(x,y)
-f,a,p = scatter(points)
-display(f)
-
-fig9, scene = plotGeometry3D(geosimple)
-fig9
+spsAsphere = OpticTrace.SurfProfileAsphere(0.0, 0.0, [0.00, 0.1, 0.0, 0.01])
+spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
 
 
-ax = fig9[1,2] = Axis(fig9, title = "Spot Diagram")
-scatter!(ax, pts, markersize=2, color=:red)
-ax.aspect = DataAspect()
-display(fig9)
+"""
+    define function to compute the normal vector using the gradient of the sag function
+"""
+function normal_from_sag(x1, y1, surfProfile)
+    f(x) = sag(x[1], x[2], surfProfile)
+
+    x0 = [x1, y1]
+    # find the gradient of the sag value at the intersection point using an autodiff package
+    grad_sag = ForwardDiff.gradient(f, x0)
+    # the normal vector is then obtained by normalizing the gradient vector
+    normal_vector = normalize(Vec3(grad_sag[1], grad_sag[2], -1.0))
+    return normal_vector
+end
+normal_from_sag(1.0, 1.0, spsAsphere)
 
 
+
+
+
+
+        sag_value = sag(1.0, 1.0, spsAsphere)
+        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
+
+        sag_value = sag(1.0, 1.0, spsEAsphere)
+        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
+        sag_value = sag(1.0, 1.0, spsAsphere)
+        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
+
+        sag_value = sag(1.0, 1.0, spsEAsphere)
+        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
+
+        @test normal_from_sag(1.0, 1.0, spsAsphere) ≈ OpticTrace.surfNormal(Point(1.0, 1.0, sag(1.0, 1.0, spsAsphere)), spsAsphere)
+
+
+
+x0 = [1.0, 1.0]
+
+sag_value = sag2(x0[1], x0[2], spsAsphere)
+function g(x) 
+    return sag2(x[1], x[2], spsAsphere)
+end
+grad_sag = ForwardDiff.gradient(g, x0)
+grad = OpticTrace.normalize(Vec3(grad_sag[1], grad_sag[2], -1.0))
+println(grad)
+
+function sag2(x::T, y::T, s::OpticTrace.SurfProfileAsphere) where T<:Real
+    r2 = (x^2+y^2)
+    r = sqrt(r2)
+    sqrtarg = 1-s.ϵ * s.curv^2 * r2
+    if sqrtarg < 0.
+        return NaN
+    end
+    #sg = s.curv * r2 /(1+ sqrt(sqrtarg))+sum([ss * r2 * r^i for (i,ss) in enumerate(s.a)])
+
+    asp = 0.
+    for ss in Iterators.reverse(s.a)
+        asp = (asp + ss) * r
+    end
+    asp *= r2 #apsehreic coefficients array starts at r3
+    sg = s.curv * r2 /(1+ sqrt(sqrtarg))+asp
+
+    sg
+end
+
+normal = OpticTrace.surfNormal(Point3(x0[1], x0[2], sag2(x0[1], x0[2], spsAsphere)), spsAsphere)

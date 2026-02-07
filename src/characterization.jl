@@ -2,7 +2,37 @@
 
 
 export sag, randomPointOnSquare, randomPointOnDisk, traceMonteCarloRays, computeRearFocalPlane, traceLoss
-export findRFP, surfClosestApproach, distClosestApproach, spotDiagramHex
+export findRFP, surfClosestApproach, distClosestApproach, spotDiagramHex, centroidofpoints, rmsradiusofpoints, localRaysHexapolar
+export toLocalRay,  sizeOptic, sizeOpticSurface
+
+
+"""
+    sizeOptic(aper::AbstractSize)
+    returns the size of the aperture
+"""
+sizeOptic(aper::SizeLens) = aper.semiDiameter
+
+sizeOptic(aper::RoundAperture) = aper.semiDiameter
+
+sizeOptic(aper::RectAperture) = norm([aper.wclear, aper.lclear]) #max(aper.wclear, aper.lclear)
+
+"""
+    sizeOptic(surf::AbstractSurface)
+    returns the size of the aperture of the surface
+"""
+sizeOptic(surf::T) where (T<:AbstractSurface) = sizeOptic(surf.aperture)
+
+
+"""
+    sag(curv, ϵ, r)
+    compute the sag of a conic surface
+        curv - curvature (1/radius)
+        ϵ - conic parameter
+        r - radial distance from axis
+
+    returns sag
+
+"""
 
 function randomPointOnSquare(xhalf)
     r = 2.0* rand(2) .- (1., 1.)
@@ -273,22 +303,31 @@ function findRFP(geo; epsilon = 0.001, ydir = YAXIS, debug = false)
     return surfRFP, fl
 end
 
-"""
-    spotDiagramHex(geo, basept, pupil, rings)
-    plot spot diagram for rays from basept through geo 
-    rings = number of rings of rays to trace
-    pupil is an surface defining the entrance pupil
+toLocalRay(ray::Ray{3,T}, surf::OpticTrace.AbstractSurface{3,T}) where {T<:Real} =
+    Ray{3,T}(surf.toLocalCoord(ray.base), surf.toLocalDir(ray.dir))
+
 
 """
-function spotDiagramHex(geo, basept::Point{3,T}, pupil::P, rings::I) where {T<:Real, P<:OpticTrace.AbstractSurface{3, T}, I<:Integer}
+    localRaysHexapolar(geo, basept, pupil, rings)
+    compute rays on hexapolar grid from basept through geo in local coords of last surface
+    rings = number of rings of rays to trace
+    pupil is a surface defining the entrance pupil
+
+    returns
+        rays - array of rays at last surface in local coordinates
+
+
+"""
+function localRaysHexapolar(geo, basept::Point{3,T}, pupil::P, rings::I) where {T<:Real, P<:OpticTrace.AbstractSurface{3, T}, I<:Integer}
     ROUNDINGCONTROL = 0.99
-    toloc = geo[end].toLocalCoord
+
     if rings < 1
         error("rings must be >= 1")
     end
-    pts = Vector{Point{2, Float64}}(undef, 0)
+
+    rays = Vector{Ray{3, Float64}}(undef, 0)
     baseap = pupil.base.base
-    radius = ROUNDINGCONTROL * OpticTrace.radiusAperture(pupil.aperture)
+    radius = ROUNDINGCONTROL * sizeOptic(pupil)
     
     #trace the center ray from basept through the center of the pupil
     centerdir = Vec3(normalize(baseap .- basept))
@@ -300,34 +339,81 @@ function spotDiagramHex(geo, basept::Point{3,T}, pupil::P, rings::I) where {T<:R
     else
         nocenterray = false
         #println("base = $(toloc(trccenter[end].ray.base))")
-        push!(pts, toloc(trccenter[end].ray.base)[1:2])
+        push!(rays, toLocalRay(trccenter[end].ray, geo[end]))
     end
     #compute the distance between rings
     d = radius * 2sin(2pi/(rings * 6.0))
     deltad = radius/rings
     deltarhoj = 1.0/rings
-    for rhoj in deltarhoj:deltarhoj:(1.0+EPSILON)
+    maxr = 0.0
+    maxrhoj = 0.0
+    for rhoj in deltarhoj:deltarhoj:(1.0+0.5*deltarhoj)
         r = rhoj * radius
+        maxr = max(r, maxr)
+        maxrhoj = max(rhoj, maxrhoj)
         deltaangle = pi/(3rhoj * rings)
         for angle in 0.0:deltaangle:(2pi - EPSILON)
             dir = Vec3(normalize(pupil.toGlobalCoord(Point3(r * cos(angle), r * sin(angle), 0.)) .- basept))
+            localna = sqrt(1.0 - dir[3]^2)
+            #println("lcoalNA = $localna asin(localna) = $(asin(localna))")
             #println("tracing ray at angle = $angle  dir = $dir")
             #println("x = $(r*cos(angle))  y = $(r*sin(angle))")
             status, trc = traceGeometry(Ray(basept, dir), geo)
             if status == 0
                 #thepoint = toloc(trc[end].ray.base)
                 #println("  hit at point = $thepoint")
-                push!(pts, toloc(trc[end].ray.base)[1:2])
+                push!(rays, toLocalRay(trc[end].ray, geo[end]))
             end
         end
     end
-    center = centroidofpoints(pts)
-    rmsradius = rmsradiusofpoints(pts, center)
-    return pts, center, rmsradius
+    println("maxr = $maxr  maxrhoj = $maxrhoj")
+    return rays
 end
 
-centroidofpoints(pts::Vector{Point{2, T}}) where {T<:Real} =
-    Point{2, T}(sum(p[1] for p in pts)/length(pts), sum(p[2] for p in pts)/length(pts))
+centroidofpoints(pts::Vector{Point{N, T}}) where {T<:Real, N} =
+    Point{N, T}(sum(p for p in pts)/length(pts))
 
-rmsradiusofpoints(pts::Vector{Point{2, T}}, center::Point{2, T}) where {T<:Real} =
-    sqrt(sum(( (p[1]-center[1])^2 + (p[2]-center[2])^2 ) for p in pts)/length(pts))
+rmsradiusofpoints(pts::Vector{Point{N, T}}, center::Point{2, T}) where {T<:Real, N} =
+    sqrt(sum(( norm(p-center)^2 for p in pts))/length(pts))
+
+"""
+    spotDiagramHex(geo, basept, pupil, rings;bestFocus=true)
+    compute spot diagram for rays from basept through geo 
+    rings = number of rings of rays to trace
+    pupil is a surface defining the entrance pupil
+    bestFocus - if true, adjust the image plane to minimize rms radius
+
+    returns
+        pnts - pnts at image plane
+        center - centroid of points
+        rmsradius - rms radius of points from center
+        deltaZ - adjustment to image plane for best focus
+        
+
+"""
+function spotDiagramHex(geo, basept::Point{3,T}, pupil::P, rings::I; bestFocus = true) where {T<:Real, P<:OpticTrace.AbstractSurface{3, T}, I<:Integer}
+    localRays = localRaysHexapolar(geo, basept, pupil, rings)
+    #this is in local coordinates. Hopefully no rays are parallel to z axis
+    function errorfunc(para)
+        deltaz = para[1]
+        pts = [Point{2, T}(lr.base[1:2] .+ (deltaz/ lr.dir[3]) * lr.dir[1:2]) for lr in localRays]
+        center = centroidofpoints(pts)
+        rmsradius = rmsradiusofpoints(pts, center)
+        #println("deltaz = $deltaz  rmsradius = $rmsradius")
+        return rmsradius
+    end
+
+    if bestFocus
+        para = [0.0]
+        result =optimize(errorfunc,para)
+        deltaZ = Optim.minimizer(result)[1]
+        #println("spotDiagramHex: best focus deltaZ = $deltaZ, para = $(para[1])")
+    else
+        deltaZ = 0.0
+    end
+
+    pts = [Point{2, T}(lr.base[1:2] .+ (deltaZ/ lr.dir[3]) * lr.dir[1:2]) for lr in localRays]
+    center = centroidofpoints(pts)
+    rmsradius = rmsradiusofpoints(pts, center)
+    return pts, center, rmsradius, deltaZ
+end

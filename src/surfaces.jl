@@ -15,17 +15,17 @@ export lensSinglet, lensASinglet
         coating)
 """
 function refractConic(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
+    semiDiam::T,
     coating::APorString
     ;color = :yellow, 
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal,ydir)
@@ -52,15 +52,15 @@ end
         coating)
 """
 function refractSphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    semiDiam::T,
     coating::APorString
     ;color = :aquamarine2, 
-    attributesSurfaces = attributesSurfaces, ydir::Union{Vec3, Nothing}=nothing)
+    attributesSurfaces = attributesSurfaces, ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     refractConic(surfname,
         pointInPlane,
@@ -87,17 +87,17 @@ end
         coating)
 """
 function reflectConic(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
+    semiDiam::T,
     coating::APorString
     ;color = :aquamarine2,
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal,ydir)
@@ -124,15 +124,15 @@ end
         coating)
 """
 function cDiffuser(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    θ::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    θ::T,
+    semiDiam::T,
     coating::APorString
     ; color = :brown, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -151,17 +151,17 @@ end
 
 
 function reflectOAConic(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    ydir::Vec3,
-    offset::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    ydir::Vec3{T},
+    offset::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
+    semiDiam::T,
     coating::APorString
-    ;color = :aquamarine2, attributesSurfaces = attributeSurfaces)
+    ;color = :aquamarine2, attributesSurfaces = attributeSurfaces) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -194,16 +194,16 @@ end
         )
 """
 reflectOAP(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    ydir::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    ydir::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    semiDiam::T,
     coating::APorString
     ;color = :blue, attributesSurfaces = attributesSurfaces
-    ) = reflectOAConic(surfname,
+    ) where T<:Real = reflectOAConic(surfname,
                         pointInPlane,
                         planenormal,
                         ydir,
@@ -248,18 +248,18 @@ Overloads for referencePlane
 
 """
 function refractAsphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
     asphere::AbstractVector{Float64},
-    semiDiam::Float64,
+    semiDiam::T,
     coating::APorString
     ;color = :aquamarine,  
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -294,18 +294,18 @@ end
 
 """
 function refractEvenAsphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
-    asphere::AbstractVector{Float64},
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
+    asphere::AbstractVector{T},
+    semiDiam::T,
     coating::APorString
     ;color = :aquamarine,  
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -328,18 +328,18 @@ end
 
 """
 function reflectAsphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
-    asphere::AbstractVector{Float64},
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
+    asphere::AbstractVector{T},
+    semiDiam::T,
     coating::APorString
     ;color = :aquamarine, 
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -362,18 +362,18 @@ end
 
 """
 function reflectEvenAsphere(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    c::Float64,
-    ϵ::Float64,
-    asphere::AbstractVector{Float64},
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    c::T,
+    ϵ::T,
+    asphere::AbstractVector{T},
+    semiDiam::T,
     coating::APorString
     ;color = :aquamarine, 
     attributesSurfaces = attributesSurfaces, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -390,24 +390,24 @@ function reflectEvenAsphere(surfname::String,
         )
 end
 
-function sag(x::Float64, y::Float64, s::NoProfile)
+function sag(x::T, y::T, s::NoProfile) where T<:Real
     0.
 end
 
-function gbRadius(aperture::SizeLens, profile::NoProfile)
+function gbRadius(aperture::SizeLens{T}, profile::NoProfile) where T<:Real
     aperture.semiDiameter
 end
 
-function gbWidths(a::SizeLens, p::NoProfile)
+function gbWidths(a::SizeLens{T}, p::NoProfile) where T<:Real
     diam = 2a.semiDiameter
     SVector(diam, diam, 0.)
 end
 
-function surfNormal(r::Point3, s::NoProfile)
+function surfNormal(r::Point3{T}, s::NoProfile) where T<:Real
     Vec3(0., 0., 1.)
 end
 
-function deltaToSurf(r::Ray, p::NoProfile)
+function deltaToSurf(r::Ray{T}, p::NoProfile) where T<:Real
     x0, y0, z0 = r.base
     L,M,N = r.dir
 
@@ -419,7 +419,7 @@ function deltaToSurf(r::Ray, p::NoProfile)
     Δ
 end
 
-function modFunc(ray::Ray, normal::Vec3, d::NoBendIndex)
+function modFunc(ray::Ray{T}, normal::Vec3{T}, d::NoBendIndex) where T<:Real
     true, ray.dir, d.refIndexIn
 end
 
@@ -430,13 +430,13 @@ end
 =#
 
 function referencePlane(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    semiDiam::T,
     coating::APorString
     ;color = :khaki3, 
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -459,15 +459,15 @@ end
     potentially overload other functions
 """
 function planeMirror(surfname::String,
-    pointInPlane::Point3,
-    planenormal::Vec3,
-    rinIn::Float64,
-    rinOut::Float64,
-    semiDiam::Float64,
+    pointInPlane::Point3{T},
+    planenormal::Vec3{T},
+    rinIn::T,
+    rinOut::T,
+    semiDiam::T,
     coating::APorString
     ;color = :blue, 
     attributesSurfaces = attributesSurfaces,  #attributesSurfaces is a global dictionary
-    ydir::Union{Vec3, Nothing}=nothing)
+    ydir::Union{Vec3{T}, Nothing}=nothing) where T<:Real
 
     reflectConic(surfname,
         pointInPlane,

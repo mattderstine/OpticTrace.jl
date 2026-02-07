@@ -1,4 +1,4 @@
-export saveFigure, printFigure, multipleFigures, sizeOptic, sizeOpticSurface,plotSurface3D!,plotGeometry3D
+export saveFigure, printFigure, multipleFigures,plotSurface3D!,plotGeometry3D
 export plotGeometry3D!
 export trcAndPrintPlot!, trcAndPrintPlotRay!, trcAndPlotRay!,trcAndPlotRayRel!
 export plotRayFan!,perimeterRays,plotPerimeterRays
@@ -6,6 +6,7 @@ export plotPerimeterRays!, rayHeatmap, rayHeatmap!, computeExitPupilLoc
 export plotOPD!, plotOPD3D!
 export plotXSag!, plotYSag!
 export plotTrace!
+export plotSpotDiagram
 
 
 
@@ -82,13 +83,6 @@ end
 
 
 
-sizeOptic(aper::SizeLens) = aper.semiDiameter
-
-sizeOptic(aper::RoundAperture) = aper.semiDiameter
-
-sizeOptic(aper::RectAperture) = max(aper.wclear, aper.lclear)
-
-sizeOpticSurface(surf::AbstractSurface) = sizeOptic(surf.aperture)
 
 
 #plotSurface3D!(scene, s::OptSurface; color=:aquamarine2)=Makie.mesh!(scene, s, color=color, fxaa = true, transparency = true)#someday add options to display mesh
@@ -103,7 +97,7 @@ end
 
 
 """
-plotGeometry3D(geometry; size = (1200,700))
+plotGeometry3D(fig, geometry; size = (1200,700))
 geometry is an array of OptSurfaces
 resoltion is the initial window size
 returns a Makie Figure and LScene located at [1,1] 
@@ -111,6 +105,10 @@ returns a Makie Figure and LScene located at [1,1]
 """
 function plotGeometry3D(geometry; size = (1200,700))
     fig = Figure(;size)
+    plotGeometry3D(fig, geometry)
+end
+
+function plotGeometry3D(fig, geometry)
     ax = fig[1,1]=LScene(fig, show_axis=false, scenekw = (camera = cam3d_cad!,))
     linesegments!(ax,[Point3f(0, 0,0) => Point3f(0,0,1)],color=:green, linewidth=2)
     linesegments!(ax,[Point3f(0, 0,0) => Point3f(1,0,0)],color=:blue, linewidth=2)
@@ -419,7 +417,7 @@ function plotRayFan!(fig, r::Point3, θmax::Float64, geo; surfview = "end", colo
 
     θm = isnan(θmin) ? -θmax : θmin
     θr =  LinRange(θm, θmax, points)
-
+    println("max angle = $θmax  max NA = $(sin(θmax))")
     i = 1
     for θ in θr
         #println("dir = $([0.,sin(θ), cos(θ)])")
@@ -887,3 +885,20 @@ function plotYSag!(scene, xmax, ycut, profile)
     lines!(scene, x,z, color=:red)
 end
 
+function plotSpotDiagram(fig, spts, center, rmsradius, deltaz; title = "Spot Diagram", showRMS=true)
+    ax = Axis(fig[1,1]; title)
+    scatter!(ax, spts, markersize=2, color=:blue)
+    ax.aspect = DataAspect()
+    if showRMS
+        arc!(ax, center, rmsradius, -π, π, color=:red)
+        Label(fig[2,1], @sprintf("RMS Radius: %8.3f  ΔZ: %8.3f", rmsradius, deltaz), tellwidth = false)
+    end
+    fig
+end
+
+function plotSpotDiagram(fig, spts; title = "Spot Diagram")
+    ax = Axis(fig[1,1], title)
+    scatter!(ax, spts, markersize=2, color=:blue)
+    ax.aspect = DataAspect()
+    fig
+end

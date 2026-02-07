@@ -252,6 +252,7 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
 end
 
 function printZemaxSurfs(zsurfs::Vector{ZemaxSurf})
+    println("surface curvature distance material radius stop conic coating type")
     for (i, s) in enumerate(zsurfs)
         println("$i  $(s.curvature) $(s.distance) $(s.material) $(s.radius) $(s.stop) $(s.conic) 
         $(s.coating) $(s.type)")

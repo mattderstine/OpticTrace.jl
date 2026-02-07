@@ -51,7 +51,7 @@ findRefractiveIndexAlt(lambda, (c1, c2, c3, c4, c5, c6))=
         c5 * lambda^-6+ c6*lambda^-8)
 
 
-function riFormula2(λ, c)
+function riFormula2(λ::T, c::S) where {T<:Real, S<:AbstractVector{T}}
     λ2 = λ^2
     sum = 1.0 + c[1]
     for i in 2:2:length(c)
@@ -60,7 +60,7 @@ function riFormula2(λ, c)
     sqrt(sum)
 end
 
-function riFormula1(λ, c)
+function riFormula1(λ::T, c::S) where {T<:Real, S<:AbstractVector{T}}
     λ2 = λ^2
     sum = 1.0 + c[1]
     for i in 2:2:length(c)
@@ -69,7 +69,7 @@ function riFormula1(λ, c)
     sqrt(sum)
 end
 
-function riFormula3(λ, c)
+function riFormula3(λ::T, c::S) where {T<:Real, S<:AbstractVector{T}}
 
     sum = c[1]
     for i in 2:2:length(c)

@@ -9,23 +9,28 @@ export attributesSurfaces, surfNormal, modFunc
 
     returns z in local coordinates
 """
-function sag(x::Float64, y::Float64, s::SurfProfileConic)
-    if s.curv ==0
+function sag(x::T, y::T, s::SurfProfileConic{T}) where T<:Real
+    r2 = (x^2+y^2)
+    sqrtarg = 1-s.ϵ * s.curv^2 * r2
+    if sqrtarg < 0.
+        z=NaN
+    elseif s.curv ==0.
         z = 0.
     elseif s.ϵ == 0. 
-        z=s.curv * (x^2 + y^2) * 0.5
+        z=s.curv * r2 * 0.5
     else
-        z=(1 - sqrt(1 - s.curv^2 * s.ϵ * (x^2 + y^2)))/(s.curv*s.ϵ)
+       #z=(1 - sqrt(1 - s.curv^2 * s.ϵ * (x^2 + y^2)))/(s.curv*s.ϵ)
+       z= s.curv * r2 /(1+ sqrt(sqrtarg))
     end
     z
 end
 
-function sag(x::Float64, y::Float64, s::SurfProfileSphere)
+function sag(x::T, y::T, s::SurfProfileSphere{T}) where T<:Real
 
     z=1 - sqrt(1 - s.curv^2 * (x^2 + y^2))
 end
 
-function sag(x::Float64, y::Float64, s::SurfProfileOAConic)
+function sag(x::T, y::T, s::SurfProfileOAConic{T}) where T<:Real
     #println("at sag for SurfProfileOAConic - offset = $(s.offset)")
     a=SurfProfileConic(s.curv, s.ϵ)
     sg = sag(x-s.offset[1], y-s.offset[2], a)+s.offset[3] #add to offset for true sag
@@ -43,7 +48,7 @@ end
 
 
 """
-function sag(x::Float64, y::Float64, s::SurfProfileAsphere)
+function sag(x::T, y::T, s::SurfProfileAsphere{T}) where T<:Real
     r2 = (x^2+y^2)
     r = sqrt(r2)
     sqrtarg = 1-s.ϵ * s.curv^2 * r2
@@ -62,7 +67,7 @@ function sag(x::Float64, y::Float64, s::SurfProfileAsphere)
     sg
 end
 
-function sag(x::Float64, y::Float64, s::SurfProfileEvenAsphere)
+function sag(x::T, y::T, s::SurfProfileEvenAsphere{T}) where T<:Real
     r2 = (x^2+y^2)
 
     sqrtarg = 1-s.ϵ * s.curv^2 * r2
@@ -81,7 +86,7 @@ function sag(x::Float64, y::Float64, s::SurfProfileEvenAsphere)
     sg
 end
 
-function sag(x::Float64, y::Float64, s::SurfProfileCyl)
+function sag(x::T, y::T, s::SurfProfileCyl{T}) where T<:Real
     if s.ϵ == 0. || s.curv == 0.
         z=s.curv * (y^2) * 0.5
     else
@@ -90,7 +95,7 @@ function sag(x::Float64, y::Float64, s::SurfProfileCyl)
     z
 end
 
-function sag(x::Float64, y::Float64, s::SurfProfileToroid)
+function sag(x::T, y::T, s::SurfProfileToroid{T}) where T<:Real
     #this is likely incorrect
     z= 1 - sqrt(1 - (s.curvY * y)^2 - (s.curvX * x)^2)
 end
@@ -100,7 +105,7 @@ end
     returns a unit vector
     returns normal in LOCAL coordinates
 """
-function surfNormal(r::Point3, s::SurfProfileConic)
+function surfNormal(r::Point3{T}, s::SurfProfileConic{T}) where T<:Real
     #println("sag = $(sag(r[1],r[2],s))")
 
     if s.ϵ == 1
@@ -121,12 +126,12 @@ function surfNormal(r::Point3, s::SurfProfileConic)
         (1.0 - s.curv * s.ϵ * r[3])*denomI )
 end
 
-function surfNormal(r::Point3, s::SurfProfileOAConic)
+function surfNormal(r::Point3{T}, s::SurfProfileOAConic{T}) where T<:Real
     #println("OA r = $r offset = $(s.offset) net = $(r .- s.offset)")
     surfNormal(r .- s.offset, SurfProfileConic(s.curv, s.ϵ))
 end
 
-function surfNormal(rr::Point3, s::SurfProfileAsphere)
+function surfNormal(rr::Point3{T}, s::SurfProfileAsphere{T}) where T<:Real
     x = rr[1]
     y = rr[2]
     z = rr[3]
@@ -143,7 +148,7 @@ function surfNormal(rr::Point3, s::SurfProfileAsphere)
     Vec3(norm[1], norm[2], norm[3])
 end
 
-function surfNormal(rr::Point3, s::SurfProfileEvenAsphere)
+function surfNormal(rr::Point3{T}, s::SurfProfileEvenAsphere{T}) where T<:Real
     x = rr[1]
     y = rr[2]
     z = rr[3]
@@ -163,7 +168,7 @@ function surfNormal(rr::Point3, s::SurfProfileEvenAsphere)
     Vec3(norm[1], norm[2], norm[3])
 end
 
-function surfNormal(r::Point3, s::SurfProfileCyl)
+function surfNormal(r::Point3{T}, s::SurfProfileCyl{T}) where T<:Real
     #println("sag = $(sag(r[1],r[2],s))")
 
     if s.ϵ == 1
@@ -190,7 +195,7 @@ end
 
     returns status, array of results from traceGeometry
 """
-function traceGeometry(r::Ray, geo)
+function traceGeometry(r::Ray{3,T}, geo) where T<:Real
     trc = Vector{Trace}(undef, length(geo)+1)
     trc[1] = Trace(r, 1., 0., identityAmpMats()) #save the start ray etc
     curRay = r
@@ -215,7 +220,7 @@ end
 
     returns status, length of trace
 """
-function traceGeometry!(trc, r::Ray, geo)
+function traceGeometry!(trc::Vector{Trace}, r::Ray{3,T}, geo) where T<:Real
     #trc = Vector{Trace}(undef, length(geo)+1)
     Trace!(trc[1], r, 1., 0., identityAmpMats()) #save the start ray etc
     curRay = r
@@ -232,7 +237,7 @@ function traceGeometry!(trc, r::Ray, geo)
     status, i #only send the good ones!
 end
 
-function traceGeometryRel(rr::Ray, geo)
+function traceGeometryRel(rr::Ray{3,T}, geo) where T<:Real
     trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
     curRay=Ray(surf1.toGlobalCoord(rr.base), surf1.toGlobalDir(rr.dir))
@@ -250,7 +255,7 @@ function traceGeometryRel(rr::Ray, geo)
     status, trc[1:i] #only send the good ones!
 end
 
-function traceGeometryRel!(trc, rr::Ray, geo)
+function traceGeometryRel!(trc, rr::Ray{3,T}, geo) where T<:Real
     #trc = Vector{Trace}(undef, length(geo)+1)
     surf1=geo[1]
     curRay=Ray(surf1.toGlobalCoord(rr.base), surf1.toGlobalDir(rr.dir))
@@ -276,7 +281,7 @@ end
     newRay will contain best representation of the ray on error so it could be
     used in plotting and to continue a nonsequential raytrace
 """
-function traceSurf(r::Ray,s::OptSurface)
+function traceSurf(r::Ray{3,T},s::OptSurface{3,T}) where T<:Real
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
 
@@ -317,7 +322,7 @@ function traceSurf(r::Ray,s::OptSurface)
     return(0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
-function Trace!(trc::Trace, ray, index, delta, ampdata) 
+function Trace!(trc::Trace{T}, ray, index, delta, ampdata) where T<:Real
     trc.ray = ray
     trc.nIn = index
     trc.delta = delta
@@ -325,7 +330,7 @@ function Trace!(trc::Trace, ray, index, delta, ampdata)
     return trc
 end
 
-function traceSurf!(trc, r::Ray,s::OptSurface)
+function traceSurf!(trc, r::Ray{3,T},s::OptSurface{3,T}) where T<:Real
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
 
@@ -366,7 +371,7 @@ function traceSurf!(trc, r::Ray,s::OptSurface)
     return(0, Trace!(trc, Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
-function traceSurf(r::Ray,s::ModelSurface)
+function traceSurf(r::Ray{3,T},s::ModelSurface{3,T}) where T<:Real
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
     #println("\ntraceSurf - ModelSurface  name = $(s.surfname)")
@@ -389,7 +394,7 @@ function traceSurf(r::Ray,s::ModelSurface)
     return(stat, Trace(Ray(newRayBase, r.dir), s.refIndex, delta, identityAmpMats()))
 end
 
-function traceSurf!(trc, r::Ray,s::ModelSurface)
+function traceSurf!(trc, r::Ray{3,T},s::ModelSurface{3,T}) where T<:Real
     localRayStart=s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
     #println("\ntraceSurf - ModelSurface  name = $(s.surfname)")
@@ -421,7 +426,7 @@ end
     returns distance to intersection of ray with surface
 
 """
-function deltaToSurf(r::Ray, p::SurfProfileConic)
+function deltaToSurf(r::Ray{3,T}, p::SurfProfileConic{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
 
@@ -465,7 +470,7 @@ end
 
 # logic is flawed in this one
 #change to add offset to ray to put it into the coordinate system of the offset parabola
-function deltaToSurf(r::Ray, p::SurfProfileOAConic)
+function deltaToSurf(r::Ray{3,T}, p::SurfProfileOAConic{T}) where T<:Real
     #=
     if debugFlag
         println("deltaToSurf OAConic")
@@ -481,7 +486,7 @@ function deltaToSurf(r::Ray, p::SurfProfileOAConic)
     de
 end
 
-function deltaToSurf(r::Ray, profile::AbstractAsphericProfile)
+function deltaToSurf(r::Ray{3,T}, profile::AbstractAsphericProfile{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
 
@@ -496,7 +501,7 @@ function deltaToSurf(r::Ray, profile::AbstractAsphericProfile)
     Δl
 end
 
-function deltaToSurf(r::Ray, profile::SurfProfileCyl)
+function deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
 
@@ -557,7 +562,7 @@ end
     modFunc
 
 """
-function modFunc(ray::Ray, normal::Vec3, d::T) where T <: AbstractBendDielectric
+function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S <: AbstractBendDielectric, T<:Real}
 
     r = ray.base
     a = ray.dir
@@ -585,7 +590,7 @@ end
 
 
 
-function modFunc(ray::Ray, normal::Vec3, d::T) where T <: AbstractBendMirror
+function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S <: AbstractBendMirror, T<:Real}
     r = ray.base
     a = ray.dir
     cosI = a ⋅ normal
@@ -598,7 +603,7 @@ function modFunc(ray::Ray, normal::Vec3, d::T) where T <: AbstractBendMirror
     true, (a - (2. * (cosI)) .* normal), nIn  # Welford 4.46
 end
 
-function modFunc(ray::Ray, normal::Vec3, d::CDiffuser)
+function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::CDiffuser{T}) where T<:Real
     r = ray.base
     a = ray.dir
     perpapprox = zeros(Float64,3)
@@ -624,12 +629,33 @@ function modFunc(ray::Ray, normal::Vec3, d::CDiffuser)
 end
 
 
+function surfNormal(r::Point3{T}, s::NoProfile{T}) where T<:Real
+    Vec3(0., 0., 1.)
+end
+
+function deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real
+    x0, y0, z0 = r.base
+    L,M,N = r.dir
+
+    if N ≈ 0.
+        Δ =  NaN #ray parallel to flat surface
+    else
+        Δ = -z0/N
+    end
+    Δ
+end
+
+function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where T<:Real
+    true, ray.dir, d.refIndexIn
+end
+
+
 
 """
     surfAmpFunc
 
 """
-function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newLocalBase::Point3, sndex::B, amp) where {T<:Real, B <: AbstractBendType{T}}
+function surfAmpFunc(dirIn::Vec3{T}, dirOut::Vec3{T}, normal::Vec3{T}, newLocalBase::Point3{T}, sndex::B, amp) where {T<:Real, B <: AbstractBendType{T}}
     identityAmpMats(), dirOut
 end
 

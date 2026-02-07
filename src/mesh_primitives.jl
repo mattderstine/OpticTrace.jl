@@ -22,7 +22,7 @@ solid models can be created using other packages.
 
     This needs to be overloaded for every decendant of AbstractSize
 """
-function samplePoints(aperture::SizeLens,nvertices)
+function samplePoints(aperture::SizeLens{T},nvertices) where T<:Real
     r = LinRange(0., aperture.semiDiameter, nvertices);
     φ = LinRange(0., 2pi, nvertices)
     inner(r, φ) = [r*cos(φ), r*sin(φ)]
@@ -33,7 +33,7 @@ end
 gbWidths - provide widths for GeometryBasics
     returns SVector{3, float64}  of approx size
 """
-function gbWidths(a::SizeLens, p::SurfProfileConic)
+function gbWidths(a::SizeLens{T}, p::SurfProfileConic{T}) where T<:Real
     diam = 2a.semiDiameter
     SVector(diam, diam, p.curv * a.semiDiameter^2)
 end
@@ -45,7 +45,7 @@ gbRadius - provide a radius for GeometryBasics
     are used to find the right formula
     returns the radius
 """
-function gbRadius(aperture::SizeLens, profile::SurfProfileConic)
+function gbRadius(aperture::SizeLens{T}, profile::SurfProfileConic{T}) where T<:Real
     aperture.semiDiameter
 end
 
@@ -143,7 +143,7 @@ Base.maximum(c::OptSurf) = Vec{3, Float32}(origin(c)) + Vec{3, Float32}(radius(c
 struct Washer{N,T} <: AbstractSurface{N,T}
     base::Point{N}
     dir::Vec{N}
-    semiDiameter::Float64
+    semiDiameter::T
     toGlobalCoord::AffineMap
     toGlobalDir::LinearMap
     profile::AbstractSurfProfile  #NoProfile
