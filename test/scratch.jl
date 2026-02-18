@@ -8,6 +8,7 @@ using Test
 using StaticArrays
 using GLMakie
 using ForwardDiff
+using LinearAlgebra
 ##
 #=
 
@@ -251,52 +252,38 @@ spsAsphere = OpticTrace.SurfProfileAsphere(0.0, 0.0, [0.00, 0.1, 0.0, 0.01])
 spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [0.1, 0.01])
 
 
+include("../test/helper.jl")
+#=
 """
     define function to compute the normal vector using the gradient of the sag function
 """
-function normal_from_sag(x1, y1, surfProfile)
+function normal_from_sag(x1::T, y1::T, surfProfile::S) where{T<:Real, S<:OpticTrace.AbstractSurfProfile{T}}
     f(x) = sag(x[1], x[2], surfProfile)
 
     x0 = [x1, y1]
     # find the gradient of the sag value at the intersection point using an autodiff package
     grad_sag = ForwardDiff.gradient(f, x0)
     # the normal vector is then obtained by normalizing the gradient vector
-    normal_vector = normalize(Vec3(grad_sag[1], grad_sag[2], -1.0))
+    normal_vector = -normalize(Vec3(grad_sag[1], grad_sag[2], -1.0))
     return normal_vector
 end
-normal_from_sag(1.0, 1.0, spsAsphere)
+
+=#
+normal_from_sag(0.0, 0.0, spsAsphere)
 
 
 
+x0 = [0.5, 0.0]
 
-
-
-        sag_value = sag(1.0, 1.0, spsAsphere)
-        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
-
-        sag_value = sag(1.0, 1.0, spsEAsphere)
-        @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
-        sag_value = sag(1.0, 1.0, spsAsphere)
-        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
-
-        sag_value = sag(1.0, 1.0, spsEAsphere)
-        @test sag_value ≈ asphere_factor1 * asphere_coeff1 + asphere_factor2 * asphere_coeff2
-
-        @test normal_from_sag(1.0, 1.0, spsAsphere) ≈ OpticTrace.surfNormal(Point(1.0, 1.0, sag(1.0, 1.0, spsAsphere)), spsAsphere)
-
-
-
-x0 = [1.0, 1.0]
-
-sag_value = sag2(x0[1], x0[2], spsAsphere)
+sag_value = sag(x0[1], x0[2], spsAsphere)
 function g(x) 
-    return sag2(x[1], x[2], spsAsphere)
+    return sag(x[1], x[2], spsAsphere)
 end
 grad_sag = ForwardDiff.gradient(g, x0)
 grad = OpticTrace.normalize(Vec3(grad_sag[1], grad_sag[2], -1.0))
 println(grad)
 
-function sag2(x::T, y::T, s::OpticTrace.SurfProfileAsphere) where T<:Real
+function sag2(x::T, y::T, s::OpticTrace.SurfProfileAsphere{T}) where T<:Real
     r2 = (x^2+y^2)
     r = sqrt(r2)
     sqrtarg = 1-s.ϵ * s.curv^2 * r2
@@ -316,3 +303,44 @@ function sag2(x::T, y::T, s::OpticTrace.SurfProfileAsphere) where T<:Real
 end
 
 normal = OpticTrace.surfNormal(Point3(x0[1], x0[2], sag2(x0[1], x0[2], spsAsphere)), spsAsphere)
+
+sps = OpticTrace.SurfProfileSphere(sqrt(0.5))
+normal = OpticTrace.surfNormal(Point3(x0[1], x0[2], sag(x0[1], x0[2], sps)), sps)
+
+normal
+
+function g(x) 
+    return sag(x[1], x[2], sps)
+end
+sagval = sag(x0[1], x0[2], sps)
+grad_sag = -OpticTrace.normalize(Vec3(ForwardDiff.gradient(g, x0)..., -1.0))
+normal2 = normal_from_sag(x0[1], x0[2], sps)
+##
+
+asphere_coeff1 = 0.1
+asphere_coeff2 = 0.01
+factor1 = 4.0
+factor2 = 8.0
+curve1 = 1.0
+curve2 = sqrt(0.5)
+curve3 = 0.0
+curve = curve2
+spc1 = OpticTrace.SurfProfileConic(curve1, 0.0)
+spc2 = OpticTrace.SurfProfileConic(curve2, 1.0)
+spc3 = OpticTrace.SurfProfileConic(curve3, 1.0)
+sps = OpticTrace.SurfProfileSphere(curve)
+spsAsphere = OpticTrace.SurfProfileAsphere(0.0, 0.0, [0.00,  asphere_coeff1,0.0, asphere_coeff2])
+spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [asphere_coeff1, asphere_coeff2])
+
+offset = 0.2
+r2 = offset^2
+ray = Ray(Point(0.0, offset, -1.0), Vec(0.0, 0.0, 1.0))
+
+sag_value = offset^4 * asphere_coeff1 + offset^6 * asphere_coeff2
+delta = OpticTrace.deltaToSurf(ray, spsAsphere)
+@test delta ≈ 1.0+sag_value atol=1e-8
+point = rprop(ray, delta)
+@test point ≈ Point3(0.0, offset, sag_value)
+normal = OpticTrace.surfNormal(point, spsAsphere)
+@test normal_from_sag(point, spsAsphere) ≈ normalize(normal)
+
