@@ -366,7 +366,7 @@ function localRaysHexapolar(geo, basept::Point{3,T}, pupil::P, rings::I) where {
             end
         end
     end
-    println("maxr = $maxr  maxrhoj = $maxrhoj")
+    #println("maxr = $maxr  maxrhoj = $hoj")
     return rays
 end
 

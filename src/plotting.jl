@@ -583,7 +583,7 @@ end
 function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
     surfnumStop = tracenumFromName("stop", geo)-1
     locgeo = geo[surfnumStop:end]
-    status,trc = traceGeometryRel(Ray(ORIGIN, SVector(0., sin(epsilon), cos(epsilon))), locgeo)
+    status,trc = traceGeometryRel(Ray(ORIGIN, Vec3(0., sin(epsilon), cos(epsilon))), locgeo)
     #check to make sure all made it through
     if status !=0
         return(1, ORIGIN)
@@ -636,7 +636,7 @@ end
     current version assumes telecentric pupil/stop (i.e. reference ray θ=0)
 
 """
-function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, offset = 0., λ=1.0,label="")
+function plotOPD!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color = :blue, points=33, θmin::Float64=NaN, offset = 0., λ=1.0,label="")
     #trcStatMsg=("Normal","Missed","TIR","Clipped")
     opdy = Vector{Float64}(undef, points)
     opdx = Vector{Float64}(undef, points)
@@ -696,12 +696,12 @@ function plotOPD!(scene, r::SVector, θmax::Float64, geo; surfview = "end", colo
 
     for (i,θ) in enumerate(θr)
         #println("dir = $([0.,sin(θ), cos(θ)])")
-        opdy[i] = opdRel(Ray(r, [0.,sin(θ), cos(θ)]), refTrace,testgeo)*1000.0/λ 
-        opdx[i] = opdRel(Ray(r, [sin(θ), 0., cos(θ)]), refTrace,testgeo)*1000.0/λ
+        opdy[i] = opdRel(Ray(r, Vec3(0.,sin(θ), cos(θ))), refTrace,testgeo)*1000.0/λ 
+        opdx[i] = opdRel(Ray(r, Vec3(sin(θ), 0., cos(θ))), refTrace,testgeo)*1000.0/λ
     end
-
-    Makie.lines!(scene, θr, opdx, color=color, linestyle = :dash)
-    Makie.lines!(scene, θr, opdy , color=color, label=label)
+    ax = Axis(scene[1,1]; title=label)
+    Makie.lines!(ax, θr, opdx, color=color, linestyle = :dash)
+    Makie.lines!(ax, θr, opdy , color=color, label=label)
     θr, opdx, opdy
 end
 
@@ -885,19 +885,25 @@ function plotYSag!(scene, xmax, ycut, profile)
     lines!(scene, x,z, color=:red)
 end
 
+"""
+    plotSpotDiagram(fig, spts, center, rmsradius, deltaz; title = "Spot Diagram", showRMS=true)
+    returns a figure with the spot diagram and optionally the RMS radius and ΔZ
+    It uses the results from spotDiagramHex()
+"""
+
 function plotSpotDiagram(fig, spts, center, rmsradius, deltaz; title = "Spot Diagram", showRMS=true)
-    ax = Axis(fig[1,1]; title)
+    ax = Axis(fig[1,1]; title, tellwidth = false)
     scatter!(ax, spts, markersize=2, color=:blue)
     ax.aspect = DataAspect()
     if showRMS
         arc!(ax, center, rmsradius, -π, π, color=:red)
-        Label(fig[2,1], @sprintf("RMS Radius: %8.3f  ΔZ: %8.3f", rmsradius, deltaz), tellwidth = false)
+        Label(fig[2,1], @sprintf("RMS Radius: %8.3f  ΔZ: %8.3g", rmsradius, deltaz), tellwidth = false)
     end
     fig
 end
 
 function plotSpotDiagram(fig, spts; title = "Spot Diagram")
-    ax = Axis(fig[1,1], title)
+    ax = Axis(fig[1,1], title, tellwidth = false)
     scatter!(ax, spts, markersize=2, color=:blue)
     ax.aspect = DataAspect()
     fig

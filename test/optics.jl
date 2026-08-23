@@ -119,12 +119,15 @@
         normal = OpticTrace.surfNormal(point, spsEAsphere)
         @test normal_from_sag(point, spsEAsphere) ≈ normalize(normal)
 
-
+        #even cylinder test
+        
     end
 
 
 
     @testset "modFunc tests" begin
+
+
         normal = Vec3(0.0, 0.0, 1.0)
         ray = Ray(Point(0.0, 0.0, 0.0), Vec(0.0, 0.4, sqrt(1.0 - 0.4^2)))
         dT = OpticTrace.DielectricT(1.0, 1.5)
@@ -132,6 +135,12 @@
         @test status == true
         @test nIn == dT.refIndexIn
         @test dT.refIndexOut * dir[2] ≈ dT.refIndexIn * ray.dir[2]
+
+        dR = OpticTrace.MirrorR(1.0, 1.0)
+        status, dir, nIn = OpticTrace.modFunc(ray, normal, dR)
+        @test status == true
+        @test nIn ≈ dR.refIndexIn
+        @test dir ≈ Vec3(0.0, 0.4, -sqrt(1.0 - 0.4^2))
 
     end
     #=

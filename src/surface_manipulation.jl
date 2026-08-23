@@ -1,7 +1,9 @@
 
+export reverseGeo, thickGeo
+
 #reverse a geo
 
-export reverseGeo
+
 
 function reverseGeo(geo::Vector{T}) where T<:AbstractSurface
 
@@ -82,3 +84,12 @@ function reverseMod!(mod::T) where T<:AbstractBendType
     #println("After reversal: rinIn=$(mod.refIndexIn) rinOut=$(mod.refIndexOut)")
     return mod
 end
+
+function thickGeo(geo)
+    if geo[begin].base.dir != geo[end].base.dir
+        error("not in same direction")
+    end
+    v = geo[end].base.base - geo[begin].base.base
+    return v⋅geo[begin].base.dir #project onto direction in case of shifted optics
+end
+
