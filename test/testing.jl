@@ -371,8 +371,8 @@ display(fig8)
 rfp,fl = findRFP(g)
 rfpp, flp = findRFP(gp)
 
-println("RFP = $rfp   fl = $fl")
-println("RPP = $rfpp   fl = $flp")
+println("RFP = $rfp\n   fl = $fl")
+println("RPP = $rfpp\n   fl = $flp")
 bfd = rfp.base.base[3] - g[end].base.base[3]
 ffd = rfpp.base.base[3] - gp[end].base.base[3]
 printGeo([rfp])
