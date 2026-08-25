@@ -46,22 +46,31 @@
             @test p.a == [-0.001]
         end
 
-        @testset "SurfProfileSphere (known bug: `curve` field typo, see TODO.md)" begin
+        @testset "SurfProfileSphere (working)" begin
             p = OpticTrace.SurfProfileSphere(0.02)
-            @test_throws FieldError OpticTrace.reverseProfile!(p)
+            result = OpticTrace.reverseProfile!(p)
+            @test result === p
+            @test p.curv == -0.02
         end
 
-        @testset "SurfProfileToroid (known bug: `curveX`/`curveY` typo, see TODO.md)" begin
+        @testset "SurfProfileToroid (working)" begin
             p = OpticTrace.SurfProfileToroid(0.3, 0.2)
-            @test_throws FieldError OpticTrace.reverseProfile!(p)
+            result = OpticTrace.reverseProfile!(p)
+            @test result === p
+            @test p.curvY == -0.3
+            @test p.curvX == -0.2
         end
 
-        @testset "generic fallback on types without an `a` field (known bug, see TODO.md)" begin
+        @testset "SurfProfileOAConic (generic fallback, known bug -- see TODO.md)" begin
             pOA = OpticTrace.SurfProfileOAConic(0.02, 0.5, Vec3(0.0, 0.0, 0.0))
             @test_throws FieldError OpticTrace.reverseProfile!(pOA)
+        end
 
+        @testset "NoProfile (working)" begin
             pNP = NoProfile(0.0)
-            @test_throws FieldError OpticTrace.reverseProfile!(pNP)
+            result = OpticTrace.reverseProfile!(pNP)
+            @test result === pNP
+            @test pNP.curv == 0.0
         end
     end
 
@@ -122,14 +131,33 @@
             @test_throws ErrorException reverseGeo([s1, s2])
         end
 
-        @testset "geo containing a ModelSurface (known bug, see TODO.md)" begin
-            # reverseSurface! only has a method for OptSurface, despite
-            # reverseGeo's Vector{T} where T<:AbstractSurface signature.
+        @testset "geo containing a ModelSurface" begin
             mixedGeo = AbstractSurface[
                 refractSphere("mg1", ORIGIN, ZAXIS, 1.0, 1.5, 0.02, 5.0, "none"),
                 roundAperture("mg2", Point3(0.0, 0.0, 3.0), ZAXIS, 1.5, 0.5, 5.0)
             ]
-            @test_throws MethodError reverseGeo(mixedGeo)
+            beginpoint = mixedGeo[1].base.base
+            endpoint = mixedGeo[2].base.base
+
+            reversed = reverseGeo(mixedGeo)
+            @test length(reversed) == 2
+
+            # order is flipped
+            @test reversed[1].surfname == mixedGeo[2].surfname
+            @test reversed[2].surfname == mixedGeo[1].surfname
+
+            # positions reflected about the midpoint of beginpoint/endpoint
+            @test reversed[1].base.base ≈ beginpoint + endpoint - mixedGeo[2].base.base
+            @test reversed[2].base.base ≈ beginpoint + endpoint - mixedGeo[1].base.base
+
+            # ModelSurface (reversed[1]): NoProfile reversal is a no-op,
+            # refIndex has no in/out pair so it's left untouched
+            @test reversed[1].refIndex == mixedGeo[2].refIndex
+
+            # OptSurface (reversed[2]): curvature negated, indices swapped
+            @test reversed[2].profile.curv ≈ -mixedGeo[1].profile.curv
+            @test reversed[2].mod.refIndexIn ≈ mixedGeo[1].mod.refIndexOut
+            @test reversed[2].mod.refIndexOut ≈ mixedGeo[1].mod.refIndexIn
         end
     end
 

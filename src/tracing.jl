@@ -310,46 +310,40 @@ end
 """
     deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T}) where T<:Real
 
-Intended to compute the distance along `r` to its intersection with a
+Computes the distance along `r` to its intersection with a
 `SurfProfileCyl`, following the same quadratic-in-`Δ` solve as
 `deltaToSurf(r, p::SurfProfileConic)` restricted to `y`/`z`.
-
-**This method is broken**: its body refers to a variable `p` that is
-never defined (the parameter is named `profile`), so calling it throws
-`UndefVarError: p not defined`. It has no live call site currently --
-nothing in `src/` constructs a `SurfProfileCyl` -- so this has gone
-unnoticed. See `TODO.md`.
 """
 function deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
 
-    ffunc = p.curv * (y0^2 + z0^2 * p.ϵ) - 2 * z0
-    gfunc = N - p.curv * (M * y0 + N * z0 * p.ϵ)
+    ffunc = profile.curv * (y0^2 + z0^2 * profile.ϵ) - 2 * z0
+    gfunc = N - profile.curv * (M * y0 + N * z0 * profile.ϵ)
 
-    if p.ϵ == 1.
-        C = p.curv
+    if profile.ϵ == 1.
+        C = profile.curv
     else
-        C = p.curv * (M^2 + p.ϵ * N^2)
+        C = profile.curv * (M^2 + profile.ϵ * N^2)
     end
     #=
     if debugFlag
         println("N = $N  gfunc = $gfunc  ffunc = $ffunc")
-        println("p.curv = $(p.curv)  C = $C")
+        println("profile.curv = $(profile.curv)  C = $C")
     end
     =#
 
 
     if isapprox(C, 0., atol=1e-16)
         if isapprox(N, 0., atol=1e-16)
-            qmiss = gfunc^2 - p.curv * ffunc
-            if qmiss < 0. || p.curv == 0.
+            qmiss = gfunc^2 - profile.curv * ffunc
+            if qmiss < 0. || profile.curv == 0.
                 Δ = NaN # root is imaginary or ray parallel to plane, miss
             else
-                Δ = (gfunc - sqrt(qmiss)) / p.curv
+                Δ = (gfunc - sqrt(qmiss)) / profile.curv
             end
         else
-            Δ = (0.5 * p.curv * (x0^2 + y0^2) - z0) / N # negative sign removed 9/29/20
+            Δ = (0.5 * profile.curv * (x0^2 + y0^2) - z0) / N # negative sign removed 9/29/20
         end
     else
         qmiss = gfunc^2 - C * ffunc
@@ -618,15 +612,6 @@ end
 
     trc will contain best representation of the ray on error so it could be
     used in plotting and to continue a nonsequential raytrace
-
-    **This method is broken**: it checks `if delta == NaN` to detect a
-    missed ray (`deltaToSurf` returns `NaN` on a miss), but in IEEE 754
-    `NaN == NaN` is always `false`, so this branch is dead code -- status
-    1 is unreachable through this check. A ray that should miss instead
-    has the `NaN` silently propagate through the rest of the surface-
-    normal/`modFunc` math, ending in a false "success" (status 0) with a
-    garbage `NaN` trace. Likely fix: `isnan(delta)` instead of `delta ==
-    NaN`. See `TODO.md`.
 """
 function traceSurf(r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
     localRayStart = s.toLocalCoord(r.base)
@@ -639,7 +624,7 @@ function traceSurf(r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
         println("start = $(r.base)")
     end
     =#
-    if delta == NaN #missed
+    if isnan(delta) #missed
         return (1, Trace(r, NaN, delta, identityAmpMats()))
     end
     newRayBase = r.base + r.dir * delta
@@ -690,8 +675,7 @@ end
     traceSurf!(trc, r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
 
 In-place version of `traceSurf(r, s::OptSurface{3,T})` (see that
-method's docstring above for the full status-code contract, and the
-`delta == NaN` dead-code bug it shares with this method) -- writes
+method's docstring above for the full status-code contract) -- writes
 the result into `trc` via `Trace!` instead of allocating a new `Trace`.
 
 returns (status, trc::Trace)
@@ -707,7 +691,7 @@ function traceSurf!(trc, r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
         println("start = $(r.base)")
     end
     =#
-    if delta == NaN
+    if isnan(delta)
         return (1, Trace!(trc, r, NaN, delta, identityAmpMats()))
     end
     newRayBase = r.base + r.dir * delta
@@ -760,15 +744,6 @@ end
 
     trc will contain best representation of the ray on error so it could be
     used in plotting and to continue a nonsequential raytrace
-
-    **This method is broken**: like `traceSurf(r, s::OptSurface{3,T})`
-    above, it checks `if delta == NaN` to detect a missed ray, but
-    `NaN == NaN` is always `false` in IEEE 754, so status 1 is
-    unreachable here too. The `NaN`'d intersection point makes
-    `clipAperture`'s comparisons all false as well, so a ray that should
-    miss instead silently reports status 0 ("not clipped") with a
-    garbage `NaN` trace. Likely fix: `isnan(delta)` instead of
-    `delta == NaN`. See `TODO.md`.
 """
 function traceSurf(r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
     localRayStart = s.toLocalCoord(r.base)
@@ -777,7 +752,7 @@ function traceSurf(r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
     #println("aperture = $(s.aperture)")
 
     delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
-    if delta == NaN
+    if isnan(delta)
         return (1, Trace(r, s.refIndex, delta, identityAmpMats()))
     end
     newRayBase = r.base + r.dir * delta
@@ -797,9 +772,9 @@ end
     traceSurf!(trc, r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
 
     In-place version of traceSurf(r, s::ModelSurface{3,T}) (see that
-    method's docstring above for the `delta == NaN` dead-code bug this
-    method shares) -- writes the result into `trc` (via Trace!) instead
-    of allocating a new Trace.
+    method's docstring above for the full status-code contract) --
+    writes the result into `trc` (via Trace!) instead of allocating a
+    new Trace.
 
     returns (status, trc::Trace)
     status
@@ -815,7 +790,7 @@ function traceSurf!(trc, r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
     #println("aperture = $(s.aperture)")
 
     delta = deltaToSurf(Ray(localRayStart, localRayDir), s.profile)
-    if delta == NaN
+    if isnan(delta)
         return (1, Trace!(trc, r, s.refIndex, delta, identityAmpMats()))
     end
     newRayBase = r.base + r.dir * delta

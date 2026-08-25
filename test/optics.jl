@@ -162,14 +162,23 @@
         oaPoint = rprop(oaRay, oaDelta)
         @test_broken oaPoint ≈ Point3(x0, y0, z0)
 
-        #cylinder test (surfNormal only -- deltaToSurf(::SurfProfileCyl) is
-        #fully broken, references an undefined variable and always throws,
-        #see TODO.md, so it is excluded rather than tested here)
+        #cylinder test
         xC, yC = 0.3, 0.4
         zC = sag(xC, yC, spsCyl2)
         pointC = Point3(xC, yC, zC)
         normalC = OpticTrace.surfNormal(pointC, spsCyl2)
         @test normal_from_sag(xC, yC, spsCyl2) ≈ normalize(normalC)
+
+        # deltaToSurf, ϵ=1 branch: reduces to the same circular
+        # cross-section formula as the sphere test above, since
+        # curve2 == curve and ray's x is 0
+        sag_valueCyl = curve2 * r2 / (1.0 + sqrt(1 - curve2^2 * r2))
+        deltaCyl = OpticTrace.deltaToSurf(ray, spsCyl2)
+        @test deltaCyl ≈ 1.0 + sag_valueCyl
+        pointCyl = rprop(ray, deltaCyl)
+        @test pointCyl ≈ Point3(0.0, offset, sag_valueCyl)
+        normalCyl = OpticTrace.surfNormal(pointCyl, spsCyl2)
+        @test normal_from_sag(pointCyl, spsCyl2) ≈ normalize(normalCyl)
     end
 
 

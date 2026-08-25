@@ -192,7 +192,7 @@ function reflectOAConic(surfname::String,
     ϵ::T,
     semiDiam::T,
     coating::APorString
-    ;color = :aquamarine2, attributesSurfaces = attributeSurfaces) where T<:Real
+    ;color = :aquamarine2, attributesSurfaces = attributesSurfaces) where T<:Real
 
     ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
                 updateCoordChange(pointInPlane, planenormal, ydir)
@@ -625,7 +625,7 @@ function lensSinglet(base, dir, curv1, curv2, thick, lambda, riFunc, semiDiam; o
         refractSphere("$(lensname)_2", base, dir, refIndexDefault, ri, 
             -curv2, semiDiam, coating),
         refractSphere("$(lensname)_1", base1, dir, ri, refIndexDefault,
-            -curv1, semiDiam, Base.compute_assumed_setting)
+            -curv1, semiDiam, coating)
         ]
     end
     lens

@@ -153,21 +153,24 @@
         @test sceneReturned === scene
     end
 
-    @testset "perimeterRays / plotPerimeterRays (unconditionally broken -- see TODO.md)" begin
+    @testset "perimeterRays / plotPerimeterRays" begin
         r = SVector(0.0, 0.0, -5.0)
 
-        # perimeterRays builds its Ray's direction as a raw Vector literal
-        # ([cos(ϕ)*sin(θ), ...]) instead of a Vec3 -- Ray(::Point, ::Vec3)
-        # has no method for a plain Vector, so this throws unconditionally,
-        # independent of (and before ever reaching) the already-documented
-        # early-return-on-miss bug.
-        @test_throws MethodError perimeterRays(r, 1.0, 0.01, 8, geo; surfview = "end")
-        @test_throws MethodError plotPerimeterRays(r, 1.0, 0.01, 8, geo; surfview = "end")
+        pr = perimeterRays(r, 1.0, 0.01, 8, geo; surfview = "end")
+        @test length(pr) == 8
+        @test all(ray -> !any(isnan, ray.base) && !any(isnan, ray.dir), pr)
+        # surfview="end" -> the image plane, geo's last surface (z=50)
+        @test all(ray -> ray.base[3] ≈ 50.0, pr)
+        # TODO.md Bugs #2 (early return -> nothing on any miss) is still
+        # open, but none of these 8 rays miss, so it isn't exercised here.
+
+        plt = plotPerimeterRays(r, 1.0, 0.01, 8, geo; surfview = "end")
+        @test !isnothing(plt)
 
         fig = Figure()
         scene = Axis3(fig[1, 1])
-        @test_throws MethodError plotPerimeterRays!(scene, r, 1.0, 0.01, 8, geo; surfview = "end")
-        @test_throws MethodError plotPerimeterRays!(r, 1.0, 0.01, 8, geo; surfview = "end")
+        @test !isnothing(plotPerimeterRays!(scene, r, 1.0, 0.01, 8, geo; surfview = "end"))
+        @test !isnothing(plotPerimeterRays!(r, 1.0, 0.01, 8, geo; surfview = "end"))
     end
 
     @testset "rayHeatmap / rayHeatmap!" begin
@@ -238,24 +241,32 @@
         @test opdy[1] ≈ opdy[end] atol = 1e-6
     end
 
-    @testset "plotOPD!(egeo) / plotOPD3D! (unconditionally broken -- see TODO.md)" begin
+    @testset "plotOPD!(egeo) / plotOPD3D!" begin
         object = referencePlane("object", Point3(0.0, 0.0, -100.0), ZAXIS, 1.0, 5.0, "none")
         stop = roundAperture("stop", ORIGIN, ZAXIS, 1.0, 0.0, 2.0)
         lensgeo = lensSinglet(ORIGIN, ZAXIS, 0.05, -0.04, 3.0, 0.5, riFunc, 5.0; order = "forward", lensname = "OE")
         egeoGeo = AbstractSurface[stop; lensgeo]
-        noopFunc(p, wl) = nothing
-        egeo = ExtendedGeometry(egeoGeo, noopFunc, OpticTrace.defaultSetupGeo, object, [0.5], Dict{Symbol,Any}())
+        # updateEGeo! now actually assigns funcGeo's result into egeo.geo, so
+        # funcGeo has to return a real Array{AbstractSurface} (not a no-op).
+        buildGeo(p, wl) = egeoGeo
+        egeo = ExtendedGeometry(egeoGeo, buildGeo, OpticTrace.defaultSetupGeo, object, [0.5], Dict{Symbol,Any}())
 
-        # both methods share `normalize!(usedgeo[1].base.base .- r)`, which
-        # calls the mutating normalize! on an immutable Point3 -- throws
-        # unconditionally, before plotOPD!(...,egeo) ever reaches its own
-        # separately-documented θr bug.
         fig = Figure()
-        @test_throws ErrorException plotOPD!(fig, 0.5, egeo; points = 5)
+        ax = Axis(fig[1, 1])
+        opdx, opdy = redirect_stdout(devnull) do
+            plotOPD!(ax, 0.5, egeo; points = 5)
+        end
+        @test length(opdx) == 5
+        @test length(opdy) == 5
+        @test all(!isnan, opdx)
+        @test all(!isnan, opdy)
 
         fig2 = Figure()
         ax2 = LScene(fig2[1, 1])
-        @test_throws ErrorException plotOPD3D!(ax2, 0.5, egeo; points = 5)
+        result = redirect_stdout(devnull) do
+            plotOPD3D!(ax2, 0.5, egeo; points = 5)
+        end
+        @test result === ax2
     end
 
     @testset "plotXSag! / plotYSag!" begin
@@ -285,10 +296,9 @@
         result2 = plotSpotDiagram(fig, spts, Point2(0.0, 0.0), 1.0, 0.01; showRMS = false)
         @test result2 === fig
 
-        # missing `;` before `title` in this method's Axis(...) call ->
-        # title is passed positionally, which Makie.Axis doesn't accept
         fig3 = Figure()
-        @test_throws MethodError plotSpotDiagram(fig3, spts)
+        result3 = plotSpotDiagram(fig3, spts)
+        @test result3 === fig3
     end
 
 end

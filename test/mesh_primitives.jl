@@ -59,14 +59,15 @@
             @test all(n -> norm(n) ≈ 1.0, ns)
         end
 
-        @testset "normals (AbstractSurface, ModelSurface -- known bug)" begin
-            # A ModelSurface with a SizeLens aperture so samplePoints
-            # succeeds and the failure is isolated to inOrOut, which has
-            # no method outside OptSurface (see TODO.md).
+        @testset "normals (AbstractSurface, ModelSurface)" begin
+            # A ModelSurface with a SizeLens aperture, since samplePoints
+            # only has methods for SizeLens/Washer/Disk apertures.
             ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir = updateCoordChange(ORIGIN, ZAXIS)
             modelSurf = ModelSurface("mesh_model", SurfBase(ORIGIN, ZAXIS, ydir), SizeLens(5.0),
                 NoProfile(0.), 1.0, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir, :blue)
-            @test_throws MethodError GeometryBasics.normals(modelSurf, 4)
+            ns = collect(GeometryBasics.normals(modelSurf, 4))
+            @test length(ns) == 16
+            @test all(n -> norm(n) ≈ 1.0, ns)
         end
     end
 
@@ -103,17 +104,12 @@
             @test all(n -> n ≈ ZAXIS, ns)
         end
 
-        @testset "gbRadius (working) vs gbWidths/radius/widths (broken)" begin
+        @testset "gbRadius / gbWidths / radius / widths" begin
             @test OpticTrace.gbRadius(washer, NoProfile(0.)) == washer.semiDiameter
+            @test OpticTrace.gbWidths(washer, NoProfile(0.)) == SVector(2washer.semiDiameter, 2washer.semiDiameter, 0.)
 
-            # gbWidths references misspelled fields SemiDiameter/SemiDiamater
-            # (real field: semiDiameter) -- see TODO.md.
-            @test_throws FieldError OpticTrace.gbWidths(washer, NoProfile(0.))
-
-            # GeometryBasics.radius/widths(::Washer) both pass a bare number
-            # to gbRadius/gbWidths instead of the Washer itself.
-            @test_throws MethodError GeometryBasics.radius(washer)
-            @test_throws MethodError GeometryBasics.widths(washer)
+            @test GeometryBasics.radius(washer) == washer.semiDiameter
+            @test GeometryBasics.widths(washer) == SVector(2washer.semiDiameter, 2washer.semiDiameter, 0.)
         end
     end
 
@@ -135,12 +131,12 @@
             @test all(n -> n ≈ ZAXIS, ns)
         end
 
-        @testset "gbRadius (working) vs gbWidths/radius/widths (broken)" begin
+        @testset "gbRadius / gbWidths / radius / widths" begin
             @test OpticTrace.gbRadius(disk, NoProfile(0.)) == disk.semiDiameter
+            @test OpticTrace.gbWidths(disk, NoProfile(0.)) == SVector(2disk.semiDiameter, 2disk.semiDiameter, 0.)
 
-            @test_throws FieldError OpticTrace.gbWidths(disk, NoProfile(0.))
-            @test_throws MethodError GeometryBasics.radius(disk)
-            @test_throws MethodError GeometryBasics.widths(disk)
+            @test GeometryBasics.radius(disk) == disk.semiDiameter
+            @test GeometryBasics.widths(disk) == SVector(2disk.semiDiameter, 2disk.semiDiameter, 0.)
         end
     end
 
@@ -151,16 +147,8 @@
         rectInfinite = RectAperture(0.5, 0.5, ∞, ∞)
         @test OpticTrace.gbWidths(rectInfinite, NoProfile(0.)) == SVector(1.0, 1.0, 0.0) # falls back to 2wo, 2lo
 
-        # gbRadius: the both-infinite branch works...
         @test OpticTrace.gbRadius(rectInfinite, NoProfile(0.)) ≈ sqrt(0.5^2 + 0.5^2)
-
-        # ...but the finite (everyday) branch references a nonexistent field
-        # `a.clear` (real fields are `wclear`/`lclear`). Confirmed by direct
-        # reading of the source: this is the *opposite* of which branch
-        # TODO.md's prose describes as broken -- the bug is in the finite
-        # case, not the both-infinite case, so it affects ordinary
-        # rectangular apertures, not just an edge case.
-        @test_throws FieldError OpticTrace.gbRadius(rectFinite, NoProfile(0.))
+        @test OpticTrace.gbRadius(rectFinite, NoProfile(0.)) ≈ sqrt(rectFinite.wclear^2 + rectFinite.lclear^2)
     end
 
 end

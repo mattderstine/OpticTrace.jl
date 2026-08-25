@@ -1,364 +1,231 @@
 # TODO
 
 Running list of known issues to come back to. Not exhaustive -- add to it
-as things are found; remove entries once fixed.
+as things are found. Once an item is fixed, don't delete or renumber it
+here -- move its full entry to `FIXED.md`, keeping its original number,
+and simply drop it from the list below. Item numbers in `Bugs`/`Code
+issues` are stable, permanent identifiers: never reused, never
+resequenced, so a number always refers to the same thing whether it's
+still open (here) or resolved (`FIXED.md`). `Bugs` and `Code issues`
+are separate numbering pools (each starts at 1) -- a new entry gets
+`max(existing numbers for that same section, across this file and
+FIXED.md) + 1`. Entries use a
+bold `**N.**` prefix rather than real Markdown ordered-list syntax
+(`1.`/`2.`/...) on purpose: CommonMark renderers (GitHub, VS Code's
+Markdown preview) auto-renumber ordered lists sequentially from the
+first item, silently hiding any gap left by a removed item -- a bold
+prefix always displays the literal number written, in any renderer or
+plain-text view.
 
-## Code issues
+## Bugs
 
-- `src/zemax.jl`: `ZemaxGeometry` struct is defined but never constructed
-  anywhere -- `readZemax` returns its parsed data as a plain
-  `(zsurfs, name, units, wavelengths)` tuple instead of wrapping it in a
-  `ZemaxGeometry`. Either start using `ZemaxGeometry` as the return type,
-  or remove it if it's not needed.
-- `src/zemax.jl`: `readZemax`'s `basept`/`dir` keyword args are accepted
-  but not actually used during parsing (the `basecurrent`/`dircurrent`
-  variables they seed are only read by commented-out code). Either wire
-  them up (the commented-out `zemaxsurfToSurface!`/`push!` lines suggest
-  the original intent) or drop the unused args.
-- `src/beamlet_decomposition.jl`: `gaussBeamParams` is an unimplemented
-  stub (`function gaussBeamParams() end`) with a docstring describing a
-  5-argument signature and return value that don't exist yet. See the
-  `# TODO` comment already left in the file.
-- `src/zemax.jl` (`zemaxsurfToSurface`): only Zemax surface `type`s
-  `"STANDARD"` and `"EVENASPH"` are supported; any other type (e.g.
-  toroidal, coordinate breaks) throws `error("Zemax surface type ...
-  not implemented yet")`.
-- `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar` archives
-  (zipped Zemax file bundles) isn't implemented at all -- only the
-  Python reference implementation exists, kept in
-  `docs/zemax_reference.md` as a starting point for a future
-  `readZemaxArchive`-style function.
-- `src/surfaces.jl` (`lensASinglet`, `lensEASinglet`, lines ~518 & ~548):
-  both have a `#ToDo` comment -- "should check if the input is really an
-  asphere. if not make the surface spherical" -- that validation isn't
-  implemented; passing non-aspheric coefficients silently proceeds as-is.
-- **Bug** -- `src/surfaces.jl`, `lensSinglet`'s `order = "reverse"`
-  branch: passes `Base.compute_assumed_setting` (a real but completely
-  unrelated Julia compiler internal -- almost certainly a stray
-  autocomplete/typo) as the `coating` argument to the second
-  `refractSphere` call, instead of `coating`. Confirmed by direct
-  testing: throws a `MethodError` (`coating::APorString` doesn't match
-  a `Function`). Reachable through the public API
-  (`lensSinglet(...; order="reverse")`, or via any of its four
-  `lens_edmund.jl` callers with `order="reverse"`) but not exercised by
-  any test.
-- **Bug** -- `src/surfaces.jl`, `reflectOAConic`: its
-  `attributesSurfaces` keyword's default value is written
-  `attributesSurfaces = attributeSurfaces` (missing the second `s`),
-  referencing an undefined variable. Confirmed by direct testing:
-  calling `reflectOAConic(...)` without explicitly passing
-  `attributesSurfaces` throws `UndefVarError: attributeSurfaces not
-  defined`. `reflectOAConic` is exported, so this is reachable by any
-  direct external caller; the only in-repo caller (`reflectOAP`) avoids
-  it by always passing `attributesSurfaces` explicitly.
-- `src/surfaces.jl`: `refractAsphere`'s `asphere` parameter is typed
-  `AbstractVector{Float64}` (hardcoded), unlike its sibling
-  `refractEvenAsphere`'s `asphere::AbstractVector{T}` (generic). Per
-  `CLAUDE.md`'s stated convention ("numeric types are generally
-  parameterized... rather than hardcoded to Float64... so functions
-  stay compatible with ForwardDiff"), this hardcoding will silently
-  break autodiff-based normal/gradient computations through
-  `refractAsphere` specifically, unlike through `refractEvenAsphere`.
-- `src/surfaces.jl`: `surfNormal(r::Point3{T}, s::NoProfile)`,
-  `deltaToSurf(r::Ray{T}, p::NoProfile)`, and `modFunc(ray::Ray{T},
-  normal::Vec3{T}, d::NoBendIndex)` are all effectively dead code --
-  each has a more specific same-named method in `src/tracing.jl`
-  (`NoProfile{T}`/`NoBendIndex{T}` tied to the ray's own type `T`) that
-  Julia's dispatch always prefers when both apply, confirmed via
-  `@which`. Not incorrect, just redundant -- low-priority cleanup
-  candidates.
-- `src/lens_thorlabs.jl`, `lens_ACL12708U(base, dir, wl)`: `wl` is
-  actually used as a refractive index (passed as `rinOut`/`rinIn` to
-  the two surface constructors), not a wavelength despite the name --
-  misleading for any caller who reasonably expects to pass a
-  wavelength like its siblings (`lens_TLF220APC`, `lens_TLF357775_405`)
-  do. Not a crash bug, but worth fixing the parameter name/behavior for
-  consistency. Also has no `order`/`lensname` keywords, unlike every
-  other lens builder in the file.
-- `src/lens_edmund.jl`, `lens_EO38398`: not exported (missing from this
-  file's `export` line, unlike its three siblings
-  `lens_EO68001`/`lens_EO67548`/`lens_EO67652`) -- likely an oversight;
-  currently only reachable as `OpticTrace.lens_EO38398(...)`.
-- `src/lens_thorlabs.jl`, `lensAC127019AB`: **also not exported**
-  (missing from this file's two `export` lines, unlike every other
-  builder in the file) -- found while writing `test/lens_catalogs.jl`
-  (phase 9); only reachable as `OpticTrace.lensAC127019AB(...)`, same
-  pattern as `lens_EO38398` above. Separately, unlike its two
-  structurally identical siblings (`lensAC508180AB`, `lensAC127050A`),
-  doesn't validate `order` -- any value other than exactly `"forward"` is
-  silently treated as `"reverse"` instead of erroring on an
-  unrecognized value.
-- `src/mesh_primitives.jl`: `GeometryBasics.radius`/`widths` for
-  `OptSurface` dispatch to `gbRadius`/`gbWidths`, which only have a
-  method for the `(SizeLens, SurfProfileConic)` aperture/profile
-  combination. Any `OptSurface` using a different aperture or a
-  non-conic profile (sphere, asphere, even-asphere, cylinder, toroid,
-  off-axis conic) will throw a `MethodError` when its mesh bounds are
-  computed (e.g. for 3D plotting).
-- **Bugs** -- `src/mesh_primitives.jl`, several confirmed (independently
-  flagged by the IDE's linter as "Possible method call error"):
-  - `gbWidths(a::Washer, p::NoProfile)` and `gbWidths(a::Disk,
-    p::NoProfile)`: both reference `a.SemiDiameter`/`a.SemiDiamater`,
-    neither of which is a real field (the actual field is
-    `semiDiameter`; `SemiDiamater` is also a typo for `SemiDiameter`).
-    Throws a field-access error if called.
-  - `GeometryBasics.radius(c::Washer)`/`widths(c::Washer)` and the
-    `Disk` equivalents: all four call `gbRadius`/`gbWidths` with
-    `c.semiDiameter` (a bare number) as the first argument, but those
-    functions expect the whole `Washer`/`Disk` object. No matching
-    method exists for a number, so these throw a `MethodError`.
-    Reachable from live plotting (`plotModelSurf!`/`Makie.mesh!`)
-    whenever a `ModelSurface`'s aperture is a `RoundAperture` with a
-    nonzero `obscure`, if Makie's mesh conversion calls these methods.
-  - `gbRadius(a::RectAperture, profile::NoProfile)`: **correction**
-    (found while writing `test/mesh_primitives.jl` for the phased
-    test-writing plan, phase 4) to the branch description above -- the
-    bug is actually in the *finite*-aperture branch (i.e. whenever
-    `wclear`/`lclear` are **not** both infinite, the ordinary/everyday
-    case for a `RectAperture`), not the `wclear == ∞ && lclear == ∞`
-    branch. That both-infinite branch (`sqrt(a.wo^2+a.lo^2)`) works
-    correctly; the finite branch references `a.clear`, which isn't a
-    field of `RectAperture` (the real fields are `wclear`/`lclear`). No
-    live code currently constructs an `OptSurface`/`ModelSurface` with a
-    `RectAperture` aperture at all, so this is unreachable today, but it
-    would break for the common finite-aperture case (not just an edge
-    case) if that changed.
-  - Likely fix for all of the above: `s/SemiDiameter/semiDiameter/`,
-    `s/SemiDiamater/semiDiameter/`, `gbRadius(c, c.profile)` /
-    `gbWidths(c, c.profile)` instead of `c.semiDiameter`, and
-    `a.clear` -> `a.lclear`.
-  - Also: `GeometryBasics.normals(s::AbstractSurface, nvertices=60)`
-    calls `inOrOut(s)`, which only has a method for `OptSurface` --
-    calling `normals` on any other `AbstractSurface` (e.g.
-    `ModelSurface`) throws a `MethodError`, despite the generic
-    `s::AbstractSurface` signature implying it should work for any
-    surface type.
-  - Minor/non-bug: `GeometryBasics.normals(s::OptSurface, nvertices=60)`
-    is byte-for-byte identical to the generic
-    `GeometryBasics.normals(s::AbstractSurface, nvertices=60)` method
-    above it -- redundant, not incorrect.
-- `src/plotting.jl` (~line 250-261): a non-mutating `trcAndPlotRay`
-  (counterpart to `trcAndPlotRay!`) is commented out with the note "see
-  if this method is needed" -- open question on whether to implement it.
-- **Bug** -- `src/plotting.jl`, `perimeterRays`: on any ray that fails
-  to trace (`status != 0`), it stores a `NaN` `Ray` and then does a bare
+Confirmed defects -- something throws, returns wrong data, or silently
+does the wrong thing. See "Code issues" below for missing features,
+cleanup candidates, and open design questions that aren't bugs. See
+`FIXED.md` for bugs already resolved.
+
+- **2.** `src/plotting.jl`, `perimeterRays`: on any ray that fails to
+  trace (`status != 0`), it stores a `NaN` `Ray` and then does a bare
   `return` -- which returns `nothing`, discarding the whole `rays`
   vector (including rays already successfully traced) instead of
   continuing to the next perimeter angle. Almost certainly a `continue`
   was intended. `plotPerimeterRays`/`plotPerimeterRays!` (both variants)
   will fail if fed a `geo` where any perimeter ray misses, since they
   iterate over the `nothing` return value.
-  - **Separate, more severe bug** -- found while writing
-    `test/plotting.jl` (phase 12): `perimeterRays` never gets far enough
-    to reach the bug above. Its `Ray(...)` call builds the direction
-    argument as a raw `[cos(ϕ)*sin(θ), sin(ϕ)*sin(θ), cos(θ)]` literal --
-    a plain `Vector`, not a `Vec3` -- but `Ray` only has a constructor
-    for `(Point{N,T}, Vec{N,T})`. This throws `MethodError`
-    unconditionally, for every call regardless of input, before the
-    per-ray tracing loop ever runs. Confirmed by direct testing.
-    `perimeterRays`/`plotPerimeterRays`/`plotPerimeterRays!` (both
-    variants) are all exported and all fail this way currently -- none
-    of the four is currently callable at all. Likely fix: wrap both the
-    base-offset and direction literals as `Vec3(...)`/use `Point3`
-    arithmetic consistently, matching the rest of `src/`'s convention.
-- **Bug** -- `src/plotting.jl`, `plotOPD!(scene, h::Float64,
-  egeo::ExtendedGeometry; ...)`: its final line returns `θr, opdx, opdy`,
-  but `θr` is never assigned anywhere in this method (it loops over
-  `x = LinRange(-sizeP, sizeP, points)`, not an angle range) --
-  `UndefVarError: θr not defined`, thrown only after all the actual
-  tracing/plotting work has completed. No call site anywhere in
-  `src/`/`test/`.
-  - **Separate, more severe bug, shared with `plotOPD3D!`** -- found
-    while writing `test/plotting.jl` (phase 12): both this method and
-    `plotOPD3D!` never get far enough to reach the `θr` bug above (or,
-    for `plotOPD3D!`, to complete at all). Both contain the identical
-    line `dirRef = normalize!(usedgeo[1].base.base .- r)`. `.base.base`
-    is a `Point3` (an immutable `StaticArrays`-style point), so
-    `.- r` produces another immutable `Point3`; `normalize!` is the
-    in-place variant and tries to `setindex!` into it, which `Point3`
-    doesn't support. Throws `ErrorException("setindex!(::Point{3,
-    Float64}, value, ::Int) is not defined. Hint: Use MArray or
-    SizedArray...")` unconditionally, for any input, near the start of
-    both methods -- confirmed by direct testing. Likely fix: `normalize`
-    (non-mutating) instead of `normalize!`.
-- **Likely bug** -- `src/plotting.jl`, `plotSpotDiagram(fig, spts;
-  title = "Spot Diagram")` (the 2-arg method): calls `Axis(fig[1,1],
-  title, tellwidth = false)`, passing `title` positionally. Its sibling
-  5-arg method correctly writes `Axis(fig[1,1]; title, tellwidth =
-  false)` (with the `;`). `Makie.Axis` doesn't accept a title
-  positionally, so this is likely a missing-semicolon typo that throws
-  a `MethodError`. No call site anywhere in `src/`/`test/`.
-- `src/characterization.jl` (`traceLoss`, line ~236): docstring ends
-  with a bare `TBW` ("to be written") placeholder -- description is
-  incomplete/unfinished.
-- `test/optics.jl` (line ~74): `sag` tests for `SurfProfileCyl` and
-  `SurfProfileToroid` are written but disabled inside a `#= =#` block,
-  with the comment "Tests not implemented for SurfProfileCyl &
+- **6.** `src/surface_manipulation.jl`, `reverseProfile!(profile::T)
+  where T<:AbstractSurfProfile` (the generic fallback for profile types
+  without their own specific method): assumes every such type has an
+  `a` field. That's false for `SurfProfileOAConic` (`curv`/`ϵ`/
+  `offset`), which falls through to this method -- calling it throws a
+  field-access error. (`NoProfile` used to hit this same fallback too,
+  but now has its own dedicated `reverseProfile!(profile::NoProfile)`
+  no-op method -- see `FIXED.md`.)
+
+## Code issues
+
+Missing features, cleanup candidates, and open design questions -- not
+confirmed bugs (see "Bugs" above for those). See `FIXED.md` for issues
+already resolved.
+
+- **1.** `src/zemax.jl`: `ZemaxGeometry` struct is defined but never
+  constructed anywhere -- `readZemax` returns its parsed data as a
+  plain `(zsurfs, name, units, wavelengths)` tuple instead of wrapping
+  it in a `ZemaxGeometry`. Either start using `ZemaxGeometry` as the
+  return type, or remove it if it's not needed.
+- **2.** `src/zemax.jl`: `readZemax`'s `basept`/`dir` keyword args are
+  accepted but not actually used during parsing (the
+  `basecurrent`/`dircurrent` variables they seed are only read by
+  commented-out code). Either wire them up (the commented-out
+  `zemaxsurfToSurface!`/`push!` lines suggest the original intent) or
+  drop the unused args.
+- **3.** `src/beamlet_decomposition.jl`: `gaussBeamParams` is an
+  unimplemented stub (`function gaussBeamParams() end`) with a
+  docstring describing a 5-argument signature and return value that
+  don't exist yet. See the `# TODO` comment already left in the file.
+- **4.** `src/zemax.jl` (`zemaxsurfToSurface`): only Zemax surface
+  `type`s `"STANDARD"` and `"EVENASPH"` are supported; any other type
+  (e.g. toroidal, coordinate breaks) throws `error("Zemax surface type
+  ... not implemented yet")`.
+- **5.** `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar`
+  archives (zipped Zemax file bundles) isn't implemented at all -- only
+  the Python reference implementation exists, kept in
+  `docs/zemax_reference.md` as a starting point for a future
+  `readZemaxArchive`-style function.
+- **6.** `src/surfaces.jl` (`lensASinglet`, `lensEASinglet`, lines ~518
+  & ~548): both have a `#ToDo` comment -- "should check if the input is
+  really an asphere. if not make the surface spherical" -- that
+  validation isn't implemented; passing non-aspheric coefficients
+  silently proceeds as-is.
+- **7.** `src/surfaces.jl`: `refractAsphere`'s `asphere` parameter is
+  typed `AbstractVector{Float64}` (hardcoded), unlike its sibling
+  `refractEvenAsphere`'s `asphere::AbstractVector{T}` (generic). Per
+  `CLAUDE.md`'s stated convention ("numeric types are generally
+  parameterized... rather than hardcoded to Float64... so functions
+  stay compatible with ForwardDiff"), this hardcoding will silently
+  break autodiff-based normal/gradient computations through
+  `refractAsphere` specifically, unlike through `refractEvenAsphere`.
+- **8.** `src/surfaces.jl`: `surfNormal(r::Point3{T}, s::NoProfile)`,
+  `deltaToSurf(r::Ray{T}, p::NoProfile)`, and `modFunc(ray::Ray{T},
+  normal::Vec3{T}, d::NoBendIndex)` are all effectively dead code --
+  each has a more specific same-named method in `src/tracing.jl`
+  (`NoProfile{T}`/`NoBendIndex{T}` tied to the ray's own type `T`)
+  that Julia's dispatch always prefers when both apply, confirmed via
+  `@which`. Not incorrect, just redundant -- low-priority cleanup
+  candidates.
+- **9.** `src/lens_thorlabs.jl`, `lens_ACL12708U(base, dir, wl)`: `wl`
+  is actually used as a refractive index (passed as `rinOut`/`rinIn` to
+  the two surface constructors), not a wavelength despite the name --
+  misleading for any caller who reasonably expects to pass a
+  wavelength like its siblings (`lens_TLF220APC`, `lens_TLF357775_405`)
+  do. Not a crash bug, but worth fixing the parameter name/behavior
+  for consistency. Also has no `order`/`lensname` keywords, unlike
+  every other lens builder in the file.
+- **10.** `src/lens_edmund.jl`, `lens_EO38398`: not exported (missing
+  from this file's `export` line, unlike its three siblings
+  `lens_EO68001`/`lens_EO67548`/`lens_EO67652`) -- likely an
+  oversight; currently only reachable as
+  `OpticTrace.lens_EO38398(...)`.
+- **11.** `src/lens_thorlabs.jl`, `lensAC127019AB`: **also not
+  exported** (missing from this file's two `export` lines, unlike
+  every other builder in the file) -- found while writing
+  `test/lens_catalogs.jl` (phase 9); only reachable as
+  `OpticTrace.lensAC127019AB(...)`, same pattern as `lens_EO38398`
+  above. Separately, unlike its two structurally identical siblings
+  (`lensAC508180AB`, `lensAC127050A`), doesn't validate `order` -- any
+  value other than exactly `"forward"` is silently treated as
+  `"reverse"` instead of erroring on an unrecognized value.
+- **12.** `src/mesh_primitives.jl`: `GeometryBasics.radius`/`widths`
+  for `OptSurface` dispatch to `gbRadius`/`gbWidths`, which only have a
+  method for the `(SizeLens, SurfProfileConic)` aperture/profile
+  combination. Any `OptSurface` using a different aperture or a
+  non-conic profile (sphere, asphere, even-asphere, cylinder, toroid,
+  off-axis conic) will throw a `MethodError` when its mesh bounds are
+  computed (e.g. for 3D plotting).
+- **13.** `src/plotting.jl` (~line 250-261): a non-mutating
+  `trcAndPlotRay` (counterpart to `trcAndPlotRay!`) is commented out
+  with the note "see if this method is needed" -- open question on
+  whether to implement it.
+- **14.** `src/characterization.jl` (`traceLoss`, line ~236): docstring
+  ends with a bare `TBW` ("to be written") placeholder -- description
+  is incomplete/unfinished.
+- **15.** `test/optics.jl` (line ~74): `sag` tests for `SurfProfileCyl`
+  and `SurfProfileToroid` are written but disabled inside a `#= =#`
+  block, with the comment "Tests not implemented for SurfProfileCyl &
   SurfProfileToroid". Worth revisiting -- unclear if they're disabled
   because the expected values are wrong or because the feature is
   incomplete.
-- `src/lens_definitions.jl` (`ExtendedGeometry.geo` field, line ~220):
-  typed as `Array{AbstractSurface}` with the comment "needs to be
-  changed to `AbstractOpticalObject`" -- that abstract type already
-  exists (`lens_definitions.jl:18`) but nothing uses it yet.
-- `src/surfaces.jl` (`planeMirror`, line ~458): docstring notes it
-  "could use `NoProfile` to speed things up but then would need to
+- **16.** `src/lens_definitions.jl` (`ExtendedGeometry.geo` field, line
+  ~220): typed as `Array{AbstractSurface}` with the comment "needs to
+  be changed to `AbstractOpticalObject`" -- that abstract type
+  already exists (`lens_definitions.jl:18`) but nothing uses it yet.
+- **17.** `src/surfaces.jl` (`planeMirror`, line ~458): docstring notes
+  it "could use `NoProfile` to speed things up but then would need to
   potentially overload other functions" -- a known, deliberately
   deferred performance optimization.
-- `src/lens_definitions.jl` (`SurfProfileToroid`): only a `sag` method
-  exists (`src/tracing.jl`), and it's explicitly code-commented as
-  "likely incorrect" -- there is no `deltaToSurf`/`surfNormal` method
-  for this type at all, so toroidal surfaces are defined but not
-  actually traceable yet.
-- **Bug** -- `src/tracing.jl`, `deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T})`
-  (~line 292): the function body refers to a variable `p` throughout,
-  but the parameter is named `profile` -- `p` is never defined, so
-  calling this method throws `UndefVarError: p not defined`. Confirmed
-  by the IDE's own linter ("Possible method call error"). Currently has
-  no live call site anywhere (`SurfProfileCyl` is never constructed
-  outside a disabled test block, see the `test/optics.jl` entry above),
-  which is presumably why this hasn't been caught. Fix is presumably
-  `s/p\./profile\./g` within that method.
-- `src/tracing.jl`, `deltaToSurf(r::Ray{3,T}, p::SurfProfileOAConic{T})`
-  (~line 275): preceded by the original author's own code comments
-  (`# logic is flawed in this one` / `#change to add offset to ray to
-  put it into the coordinate system of the offset parabola`) flagging
-  it as believed-incorrect. Unlike the `SurfProfileCyl` bug above, this
-  one *is* reachable (`SurfProfileOAConic` is constructed by
+- **18.** `src/lens_definitions.jl` (`SurfProfileToroid`): only a `sag`
+  method exists (`src/tracing.jl`), and it's explicitly
+  code-commented as "likely incorrect" -- there is no
+  `deltaToSurf`/`surfNormal` method for this type at all, so toroidal
+  surfaces are defined but not actually traceable yet.
+- **19.** `src/tracing.jl`, `deltaToSurf(r::Ray{3,T},
+  p::SurfProfileOAConic{T})` (~line 275): preceded by the original
+  author's own code comments (`# logic is flawed in this one` /
+  `#change to add offset to ray to put it into the coordinate system
+  of the offset parabola`) flagging it as believed-incorrect. This one
+  *is* reachable (`SurfProfileOAConic` is constructed by
   `reflectOAConic` in `src/surfaces.jl`), so any live use of
   `reflectOAConic` may be tracing incorrectly. Needs investigation.
-- **Bugs** -- `src/surface_manipulation.jl`, `reverseProfile!` (three
-  confirmed field-name typos, plus one dispatch-fallback gap; nothing
-  in this file has any call site anywhere, which is presumably why none
-  of these have surfaced):
-  - `reverseProfile!(profile::SurfProfileSphere)`: assigns
-    `profile.curve` -- not a real field (`SurfProfileSphere`'s field is
-    `curv`).
-  - `reverseProfile!(profile::SurfProfileToroid)`: assigns
-    `profile.curveX`/`profile.curveY` -- not real fields
-    (`SurfProfileToroid`'s fields are `curvX`/`curvY`).
-  - `reverseProfile!(profile::T) where T<:AbstractSurfProfile` (the
-    generic fallback for profile types without their own specific
-    method): assumes every such type has an `a` field. That's false for
-    `SurfProfileOAConic` (`curv`/`ϵ`/`offset`) and `NoProfile` (`curv`
-    only), both of which fall through to this method -- calling it on
-    either throws a field-access error.
-  - `reverseGeo`/`reverseSurface!`: despite `reverseGeo`'s
-    `Vector{T} where T<:AbstractSurface` signature, `reverseSurface!`
-    only has a method for `OptSurface` -- a `geo` containing a
-    `ModelSurface` (e.g. built by `roundAperture`/`rectAperture`, both
-    plausible in a real lens system with an aperture stop) throws a
-    `MethodError`.
-  - Separately (not a confirmed bug, just an open question worth
-    checking): `reverseSurface!` leaves `surf.base.dir`/`surf.base.ydir`
-    unchanged when reversing a surface -- only position and
-    profile/index data are flipped. Whether propagation-direction
-    reversal should also flip the surface's local orientation isn't
-    obvious from the code alone.
-- `src/lens_definitions.jl`: four abstract types appear to be unused
-  scaffolding -- `AbstractRay`/`AbstractSurfBase` each have exactly one
-  subtype (`Ray`/`SurfBase`) and are never used as a dispatch target
-  anywhere; `AbstractOpticalObject`/`AbstractTrace` have zero subtypes
-  at all. Low priority -- candidates for removal, or for actually being
-  put to use (see the `ExtendedGeometry.geo` entry above for
-  `AbstractOpticalObject`).
-
-- **Bug** -- `src/characterization.jl`: `sizeOpticSurface` is exported
-  (line 6) but never defined anywhere in the repo -- any call to it
-  throws immediately (`UndefVarError`/no matching method). Found during
-  the initial codebase survey for the phased test-writing plan (see
-  "Test-writing plan" below); either implement it or remove it from the
-  export list.
-- **Bug** -- `src/tracing.jl`, `traceSurf`/`traceSurf!` (all four
-  methods: `OptSurface` and `ModelSurface`, mutating and non-mutating):
-  each checks `if delta == NaN` to detect a ray that missed the surface
-  (`deltaToSurf` returns `NaN` on a miss). In IEEE 754, `NaN == NaN` is
-  always `false`, so this branch is dead code -- status 1 ("missed") is
-  unreachable through this check in all four methods. Confirmed by
-  direct testing (test-writing plan, phase 5, `test/trace_geometry.jl`):
-  a ray that should miss instead silently propagates `NaN` through the
-  rest of the surface-normal/`modFunc`/`clipAperture` math and ends up
-  reporting a false "success" (status 0) with a garbage `NaN` trace,
-  rather than erroring or correctly reporting a miss. Likely fix:
-  `isnan(delta)` instead of `delta == NaN`.
-- **Bug** -- `src/extended_geo.jl`, `updateEGeo!`: named and documented
-  as mutating its `ExtendedGeometry` argument ("calls the function
-  necessary to create a static geometry for tracing", per its own
-  docstring), but the current implementation only calls
-  `defaultSetupGeo(...)` and returns the result -- it never assigns back
-  into `egeo.geo`. Confirmed by direct testing (test-writing plan, phase
-  1, `test/foundations.jl`). Likely fix: `egeo.geo =
-  defaultSetupGeo(...)`.
-- `src/lens_refractive_index.jl`: `dirBaseRefractiveIndex` is a
+- **20.** `src/lens_definitions.jl`: four abstract types appear to be
+  unused scaffolding -- `AbstractRay`/`AbstractSurfBase` each have
+  exactly one subtype (`Ray`/`SurfBase`) and are never used as a
+  dispatch target anywhere; `AbstractOpticalObject`/`AbstractTrace`
+  have zero subtypes at all. Low priority -- candidates for removal, or
+  for actually being put to use (see the `ExtendedGeometry.geo` entry
+  above for `AbstractOpticalObject`).
+- **21.** `src/lens_refractive_index.jl`: `dirBaseRefractiveIndex` is a
   hardcoded absolute path on the original author's machine
   (`/Users/matt/Development/Projects/refractiveindex/database/data`),
   not part of the repo. `test/refractive_index.jl` (phase 8),
   `test/lens_catalogs.jl` (phase 9), and (via an otherwise-unused
   `simplesystem` variable that calls `lens_TLAC254_060`) the
   pre-existing `test/optics.jl` all read real glass `.yml` files from
-  this path with no override -- **this was a CI-breaking gap**: pointing
-  `dirBaseRefractiveIndex` at a nonexistent directory and re-running the
-  suite confirmed `getRefractiveIndexFunc` threw an uncaught
-  `SystemError` ("No such file or directory") in all three files, each
-  failing its whole `@testset`/file (not just an individual `@test`),
-  which `.github/workflows/CI.yml`'s plain `Pkg.test()` against a fresh
-  `actions/checkout@v3` clone would have hit every time (that path never
-  exists there). **Fixed**: all three now check `HAS_GLASS_CATALOG`
-  (`test/helper.jl`, `= isdir(OpticTrace.dirBaseRefractiveIndex)`) and
-  skip (print an `@info`, don't fail) their catalog-dependent portion
-  when it's false, verified by re-running the whole suite with
-  `dirBaseRefractiveIndex` pointed at a nonexistent path: 0 errors, only
-  the catalog-dependent tests (123 of them) skipped. This is a
+  this path with no override -- **this was a CI-breaking gap**:
+  pointing `dirBaseRefractiveIndex` at a nonexistent directory and
+  re-running the suite confirmed `getRefractiveIndexFunc` threw an
+  uncaught `SystemError` ("No such file or directory") in all three
+  files, each failing its whole `@testset`/file (not just an
+  individual `@test`), which `.github/workflows/CI.yml`'s plain
+  `Pkg.test()` against a fresh `actions/checkout@v3` clone would have
+  hit every time (that path never exists there). **Fixed**: all
+  three now check `HAS_GLASS_CATALOG` (`test/helper.jl`, `=
+  isdir(OpticTrace.dirBaseRefractiveIndex)`) and skip (print an
+  `@info`, don't fail) their catalog-dependent portion when it's
+  false, verified by re-running the whole suite with
+  `dirBaseRefractiveIndex` pointed at a nonexistent path: 0 errors,
+  only the catalog-dependent tests (123 of them) skipped. This is a
   stopgap, not a real fix -- CI still gets zero coverage of the
   catalog-dependent code paths this way. Follow-up items that would
   actually close that gap (identified while building the test plan):
-  - **Option: vendor a glass-file subset into `test/fixtures/`.** Same
-    pattern already used for the Zemax fixture
+  - **Option: vendor a glass-file subset into `test/fixtures/`.**
+    Same pattern already used for the Zemax fixture
     (`test/fixtures/test_singlet.zmx`) -- check the specific `.yml`
     files the current tests actually read into the repo and point
-    `getRefractiveIndexFunc`/the lens builders at that directory instead
-    of `OpticTrace.dirBaseRefractiveIndex` when running under CI. Lower
-    effort than the full database (below); gives CI real coverage of
-    the catalog-dependent code paths without depending on an external
-    download. The exact file list currently exercised (11 files):
+    `getRefractiveIndexFunc`/the lens builders at that directory
+    instead of `OpticTrace.dirBaseRefractiveIndex` when running under
+    CI. Lower effort than the full database (below); gives CI real
+    coverage of the catalog-dependent code paths without depending on
+    an external download. The exact file list currently exercised
+    (11 files):
     `glass/schott/{N-SF11,N-BK7,N-LAK22,N-SF6,N-SF2,N-LAK10,N-SF57}.yml`,
     `glass/cdgm/{D-ZK3,D-LAK6}.yml`, `glass/hoya/{BAF11,E-FD10}.yml`
     (per each glass file's own license/redistribution terms on
     refractiveindex.info -- check before committing).
-  - **Option: vendor/download the full refractive-index database** (e.g.
-    from refractiveindex.info) so it's available to both automated tests
-    and package users, instead of depending on a machine-local path that
-    isn't part of the repo or a clean checkout. Larger effort than the
-    subset option above (whole-database size/licensing to work out), but
-    also fixes this for real package users, not just CI -- currently
-    `dirBaseRefractiveIndex` is unusable for anyone except the original
-    author regardless of testing.
+  - **Option: vendor/download the full refractive-index database**
+    (e.g. from refractiveindex.info) so it's available to both
+    automated tests and package users, instead of depending on a
+    machine-local path that isn't part of the repo or a clean
+    checkout. Larger effort than the subset option above
+    (whole-database size/licensing to work out), but also fixes this
+    for real package users, not just CI -- currently
+    `dirBaseRefractiveIndex` is unusable for anyone except the
+    original author regardless of testing.
   - Add a configuration-file mechanism to store the refractive-index
-    database's location/state (replacing the hardcoded path), with room
-    for other future package configuration alongside it -- useful either
-    way, but especially once either vendoring option above exists and
-    needs a location to point at.
+    database's location/state (replacing the hardcoded path), with
+    room for other future package configuration alongside it --
+    useful either way, but especially once either vendoring option
+    above exists and needs a location to point at.
   - **Process note**: this entry itself was wrong twice while being
-    written -- first (phase 8) it correctly flagged `test/optics.jl` as
-    also depending on this path, but gave no specifics; then a later
-    pass "corrected" that to say `test/optics.jl` *doesn't* depend on it,
-    based on a `grep` for the literal identifiers
+    written -- first (phase 8) it correctly flagged `test/optics.jl`
+    as also depending on this path, but gave no specifics; then a
+    later pass "corrected" that to say `test/optics.jl` *doesn't*
+    depend on it, based on a `grep` for the literal identifiers
     `dirBaseRefractiveIndex`/`getRefractiveIndexFunc` -- which missed
-    the indirect dependency through `lens_TLAC254_060` (a lens-builder
-    call that itself calls `getRefractiveIndexFunc` internally). Only
-    actually simulating the missing-directory case (not grepping for
-    identifier names) caught it. Grepping for a dependency's own name is
-    not sufficient when the dependency can be reached indirectly through
-    another function call.
-- **Bug** -- `src/characterization.jl`, `traceMonteCarloRays`: its very
-  first executable line builds `badray = Ray((NaN, NaN, NaN), (NaN, NaN,
-  NaN))` from raw tuples, but `Ray` requires an actual `Point{N,T}`/
-  `Vec{N,T}` pair -- this throws a `MethodError` unconditionally, before
-  the function ever reaches its own arguments or the ray-tracing loop.
-  Confirmed by direct testing (test-writing plan, phase 7,
-  `test/characterization.jl`): no call to this function can currently
-  succeed regardless of inputs. Likely fix: `badray = Ray(Point3(NaN,
-  NaN, NaN), Vec3(NaN, NaN, NaN))`.
+    the indirect dependency through `lens_TLAC254_060` (a
+    lens-builder call that itself calls `getRefractiveIndexFunc`
+    internally). Only actually simulating the missing-directory case
+    (not grepping for identifier names) caught it. Grepping for a
+    dependency's own name is not sufficient when the dependency can
+    be reached indirectly through another function call.
 
 ## Test-writing plan
 
@@ -495,9 +362,8 @@ after the fact).
   `sag`/`surfNormal` now pass (the old disabled block used an outdated
   formula and a stale expected value, replaced rather than just
   re-enabled); `SurfProfileToroid`'s `sag` is `@test_broken`.
-  `SurfProfileCyl`'s `deltaToSurf` is excluded entirely (confirmed fully
-  broken, not just a wrong value -- see Code issues above) rather than
-  tested.
+  `SurfProfileCyl`'s `deltaToSurf` had the same undefined-variable bug,
+  now fixed and covered.
 - ✅ **Covered** (phase 5, `test/trace_geometry.jl`) -- ~~`src/tracing.jl`:
   `traceGeometryRel`/`traceGeometryRel!` are exported and used
   elsewhere, but have no direct unit test of their own~~ (as opposed to
@@ -521,16 +387,17 @@ after the fact).
   internal `activate!` calls, e.g. inside `multipleFigures`, since
   GLMakie merges into one config dict rather than resetting it), so
   `xvfb-run` wasn't needed here either, same as the `mesh_primitives.jl`
-  correction above. Confirmed the three known bugs already listed in
-  Code issues (`perimeterRays`'s early return, `plotOPD!`'s `θr` typo,
-  `plotSpotDiagram`'s missing `;`), and found two more in the process
-  (also now in Code issues): `perimeterRays` builds its `Ray` with a raw
+  correction above. Confirmed the known bugs already listed in Bugs
+  (`perimeterRays`'s early return -- still open; `plotOPD!`'s `θr`
+  typo and `plotSpotDiagram`'s missing `;` were two more, both now
+  fixed, see `FIXED.md`), and found two more in the process (also now
+  fixed, see `FIXED.md`): `perimeterRays` built its `Ray` with a raw
   `Vector` direction instead of `Vec3`, so it and both
-  `plotPerimeterRays`/`plotPerimeterRays!` variants throw `MethodError`
+  `plotPerimeterRays`/`plotPerimeterRays!` variants threw `MethodError`
   unconditionally, regardless of the early-return bug; and
-  `plotOPD!(scene, h, egeo::ExtendedGeometry)`/`plotOPD3D!` both call
+  `plotOPD!(scene, h, egeo::ExtendedGeometry)`/`plotOPD3D!` both called
   `normalize!` on an immutable `Point3`, throwing `ErrorException`
-  unconditionally, before either method reaches its own later logic.
+  unconditionally, before either method reached its own later logic.
   `opdRel` (defined in this file, but exported from `src/printing.jl`'s
   `export` line instead of this file's) turned out to be plain
   OPD-difference math with no Makie dependency, and ended up covered by
@@ -539,26 +406,29 @@ after the fact).
   nothing in this file (`reverseGeo`, `reverseSurface!`, `reverseBase!`,
   `reverseProfile!`, `reverseMod!`, `thickGeo`) has any call site
   anywhere in `src/`/`test/`~~ -- this is presumably why the field-typo
-  and dispatch-fallback bugs listed in Code issues above have gone
-  unnoticed. All of these are plain numeric/struct-manipulation code
-  with no Makie dependency, so were straightforward to unit-test
-  directly (build a small `geo`, reverse it, check the expected sign
-  flips and positions).
+  and dispatch-fallback bugs have gone unnoticed (the field-typo bugs,
+  `SurfProfileSphere`/`SurfProfileToroid`, and the `ModelSurface`
+  `reverseSurface!` dispatch gap, are all now fixed, see `FIXED.md`;
+  the generic `reverseProfile!` fallback's gap remains open for
+  `SurfProfileOAConic`, see Bugs above). All of these
+  are plain numeric/struct-manipulation code with no Makie dependency,
+  so were straightforward to unit-test directly (build a small `geo`,
+  reverse it, check the expected sign flips and positions).
 - ✅ **Covered** (phase 3, `test/surface_builders.jl`) -- ~~`src/surfaces.jl`:
   `lensSinglet` and its four `lens_edmund.jl` callers, and
   `reflectOAConic`/`reflectOAP`, have no test coverage~~ -- presumably
   why the `Base.compute_assumed_setting` and `attributeSurfaces` bugs
-  listed in Code issues above have gone unnoticed. Both bugs are now
-  caught via `@test_throws MethodError`/`@test_throws UndefVarError`
-  respectively. (The `lens_edmund.jl` callers themselves are covered
-  separately, phase 9.)
+  listed in Code issues above went unnoticed. Both bugs are now fixed,
+  with the tests updated from `@test_throws MethodError`/
+  `@test_throws UndefVarError` to real passing assertions. (The
+  `lens_edmund.jl` callers themselves are covered separately, phase 9.)
 - ✅ **Covered** (phase 9, `test/lens_catalogs.jl`) -- ~~`src/lens_edmund.jl`:
   none of its four lens builders (`lens_EO38398`, `lens_EO68001`,
   `lens_EO67548`, `lens_EO67652`) have any test coverage~~ -- same
   glass-catalog-file dependency caveat as `lens_thorlabs.jl` below. All
-  four forward straight through to `lensSinglet`'s broken
-  `order="reverse"` branch (see Code issues above), now caught via
-  `@test_throws MethodError` for each.
+  four forward straight through to `lensSinglet`'s `order="reverse"`
+  branch, whose bug is now fixed; their `order="reverse"` tests were
+  updated from `@test_throws MethodError` to real passing assertions.
 - ✅ **Covered** (phase 9, `test/lens_catalogs.jl`) -- ~~`src/lens_thorlabs.jl`:
   none of its lens-builder functions (`lensAC508180AB`, `lensAC127050A`,
   `lensAC127019AB`, `lens_ACL12708U`, `lens_TLF220APC`,
@@ -576,10 +446,10 @@ after the fact).
   3-ray `surfClosestApproach` indirectly, or `distClosestApproach`,
   exercised indirectly via the 2-ray `surfClosestApproach`). Also now
   covers `distClosestApproach`'s documented unit-direction assumption.
-  Phase 7 additionally found and fixed the entirely-broken
-  `traceMonteCarloRays` (see Code issues above) while covering
-  `traceMonteCarloRays`/`traceLoss`, which weren't separately called out
-  in this list originally.
+  Phase 7 additionally found the entirely-broken `traceMonteCarloRays`
+  and added `@test_throws` coverage documenting it (since fixed, see
+  `FIXED.md` #11) while covering `traceMonteCarloRays`/`traceLoss`,
+  which weren't separately called out in this list originally.
 - `src/lens_refractive_index.jl`: `findRefractiveIndex`,
   `findRefractiveIndexAlt` -- fixed-arity dispersion formulas (same
   math as `riFormula1`/`riFormula2`, respectively, for `findRefractiveIndex`;

@@ -3,7 +3,7 @@
 
 export sag, randomPointOnSquare, randomPointOnDisk, traceMonteCarloRays, computeRearFocalPlane, traceLoss
 export findRFP, surfClosestApproach, distClosestApproach, spotDiagramHex, centroidofpoints, rmsradiusofpoints, localRaysHexapolar
-export toLocalRay,  sizeOptic, sizeOpticSurface
+export toLocalRay,  sizeOptic
 
 
 """
@@ -180,20 +180,13 @@ end
     pnts - number of rays to start
     surfnum is the number of the surface +1 to sample, -1 is last surface
 
-**This method is broken**: its very first executable line builds
-`badray = Ray((NaN, NaN, NaN), (NaN, NaN, NaN))` from raw tuples, but
-`Ray` requires an actual `Point{N,T}`/`Vec{N,T}` pair -- this throws a
-`MethodError` unconditionally, before the function ever reaches its own
-arguments or the ray-tracing loop. No call to this function can
-currently succeed regardless of inputs. Likely fix: `badray =
-Ray(Point3(NaN, NaN, NaN), Vec3(NaN, NaN, NaN))`. See `TODO.md`.
 """
 function traceMonteCarloRays(radiusfunc,anglefunc, radius::Float64, θmax::Float64, pnts::Int64,  geo::Array{AbstractSurface}; surfnum=-1)
     trcStatMsg=("Normal","Missed","TIR","Clipped")
 
     rays=Vector{Ray}(undef,pnts)
     miss=Vector{Tuple}(undef,pnts)
-    badray = Ray((NaN, NaN, NaN), (NaN, NaN, NaN))
+    badray = Ray(Point3(NaN, NaN, NaN), Vec3(NaN, NaN, NaN))
     missed = zeros(Int32,length(trcStatMsg)-1, length(geo)+1) #types of errors, length of trace one more than length of geometry
     #println("status = $(length(trcStatMsg)-1)  length = $(length(geo)+1)")
     cnt = Threads.Atomic{Int64}(0)

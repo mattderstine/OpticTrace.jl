@@ -629,10 +629,11 @@ function perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, poi
 
     i = 1
     for ϕ in LinRange(0., 2pi, points)
-        status, trc = traceGeometryRel(Ray(r + radius .* [cos(ϕ), sin(ϕ), 0.] , [cos(ϕ)*sin(θ),sin(ϕ)*sin(θ), cos(θ)]), geo)
+        status, trc = traceGeometryRel(Ray(Point3(r[1] + radius*cos(ϕ), r[2] + radius*sin(ϕ), r[3]),
+            Vec3(cos(ϕ)*sin(θ), sin(ϕ)*sin(θ), cos(θ))), geo)
         if status != 0
             println(trcStatMsg[status+1])
-            rays[i] = Ray([NaN, NaN, NaN], [NaN, NaN, NaN])
+            rays[i] = Ray(Point3(NaN, NaN, NaN), Vec3(NaN, NaN, NaN))
 
             return
         end
@@ -887,15 +888,9 @@ Requires `egeo.geo[1]` to be named `"stop"` or `"pupil"`; prints a
 message and returns `nothing` if not (or if the reference/exit-pupil
 tracing fails).
 
-Intended to return `(θr, opdx, opdy)`, matching its sibling above.
-
-**This method is broken**: it references `θr`, which is never assigned
-anywhere in this method's body (the loop here iterates over `x =
-LinRange(-sizeP, sizeP, points)`, not an angle range) -- calling it
-throws `UndefVarError: θr not defined` at the final line, after all of
-the tracing/plotting work has already been done. Has no call site
-anywhere in `src/`/`test/`, which is presumably why this hasn't
-surfaced. See `TODO.md`.
+Returns `(opdx, opdy)` (unlike its `θmax`-based sibling above, this
+method sweeps `x`/`y` position rather than angle, so there's no `θr`
+to return alongside them).
 """
 function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", surfview = "end", color = :blue, points=33, focusOffset = 0., label="")
     #trcStatMsg=("Normal","Missed","TIR","Clipped")
@@ -920,7 +915,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
     z = usedgeo[1].base.base[3]
 
-    dirRef = normalize!(usedgeo[1].base.base .- r)
+    dirRef = normalize(Vec3(usedgeo[1].base.base .- r))
     #println("r = $r  dirRef = $dirRef")
     #find the reference local reference intercept coordinates
     #println("base = $r")
@@ -971,10 +966,10 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     for (i,t) in enumerate(x)
         #print("t = $t, i = $i  ")
         #println("z = $z, r = $r")
-        bx = SVector(t, 0., 0.)
-        by = SVector(0., t, 0.)
-        px = normalize(SVector(t, 0., z).-r)
-        py = normalize(SVector(0., t, z).-r)
+        bx = Point3(t, 0., 0.)
+        by = Point3(0., t, 0.)
+        px = normalize(Vec3(t, 0., z).-r)
+        py = normalize(Vec3(0., t, z).-r)
         #println("bx = $bx px = $px  by = $by py = $py  ")
         opdy[i] = opdRel(Ray(by, py), refTrace, finalgeo)/wl
         opdx[i] = opdRel(Ray(bx, px), refTrace, finalgeo)/wl
@@ -982,7 +977,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
 
     Makie.lines!(scene, x, opdx, color=color, linestyle = :dash)
     Makie.lines!(scene, x, opdy , color=color, label=label)
-    θr, opdx, opdy
+    opdx, opdy
 end
 
 """
@@ -1014,7 +1009,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
 
     r = Vec3(0., sizeO, egeo.surfaceObject.base.base[3])
 
-    dirRef = normalize!(usedgeo[1].base.base .- r)
+    dirRef = normalize(Vec3(usedgeo[1].base.base .- r))
     #println("r = $r  dirRef = $dirRef")
     #find the reference local reference intercept coordinates
     #println("base = $r")
@@ -1128,16 +1123,9 @@ Like `plotSpotDiagram(fig, spts, center, rmsradius, deltaz; ...)`
 above, but without the RMS-radius circle/label overlay -- just the
 scatter plot of `spts`. See that method's docstring above for the
 general contract shared by both.
-
-**Likely bug**: unlike its sibling above (which correctly writes
-`Axis(fig[1,1]; title, tellwidth=false)`), this method's
-`Axis(fig[1,1], title, tellwidth=false)` passes `title` positionally
-rather than as a keyword (missing `;`) -- `Makie.Axis` doesn't accept a
-title positionally, so this likely throws a `MethodError`. See
-`TODO.md`.
 """
 function plotSpotDiagram(fig, spts; title = "Spot Diagram")
-    ax = Axis(fig[1,1], title, tellwidth = false)
+    ax = Axis(fig[1,1]; title, tellwidth = false)
     scatter!(ax, spts, markersize=2, color=:blue)
     ax.aspect = DataAspect()
     fig

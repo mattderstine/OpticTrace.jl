@@ -33,19 +33,12 @@
             @test trc.nIn == 1.5
         end
 
-        @testset "miss (status 1, known bug -- see TODO.md)" begin
+        @testset "miss (status 1)" begin
             surf = refractConic("os_miss", ORIGIN, ZAXIS, 1.0, 1.5, 0.0, 0.0, 5.0, "none")
             ray = Ray(Point3(0.0, 0.0, -1.0), Vec3(1.0, 0.0, 0.0)) # parallel to the flat surface -> deltaToSurf returns NaN
 
             status, trc = OpticTrace.traceSurf(ray, surf)
-            # `if delta == NaN` in traceSurf is always false (NaN==NaN is
-            # false in IEEE 754), so status 1 is unreachable through this
-            # path -- discovered while writing this test, not previously
-            # tracked in TODO.md. The NaN silently propagates through the
-            # rest of the surface-normal/modFunc math instead, and the
-            # call ends up reporting a false "success" (status 0) with a
-            # garbage NaN trace, rather than erroring or reporting a miss.
-            @test_broken status == 1
+            @test status == 1
             @test isnan(trc.delta)
         end
 
@@ -87,16 +80,12 @@
             @test status == 3
         end
 
-        @testset "miss (status 1, known bug -- see TODO.md)" begin
+        @testset "miss (status 1)" begin
             modelSurf = roundAperture("ms_miss", ORIGIN, ZAXIS, 1.0, 1.0, 5.0)
             ray = Ray(Point3(3.0, 0.0, -1.0), Vec3(1.0, 0.0, 0.0)) # parallel to the flat surface -> NaN delta
 
             status, trc = OpticTrace.traceSurf(ray, modelSurf)
-            # same `if delta == NaN` dead-code bug as the OptSurface case
-            # above -- here the NaN'd intersection point makes
-            # clipAperture's comparisons all false, so it silently reports
-            # status 0 (not clipped) instead of a miss.
-            @test_broken status == 1
+            @test status == 1
             @test isnan(trc.delta)
         end
 

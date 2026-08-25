@@ -193,19 +193,16 @@
 
     @testset "Monte Carlo & loss" begin
 
-        @testset "traceMonteCarloRays (known bug: entirely non-functional, see TODO.md)" begin
-            # traceMonteCarloRays's very first executable line builds
-            # `badray = Ray((NaN, NaN, NaN), (NaN, NaN, NaN))` from raw
-            # tuples, but Ray requires an actual Point{N,T}/Vec{N,T} pair --
-            # this throws a MethodError unconditionally, before the
-            # function ever reaches its own arguments or the ray-tracing
-            # loop. Discovered while writing this test (phase 7); no call
-            # to this function can currently succeed regardless of inputs.
+        @testset "traceMonteCarloRays" begin
             geo = AbstractSurface[referencePlane("mc_img", ORIGIN, ZAXIS, 1.0, 10.0, "none")]
             radiusfunc = r -> Point3(randomPointOnDisk(r)...)
             anglefunc = θ -> Vec3(0.0, 0.0, 1.0)
 
-            @test_throws MethodError traceMonteCarloRays(radiusfunc, anglefunc, 5.0, 0.0, 50, geo)
+            rays, cnt, missed = traceMonteCarloRays(radiusfunc, anglefunc, 5.0, 0.0, 50, geo)
+            @test length(rays) == 50
+            @test all(ray -> !any(isnan, ray.base) && !any(isnan, ray.dir), rays)
+            @test cnt == 0
+            @test all(iszero, missed)
         end
 
         @testset "traceLoss" begin

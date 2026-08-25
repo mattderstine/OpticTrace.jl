@@ -16,12 +16,6 @@ Requires `geo[1].base.dir == geo[end].base.dir` (errors otherwise).
 
 Returns the reversed `Vector{T}` (a deep copy; `geo` itself is
 untouched other than being deep-copied, not shared).
-
-Despite the `T<:AbstractSurface` signature, only works for geometries
-made entirely of `OptSurface`s: `reverseSurface!` (below) has no method
-for `ModelSurface` (e.g. surfaces built by `roundAperture`/
-`rectAperture`), so a `geo` containing one throws a `MethodError`. See
-`TODO.md`.
 """
 function reverseGeo(geo::Vector{T}) where T<:AbstractSurface
 
@@ -71,6 +65,35 @@ function reverseSurface!(surf::OpticTrace.OptSurface, bpoint, epoint)
 end
 
 """
+    reverseSurface!(surf::ModelSurface, bpoint, epoint)
+
+Like `reverseSurface!(surf::OptSurface, bpoint, epoint)` above, but for
+a non-refracting `ModelSurface`: reflects its base position
+(`reverseBase!`) and negates its profile's curvature
+(`reverseProfile!`), then recomputes its coordinate transforms.
+`ModelSurface` has no `mod`/coating (unlike `OptSurface`) -- just a
+fixed `refIndex` for OPD bookkeeping, not an in/out pair -- so there's
+no `reverseMod!` call here, and `refIndex` is left unchanged. Returns
+`surf`.
+
+Note: like the `OptSurface` method above, `surf.base.dir`/
+`surf.base.ydir` are left unchanged -- see that method's docstring for
+the same open question about whether that's correct.
+"""
+function reverseSurface!(surf::OpticTrace.ModelSurface, bpoint, epoint)
+    reverseBase!(surf.base, bpoint, epoint)
+    reverseProfile!(surf.profile)
+    -, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+        updateCoordChange(surf.base.base, surf.base.dir, surf.base.ydir)
+    surf.toGlobalCoord = toGlobalCoord
+    surf.toLocalCoord = toLocalCoord
+    surf.toGlobalDir = toGlobalDir
+    surf.toLocalDir = toLocalDir
+
+    return surf
+end
+
+"""
     reverseBase!(base::SurfBase, bpoint, epoint)
 
 Reflect `base.base` about the midpoint of `bpoint` and `epoint`:
@@ -88,17 +111,11 @@ end
 """
     reverseProfile!(profile::SurfProfileSphere)
 
-Intended to negate `profile`'s curvature in place (matching its
-sibling methods below), and return `profile`.
-
-**This method is broken**: it assigns `profile.curve` (note the extra
-`e`), which is not a real field of `SurfProfileSphere` (the actual
-field is `curv`) -- calling it throws a field-access error. See
-`TODO.md`.
+Negate `profile`'s curvature in place (matching its sibling methods
+below), and return `profile`.
 """
 function reverseProfile!(profile::SurfProfileSphere)
-    # Implement profile-specific reversal logic if needed
-    profile.curve = -profile.curve
+    profile.curv = -profile.curv
     return profile
 end
 
@@ -123,15 +140,14 @@ Fallback for any `AbstractSurfProfile` subtype without its own more
 specific `reverseProfile!` method above/below: negates `profile.curv`
 and `profile.a` in place, and returns `profile`.
 
-**This method is broken for some profile types it applies to**: it
-assumes every such type has an `a` field, which isn't true for
-`SurfProfileOAConic` (fields: `curv`, `ϵ`, `offset`) or `NoProfile`
-(field: `curv` only) -- calling this method on either throws a
+**This method is broken for `SurfProfileOAConic`**: it assumes every
+such type has an `a` field, which isn't true for `SurfProfileOAConic`
+(fields: `curv`, `ϵ`, `offset`) -- calling this method on it throws a
 field-access error. In practice this fallback is only actually reached
 for `SurfProfileAsphere`/`SurfProfileEvenAsphere` (which do have `a`,
-so those work), `SurfProfileOAConic`, and `NoProfile` -- every other
-concrete profile type has its own more specific method above/below
-that takes precedence. See `TODO.md`.
+so those work) and `SurfProfileOAConic` -- every other concrete profile
+type (including `NoProfile`, see its own method below) has its own more
+specific method above/below that takes precedence. See `TODO.md`.
 """
 function reverseProfile!(profile::T) where T<:AbstractSurfProfile
     # Implement profile-specific reversal logic if needed
@@ -141,20 +157,26 @@ function reverseProfile!(profile::T) where T<:AbstractSurfProfile
 end
 
 """
+    reverseProfile!(profile::NoProfile)
+
+No-op: `NoProfile`'s only field (`curv`) is documented as never
+actually used, so there's nothing meaningful to reverse. Returns
+`profile` unchanged, for consistency with the other `reverseProfile!`
+methods' return-the-profile contract.
+"""
+function reverseProfile!(profile::NoProfile)
+    profile
+end
+
+"""
     reverseProfile!(profile::SurfProfileToroid)
 
-Intended to negate `profile`'s two curvatures in place (matching its
-sibling methods above/below), and return `profile`.
-
-**This method is broken**: it assigns `profile.curveX`/`profile.curveY`,
-neither of which is a real field of `SurfProfileToroid` (the actual
-fields are `curvX`/`curvY`, without the extra `e`) -- calling it throws
-a field-access error. See `TODO.md`.
+Negate `profile`'s two curvatures in place (matching its sibling
+methods above/below), and return `profile`.
 """
 function reverseProfile!(profile::SurfProfileToroid)
-    # Implement profile-specific reversal logic if needed
-    profile.curveX = -profile.curveX
-    profile.curveY = -profile.curveY
+    profile.curvX = -profile.curvX
+    profile.curvY = -profile.curvY
     return profile
 end
 

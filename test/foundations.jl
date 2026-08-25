@@ -171,13 +171,18 @@
             result2 = OpticTrace.defaultSetupGeo(testfunc, object, egeo.wavelength, egeo.parameters; numWL=2)
             @test result2 == (1.2, "hi") # wavelength[2]=0.6, scale*0.6=1.2
 
-            ret = OpticTrace.updateEGeo!(egeo)
-            @test ret == result1
-            # updateEGeo! is named/documented as mutating egeo, but its current
-            # implementation only calls defaultSetupGeo and returns the result --
-            # it never assigns back into egeo.geo. Discovered while writing this
-            # test; not previously tracked in TODO.md.
-            @test_broken egeo.geo == ret
+            # updateEGeo! mutates egeo.geo, so it needs a funcGeo that
+            # actually returns an Array{AbstractSurface}, matching the
+            # egeo.geo field's type -- testfunc above returns a plain Tuple,
+            # fine for exercising defaultSetupGeo directly (result1/result2),
+            # but not assignable into egeo.geo, so it's not reused here.
+            geoFunc(parameters, wl) = AbstractSurface[referencePlane("dyn", ORIGIN, ZAXIS, 1.0, parameters[:scale] * wl, "none")]
+            egeo2 = ExtendedGeometry(AbstractSurface[], geoFunc, OpticTrace.defaultSetupGeo, object,
+                [0.5, 0.6], Dict(:scale => 2.0, :tag => "hi"))
+
+            ret2 = OpticTrace.updateEGeo!(egeo2)
+            @test egeo2.geo === ret2
+            @test egeo2.geo[1].aperture.semiDiameter == 1.0 # scale*wavelength[1] = 2.0*0.5
         end
     end
 

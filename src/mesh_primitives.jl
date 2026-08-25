@@ -110,34 +110,11 @@ end
 """
     normals - we need normals to do raytraces. Use them to do fancy rendering
 
-    Despite the `s::AbstractSurface` signature, this only actually works
-    for `OptSurface` in practice: it calls `inOrOut(s)`, which only has
-    a method for `OptSurface`. Calling this on a `ModelSurface` (or any
-    other `AbstractSurface` subtype) throws a `MethodError` (see
-    `TODO.md`). `OptSurface` also has its own identical, redundant
-    method below.
+    Works for any `AbstractSurface` subtype: `inOrOut(s)` has a method
+    for every concrete surface type the package defines (`OptSurface`,
+    `ModelSurface`).
 """
 function GeometryBasics.normals(s::AbstractSurface, nvertices=60)
-    a= samplePoints(s.aperture,nvertices)
-    dir = inOrOut(s)
-    #=
-    if dir == -1
-        println("Normals reverse on : $(s.surfname)")
-    end
-    =#
-    inner(t) = dir .* s.toGlobalDir(surfNormal(Point3(t[1], t[2] ,sag(t[1], t[2], s.profile)),s.profile))
-    (inner(a) for a in a)
-end
-
-"""
-    GeometryBasics.normals(s::OptSurface, nvertices=60)
-
-Identical in body to `GeometryBasics.normals(s::AbstractSurface,
-nvertices=60)` above -- this more-specific `OptSurface` method shadows
-the generic one for `OptSurface` but computes exactly the same thing,
-so it's redundant (see `TODO.md`).
-"""
-function GeometryBasics.normals(s::OptSurface, nvertices=60)
     a= samplePoints(s.aperture,nvertices)
     dir = inOrOut(s)
     #=
@@ -165,6 +142,18 @@ function inOrOut(s::OptSurface)
     end
 
     r
+end
+
+"""
+    inOrOut(s::ModelSurface)
+
+`ModelSurface` has no refractive-index-in/out distinction to make (no
+`mod` field, unlike `OptSurface`) -- always returns `1`, so its normals
+point outward by convention. See `inOrOut(s::OptSurface)` above for the
+refractive-index-based convention used for actual optical surfaces.
+"""
+function inOrOut(s::ModelSurface)
+    1
 end
 
 
@@ -231,18 +220,13 @@ end
 """
     gbWidths(a::Washer, p::NoProfile)
 
-Intended to return the bounding-box widths of a `Washer`'s outer
-extent, as `SVector(2*semiDiameter, 2*semiDiameter, 0.)`. See
+Bounding-box widths of a `Washer`'s outer extent, as
+`SVector(2*semiDiameter, 2*semiDiameter, 0.)`. See
 `gbWidths(a::SizeLens, p::SurfProfileConic)`'s docstring above for the
 general contract shared by every `gbWidths` method.
-
-**This method is broken**: it references `a.SemiDiameter`/
-`a.SemiDiamater`, neither of which is a real field of `Washer` (the
-actual field is `semiDiameter`, and `SemiDiamater` is also misspelled)
--- calling it throws a field-access error. See `TODO.md`.
 """
 function gbWidths(a::Washer, p::NoProfile)
-    SVector(a.SemiDiameter, a.SemiDiamater, 0.)
+    SVector(2a.semiDiameter, 2a.semiDiameter, 0.)
 end
 
 """
@@ -271,32 +255,18 @@ GeometryBasics.origin(c::Washer) = c.base #the ORIGIN of the surface in global c
 """
     GeometryBasics.radius(c::Washer)
 
-Intended to be `gbRadius(c, c.profile)` -- see
+`gbRadius(c, c.profile)` -- see
 `gbRadius(aperture::Washer, profile::NoProfile)`'s docstring above.
-
-**This method is broken**: it calls `gbRadius(c.semiDiameter,
-c.profile)`, passing the bare `semiDiameter` number where `gbRadius`
-expects the whole `Washer`. No `gbRadius` method matches a number, so
-this throws a `MethodError`. Reachable from live plotting
-(`plotModelSurf!`/`Makie.mesh!`) whenever a `ModelSurface`'s aperture is
-a `RoundAperture` with a nonzero `obscure`, if Makie's mesh conversion
-calls this method. See `TODO.md`.
 """
-GeometryBasics.radius(c::Washer) = gbRadius(c.semiDiameter, c.profile) #fix
+GeometryBasics.radius(c::Washer) = gbRadius(c, c.profile)
 
 """
     GeometryBasics.widths(c::Washer)
 
-Intended to be `gbWidths(c, c.profile)` -- see
+`gbWidths(c, c.profile)` -- see
 `gbWidths(a::Washer, p::NoProfile)`'s docstring above.
-
-**This method is broken** the same way as `GeometryBasics.radius(c::Washer)`
-above: it calls `gbWidths(c.semiDiameter, c.profile)`, passing a number
-instead of the `Washer` itself, which throws a `MethodError` (on top of
-the separate bug already in `gbWidths(a::Washer, p::NoProfile)`
-itself). See `TODO.md`.
 """
-GeometryBasics.widths(c::Washer) = gbWidths(c.semiDiameter, c.profile)
+GeometryBasics.widths(c::Washer) = gbWidths(c, c.profile)
 
 """
     GeometryBasics.coordinates(s::Washer, nvertices=60)
@@ -364,22 +334,12 @@ have a finite clear aperture, else `sqrt(wo²+lo²)` (the obscuration
 half-widths, used as a fallback size measure). See
 `gbRadius(aperture::SizeLens, profile::SurfProfileConic)`'s docstring
 above for the general contract shared by every `gbRadius` method.
-
-**This method is broken** in the *finite*-aperture branch (i.e.
-whenever `wclear`/`lclear` are not both infinite -- the ordinary,
-everyday case for a `RectAperture`): it references `a.clear`, which is
-not a field of `RectAperture` (the actual fields are `wclear`/`lclear`)
--- calling it with a finite clear aperture throws a field-access error.
-The `wclear == ∞ && lclear == ∞` branch, by contrast, works correctly.
-Like `gbWidths(a::RectAperture, ...)` above, this currently has no live
-call site, so the bug hasn't surfaced -- but it would affect the common
-case, not just an edge case, if that changed. See `TODO.md`.
 """
 function gbRadius(a::RectAperture, profile::NoProfile)
     if a.wclear == ∞ && a.lclear == ∞
         sqrt(a.wo^2+a.lo^2) #if only a rectangular obscuration, then size that
     else
-        sqrt(a.wclear^2+a.clear^2) #can be infinity if one is finite
+        sqrt(a.wclear^2+a.lclear^2) #can be infinity if one is finite
     end
 end
 
@@ -428,17 +388,13 @@ end
 """
     gbWidths(a::Disk, p::NoProfile)
 
-Intended to return the bounding-box widths of a `Disk`, as
-`SVector(2*semiDiameter, 2*semiDiameter, 0.)`. See
-`gbWidths(a::SizeLens, p::SurfProfileConic)`'s docstring above for the
-general contract shared by every `gbWidths` method.
-
-**This method has the same bug as `gbWidths(a::Washer, p::NoProfile)`**
-above: it references the nonexistent fields `a.SemiDiameter`/
-`a.SemiDiamater` instead of `a.semiDiameter`. See `TODO.md`.
+Bounding-box widths of a `Disk`, as `SVector(2*semiDiameter,
+2*semiDiameter, 0.)`. See `gbWidths(a::SizeLens, p::SurfProfileConic)`'s
+docstring above for the general contract shared by every `gbWidths`
+method.
 """
 function gbWidths(a::Disk, p::NoProfile)
-   SVector(a.SemiDiameter, a.SemiDiamater, 0.)
+   SVector(2a.semiDiameter, 2a.semiDiameter, 0.)
 end
 
 """
@@ -467,28 +423,18 @@ GeometryBasics.origin(c::Disk) = c.base #the ORIGIN of the surface in global coo
 """
     GeometryBasics.radius(c::Disk)
 
-Intended to be `gbRadius(c, c.profile)` -- see
+`gbRadius(c, c.profile)` -- see
 `gbRadius(aperture::Disk, profile::NoProfile)`'s docstring above.
-
-**This method has the same bug as `GeometryBasics.radius(c::Washer)`**
-above: it calls `gbRadius(c.semiDiameter, c.profile)`, passing a number
-where `gbRadius` expects the whole `Disk`, which throws a
-`MethodError`. See `TODO.md`.
 """
-GeometryBasics.radius(c::Disk) = gbRadius(c.semiDiameter, c.profile) #fix
+GeometryBasics.radius(c::Disk) = gbRadius(c, c.profile)
 
 """
     GeometryBasics.widths(c::Disk)
 
-Intended to be `gbWidths(c, c.profile)` -- see
+`gbWidths(c, c.profile)` -- see
 `gbWidths(a::Disk, p::NoProfile)`'s docstring above.
-
-**This method has the same bug as `GeometryBasics.widths(c::Washer)`**
-above: it calls `gbWidths(c.semiDiameter, c.profile)`, passing a number
-instead of the `Disk` itself, on top of the separate bug already in
-`gbWidths(a::Disk, p::NoProfile)`. See `TODO.md`.
 """
-GeometryBasics.widths(c::Disk) = gbWidths(c.semiDiameter, c.profile)
+GeometryBasics.widths(c::Disk) = gbWidths(c, c.profile)
 
 """
     GeometryBasics.coordinates(s::Disk, nvertices=60)

@@ -146,14 +146,9 @@ end
     updateEGeo!(egeo; numWL=1) calls the function necessary to create a static geometry for tracing
         egeo    extended geometry to update
         numWL   which wavelength to use
-
-**This method is broken**: despite its name/docstring implying it
-mutates `egeo`, it only calls `defaultSetupGeo(...)` and returns the
-result -- it never assigns back into `egeo.geo`. Likely fix:
-`egeo.geo = defaultSetupGeo(...)`. See `TODO.md`.
 """
 function updateEGeo!(egeo::ExtendedGeometry; numWL = 1)
-    defaultSetupGeo(egeo.funcGeo, egeo.surfaceObject, egeo.wavelength, egeo.parameters; numWL = numWL)
+    egeo.geo = defaultSetupGeo(egeo.funcGeo, egeo.surfaceObject, egeo.wavelength, egeo.parameters; numWL = numWL)
 end
 
 

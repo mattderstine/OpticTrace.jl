@@ -36,9 +36,14 @@
             @test lens[2].mod.refIndexIn ≈ riN_SF11(λ)
             @test lens[2].mod.refIndexOut == refIndexDefault
 
-            # order="reverse" forwards to lensSinglet's known
-            # Base.compute_assumed_setting bug (see TODO.md)
-            @test_throws MethodError OpticTrace.lens_EO38398(base, dir, λ; order = "reverse")
+            lensRev = OpticTrace.lens_EO38398(base, dir, λ; order = "reverse")
+            @test length(lensRev) == 2
+            @test lensRev[1].profile.curv == 0.0
+            @test lensRev[2].profile.curv == -8.496176720475789867E-02
+            @test lensRev[1].base.base == base
+            @test lensRev[2].base.base ≈ base + 3.1 .* dir
+            @test lensRev[1].mod.refIndexOut ≈ riN_SF11(λ)
+            @test lensRev[2].mod.refIndexIn ≈ riN_SF11(λ)
         end
 
         @testset "lens_EO68001" begin
@@ -52,7 +57,12 @@
             @test lens[1].mod.refIndexOut ≈ riN_BK7(λ)
             @test lens[2].mod.refIndexIn ≈ riN_BK7(λ)
 
-            @test_throws MethodError lens_EO68001(base, dir, λ; order = "reverse")
+            lensRev = lens_EO68001(base, dir, λ; order = "reverse")
+            @test lensRev[1].profile.curv == 0.0
+            @test lensRev[2].profile.curv == 3.869969040247679681E-02
+            @test lensRev[2].base.base ≈ base + 3.5 .* dir
+            @test lensRev[1].mod.refIndexOut ≈ riN_BK7(λ)
+            @test lensRev[2].mod.refIndexIn ≈ riN_BK7(λ)
         end
 
         @testset "lens_EO67548" begin
@@ -64,7 +74,12 @@
             @test lens[1].aperture.semiDiameter == 12.5
             @test lens[1].mod.refIndexOut ≈ riN_BK7(λ)
 
-            @test_throws MethodError lens_EO67548(base, dir, λ; order = "reverse")
+            lensRev = lens_EO67548(base, dir, λ; order = "reverse")
+            @test lensRev[1].profile.curv == 0.0
+            @test lensRev[2].profile.curv == -2.579979360165119903E-02
+            @test lensRev[2].base.base ≈ base + 4.5 .* dir
+            @test lensRev[1].mod.refIndexOut ≈ riN_BK7(λ)
+            @test lensRev[2].mod.refIndexIn ≈ riN_BK7(λ)
         end
 
         @testset "lens_EO67652" begin
@@ -76,7 +91,11 @@
             @test lens[2].base.base ≈ base + 3.5 .* dir
             @test lens[1].mod.refIndexOut ≈ riN_BK7(λ)
 
-            @test_throws MethodError lens_EO67652(base, dir, λ; order = "reverse")
+            lensRev = lens_EO67652(base, dir, λ; order = "reverse")
+            @test lensRev[1].profile.curv == 1.304461257500649958E-02
+            @test lensRev[2].profile.curv == -1.304461257500649958E-02
+            @test lensRev[2].base.base ≈ base + 3.5 .* dir
+            @test lensRev[1].mod.refIndexOut ≈ riN_BK7(λ)
         end
     end
 

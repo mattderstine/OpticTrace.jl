@@ -57,13 +57,9 @@
         @testset "reflectOAConic" begin
             offset = Vec3(0.0, 0.5, -1.0)
 
-            # calling without an explicit attributesSurfaces hits the broken
-            # default keyword value (`attributeSurfaces`, missing an "s"),
-            # an undefined variable -- see TODO.md.
-            @test_throws UndefVarError reflectOAConic("s5", ORIGIN, ZAXIS, YAXIS, offset, 1.0, 1.0, 0.02, 0.0, 5.0, coating)
-
-            # passing it explicitly avoids the bug
-            surf = reflectOAConic("s5", ORIGIN, ZAXIS, YAXIS, offset, 1.0, 1.0, 0.02, 0.0, 5.0, coating; attributesSurfaces=attributesSurfaces)
+            # attributesSurfaces defaults to the module-level attributesSurfaces
+            # dictionary, so it need not be passed explicitly.
+            surf = reflectOAConic("s5", ORIGIN, ZAXIS, YAXIS, offset, 1.0, 1.0, 0.02, 0.0, 5.0, coating)
             @test surf.profile isa SurfProfileOAConic
             @test surf.profile.curv == 0.02
             @test surf.profile.ϵ == 0.0
@@ -71,6 +67,10 @@
             @test surf.mod isa MirrorR
             @test surf.mod.refIndexIn == 1.0
             @test surf.mod.refIndexOut == 1.0
+
+            # passing it explicitly still works
+            surf2 = reflectOAConic("s5", ORIGIN, ZAXIS, YAXIS, offset, 1.0, 1.0, 0.02, 0.0, 5.0, coating; attributesSurfaces=attributesSurfaces)
+            @test surf2.profile.curv == 0.02
         end
 
         @testset "reflectOAP" begin
@@ -156,10 +156,16 @@
             @test lensFwd[2].mod.refIndexIn == riFunc(wl)
             @test lensFwd[2].mod.refIndexOut == refIndexDefault
 
-            # order="reverse" is a known bug: passes a stray Julia compiler
-            # internal (Base.compute_assumed_setting) instead of `coating`
-            # to the second refractSphere call -- see TODO.md.
-            @test_throws MethodError lensSinglet(base, dir, curv1, curv2, thick, wl, riFunc, semiDiam; order="reverse", lensname="L")
+            lensRev = lensSinglet(base, dir, curv1, curv2, thick, wl, riFunc, semiDiam; order="reverse", lensname="L")
+            @test length(lensRev) == 2
+            @test lensRev[1].profile.curv == -curv2
+            @test lensRev[2].profile.curv == -curv1
+            @test lensRev[1].base.base == base
+            @test lensRev[2].base.base ≈ base + thick .* dir
+            @test lensRev[1].mod.refIndexIn == refIndexDefault
+            @test lensRev[1].mod.refIndexOut == riFunc(wl)
+            @test lensRev[2].mod.refIndexIn == riFunc(wl)
+            @test lensRev[2].mod.refIndexOut == refIndexDefault
         end
 
         @testset "lensASinglet" begin
