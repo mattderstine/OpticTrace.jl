@@ -13,15 +13,15 @@ export plotSpotDiagram
 
 """
     saveFigure(fileNameStub, fig; startnum = 0, directory = "")
-    saves Makie figure to a file
-    returns the fig object
+    saves Makie figure to a file, then displays it
+    returns nothing (the return value of the trailing `display(fig)` call)
 
     Eventually will check for the exisitence of the file and add increasing numbers to avoid overwrite
     Currently just writes to fileNameStub*".png" in the current directory, overwriting previous files
 
     fileNameStub    string with base name for files to be stored
     fig             Makie figure object
-    startnum        number to append to the stub. If 0, nothing is appended 
+    startnum        number to append to the stub. If 0, nothing is appended
     directory       location of where to store the figure image
 
 """
@@ -35,14 +35,21 @@ function saveFigure(fileNameStub, fig; startnum = 0, directory = "")
 end
 
 #try to depricate this name
-function printFigure(fileNameStub, fig; startnum = 0, directory = "") 
+"""
+    printFigure(fileNameStub, fig; startnum = 0, directory = "")
+
+Deprecated alias for `saveFigure` -- prints a deprecation notice, then
+delegates to `saveFigure(fileNameStub, fig; startnum, directory)`. See
+that method's docstring above for the full parameter/return contract.
+"""
+function printFigure(fileNameStub, fig; startnum = 0, directory = "")
     println("printFigure is depricated. Use saveFigure instead.")
     saveFigure(fileNameStub, fig; startnum, directory)
 end
 
 
 """
-    multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButtonColor = RGBf0(0.8, 0.94, 0.8), activeFig = 1,  size = (1200,900))
+    multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButtonColor = RGBf(0.8, 0.94, 0.8), activeFig = 1,  size = (1200,900))
     sets up a stack of figures with buttons to navigate between them. Includes a button to save the figure image to a file
     returns an array of Makie figures
 """
@@ -54,17 +61,17 @@ function multipleFigures(numFigs = 5; fileNameStub = "FigurePrint", activeButton
         fig[1, 1] = buttongrid = GridLayout(tellwidth = true, tellheight=false)
         printButtonNum = numFigs + 1
         buttons = buttongrid[1:printButtonNum, 1] = [Button(fig, label = (i<=numFigs ? "$i" : "Save")) for i in 1:printButtonNum]
-        
+
         printButton = buttons[printButtonNum]
 
         saveColor = buttons[1].buttoncolor[]
-        
+
 
         for (j,button) in enumerate(buttons)
             if i==j
                 button.buttoncolor[] = activeButtonColor
             end
-            
+
             on(button.clicks) do n
                 #println("$(button.label[]) was clicked $n times.")
                 if button == printButton
@@ -85,9 +92,28 @@ end
 
 
 
+
 #plotSurface3D!(scene, s::OptSurface; color=:aquamarine2)=Makie.mesh!(scene, s, color=color, fxaa = true, transparency = true)#someday add options to display mesh
+"""
+    plotSurface3D!(scene, s::OptSurface; transparency=false)
+
+Render `s` into `scene` as a Makie mesh, colored `s.color`
+(`Makie.mesh!(scene, s, color=s.color, fxaa=true, transparency)`).
+`s`'s own `GeometryBasics` overloads (`src/mesh_primitives.jl`) supply
+the mesh geometry. See `plotSurface3D!(scene, s::ModelSurface)` below
+for the non-`OptSurface` sibling method (it dispatches differently, via
+`plotModelSurf!`, rather than a direct `Makie.mesh!` call).
+"""
 plotSurface3D!(scene, s::OptSurface; transparency = false)=Makie.mesh!(scene, s, color=s.color, fxaa = true, transparency = transparency)#someday add options to display mesh
 
+"""
+    plotGeometry3D!(scene, geometry)
+
+Render every surface in `geometry` into `scene` via `plotSurface3D!`.
+Returns `scene`. See `plotGeometry3D(fig, geometry)`'s docstring above
+for the higher-level entry point that also sets up the `LScene`/axes
+this is meant to be plotted into.
+"""
 function plotGeometry3D!(scene, geometry)
     for geo in geometry
         plotSurface3D!(scene, geo)
@@ -97,10 +123,11 @@ end
 
 
 """
-plotGeometry3D(fig, geometry; size = (1200,700))
+plotGeometry3D(geometry; size = (1200,700))
 geometry is an array of OptSurfaces
-resoltion is the initial window size
-returns a Makie Figure and LScene located at [1,1] 
+size is the initial window size
+creates a new Figure and delegates to plotGeometry3D(fig, geometry)
+returns a Makie Figure and LScene located at [1,1]
 
 """
 function plotGeometry3D(geometry; size = (1200,700))
@@ -108,6 +135,14 @@ function plotGeometry3D(geometry; size = (1200,700))
     plotGeometry3D(fig, geometry)
 end
 
+"""
+plotGeometry3D(fig, geometry)
+geometry is an array of OptSurfaces
+fig is an existing Makie Figure to plot into
+draws coordinate axes and the geometry into an LScene at fig[1,1]
+returns the Makie Figure and LScene located at [1,1]
+
+"""
 function plotGeometry3D(fig, geometry)
     ax = fig[1,1]=LScene(fig, show_axis=false, scenekw = (camera = cam3d_cad!,))
     linesegments!(ax,[Point3f(0, 0,0) => Point3f(0,0,1)],color=:green, linewidth=2)
@@ -117,10 +152,32 @@ function plotGeometry3D(fig, geometry)
     fig,ax
 end
 
+"""
+    plotSurface3D!(scene, s::ModelSurface)
+
+Render `s` into `scene` by dispatching on its aperture type to
+`plotModelSurf!(scene, s.aperture, s)` (see that function's
+`RectAperture`/`RoundAperture` methods below) -- `ModelSurface`s have
+no mesh profile of their own to draw (see `NoProfile`), so this draws
+their aperture shape instead. Compare `plotSurface3D!(scene,
+s::OptSurface; transparency=false)` above, which draws the surface's
+actual profile mesh directly.
+"""
 function plotSurface3D!(scene, s::ModelSurface)
     plotModelSurf!(scene, s.aperture, s) #dispatch on s.aperture
 end
 
+"""
+    plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize=0.3)
+
+Render `s`'s rectangular aperture into `scene`: an obscuration
+rectangle (if `a.wo`/`a.lo` are nonzero), and a "frame" of four
+polygons around the clear-aperture rectangle (if `a.wclear`/`a.lclear`
+are both finite; `dsize` sets the frame's width relative to the
+aperture size). Draws nothing for whichever piece doesn't apply. See
+`plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize=0.3)`
+below for the round-aperture sibling method.
+"""
 function plotModelSurf!(scene, a::RectAperture, s::ModelSurface, dsize = 0.3)
     #this is brute force. I'm still learning...
     connect = [
@@ -187,6 +244,18 @@ end
 
 #Makie.mesh!(scene, s, color = :orange,  transparency=true, camera=Makie.cam3d_cad!)#someday add options to display mesh
 
+"""
+    plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize=0.3)
+
+Render `s`'s round aperture into `scene`: a `Disk` mesh for the central
+obscuration (if `a.obscure != 0`), and a `Washer` mesh for the outer
+clear-aperture ring (if `a.semiDiameter != ∞`). `dsize` is accepted for
+signature symmetry with the `RectAperture` method above but is unused
+here (`Disk`/`Washer` don't take a frame-width parameter). See
+`Washer`/`Disk`'s docstrings (`src/mesh_primitives.jl`) for their known
+`GeometryBasics.radius`/`widths` bugs, which this rendering path can
+trigger (see `TODO.md`).
+"""
 function plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize = 0.3)
     if a.obscure != 0.
         Makie.mesh!(scene, Disk(s.base.base, s.base.dir,
@@ -205,7 +274,7 @@ end
 trcAndPrintPlot!(ray::Ray, geo; color=:blue)
     trace an absolute ray
     print the ray
-    plot the ray on the last LScene 
+    plot the ray on the last LScene
 """
 function trcAndPrintPlot!(ray::Ray, geo; color=:blue)
 
@@ -215,7 +284,7 @@ function trcAndPrintPlot!(ray::Ray, geo; color=:blue)
 end
 
 """
-trcAndPrintPlot!(scene, ray::Ray, geo; color=:blue)
+trcAndPrintPlotRay!(scene, ray::Ray, geo; color=:blue)
     trace an absolute ray
     print the trace
     plot the ray on scene
@@ -231,9 +300,9 @@ end
 trcAndPlotRay!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
      trace an absolute ray
     plot the ray on scene
-    return the trace
+    return the status & trace
     set clipmsg=true to print a message if the ray does not reach the end of geo
-        
+
 """
 function trcAndPlotRay!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
     status, trc = traceGeometry(ray, geo)
@@ -242,6 +311,15 @@ function trcAndPlotRay!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
     status, trc
 end
 
+"""
+    plotTrace!(scene, trace::Vector{Trace}; color=:blue)
+
+Plot an already-computed `trace` (e.g. from `traceGeometry`/
+`traceGeometryRel`) into `scene`, connecting each step's ray base
+point. Returns `scene`. Unlike `trcAndPlotRay!`/`trcAndPlotRayRel!`
+above/below, this doesn't trace a ray itself -- it just draws one you
+already have.
+"""
 function plotTrace!(scene, trace::Vector{Trace}; color=:blue)
     Makie.lines!(scene, [a.ray.base for a in trace], color=color)
     scene
@@ -265,7 +343,7 @@ trcAndPlotRayRel!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
     plot the ray on scene
     return the status & trace
     set clipmsg=true to print a message if the ray does not reach the end of geo
-        
+
 """
 function trcAndPlotRayRel!(scene, ray::Ray, geo; color=:blue, clipmsg=false)
     status, trc = traceGeometryRel(ray, geo)
@@ -281,7 +359,7 @@ trcAndPlotRayRel!(ray::Ray, geo; color=:blue, clipmsg=false)
     plot the ray on the active scene
     return the status & trace
     set clipmsg=true to print a message if the ray does not reach the end of geo
-        
+
 """
 function trcAndPlotRayRel!(ray::Ray, geo; color=:blue, clipmsg=false)
     status, trc = traceGeometryRel(ray, geo)
@@ -382,11 +460,20 @@ function getrefbase(r::Point3, geo, surfview)
 end
 
 
+"""
+    SKEWLIMIT
+
+Threshold on `cos(Δθ)` between the local x/y reference directions used
+by `plotRayFan!`: if the two directions' dot product exceeds this, a
+"significant skew distortion" warning is printed, since `plotRayFan!`'s
+y/x decomposition assumes they're close to orthogonal.
+"""
 const SKEWLIMIT = 0.1  #cos(θ) limit for skew rays in rayfan calculation
 
 """
-    plotRayFan!(scene, point, max angle, geometry; color=:blue ,surfview=Surface Name, points=33, θmin = min angle )
-    returns Makie scene of plot of rayfan
+    plotRayFan!(fig, point, max angle, geometry; color=:blue ,surfview=Surface Name, points=33, θmin = min angle )
+    plots the y- and x-fan ray-intercept curves into fig
+    returns refbase, the reference intercept point the fan is measured relative to
 
     current version assumes telecentric pupil/stop (i.e. reference ray θ=0)
 
@@ -410,7 +497,7 @@ function plotRayFan!(fig, r::Point3, θmax::Float64, geo; surfview = "end", colo
         println("θx = $(s.toLocalDir(refxdir)⋅XAXIS)   θy = $(s.toLocalDir(refydir)⋅YAXIS)")
     =#
     end
-    
+
 
     #find the reference local reference intercept coordinates
     refbase = getrefbase(r, geo, surfview)
@@ -456,8 +543,8 @@ function plotRayFan!(fig, r::Point3, θmax::Float64, geo; surfview = "end", colo
     #=
     the right way to do this is to either:
     a) assume the final surface has the yaxis aligned properly to the input rays <- use this one!
-    b) find the axis directions from the intersection points of the x&y rays. 
-    
+    b) find the axis directions from the intersection points of the x&y rays.
+
     =#
     #find the largest of x & y at the edge and use it for the sign (this gives the wrong answer in some situations)
     #yv = abs(raysy[end][1]) > abs(raysy[end][2]) ? 1 : 2
@@ -466,7 +553,7 @@ function plotRayFan!(fig, r::Point3, θmax::Float64, geo; surfview = "end", colo
     #y = [sign(t[yv])*norm(t) for t in raysy] #use norm in case the output intersections are not on an axis
     #x = [sign(t[xv])*norm(t) for t in raysx]
 
-    y = [t[2] for t in raysy] 
+    y = [t[2] for t in raysy]
     x = [t[1] for t in raysx]
 
     a,p= Makie.lines(fig, θr, y, color=color, linestyle = :solid)
@@ -516,6 +603,25 @@ end
 
 =#
 
+"""
+    perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, points::Int64, geo; surfview="end")
+
+Trace `points` rays arranged around a circle of `radius` centered at
+`r` (in the local x/y plane), all launched at polar angle `θ` from the
+local z axis, and collect each one's ray at `surfview` (see
+`tracenumFromName`). Intended to return a `Vector{Ray}` of length
+`points`.
+
+**This method has a bug**: if any ray fails to trace (`status != 0`),
+it prints a status message, stores a NaN `Ray` in `rays[i]`, and then
+executes a bare `return` -- which returns `nothing`, discarding the
+`rays` vector entirely (including any rays already successfully traced
+before this point), rather than continuing to the next perimeter angle
+or returning the partially-`NaN`-filled vector. Very likely a
+`continue` was intended instead of `return`. This also means
+`plotPerimeterRays`/`plotPerimeterRays!` below will fail if fed a `geo`
+where any perimeter ray misses. See `TODO.md`.
+"""
 function perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, points::Int64, geo;surfview = "end")
     trcStatMsg=("Normal","Missed","TIR","Clipped")
     rays = Vector{Ray}(undef, points)
@@ -536,22 +642,54 @@ function perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, poi
     rays
 end
 
+"""
+    plotPerimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview="end")
+
+Trace a ring of perimeter rays via `perimeterRays` and plot them as
+arrows (base point + direction) in a new figure. See
+`plotPerimeterRays!`/`plotPerimeterRays!(scene, ...)` below for the
+mutating variants (into the active scene, or into a given `scene`).
+Subject to the `perimeterRays` bug noted above if any ray misses.
+"""
 function plotPerimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)
     Makie.arrows([Makie.Point3f(a.base) for a in pr], [Makie.Point3f(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
 end
 
+"""
+    plotPerimeterRays!(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview="end")
+
+Like `plotPerimeterRays` above, but plots into the active scene
+(`Makie.arrows!` with no explicit scene) instead of creating a new
+figure.
+"""
 function plotPerimeterRays!(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)
     Makie.arrows!([Makie.Point3f(a.base) for a in pr], [Makie.Point3f(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
 end
 
+"""
+    plotPerimeterRays!(scene, r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview="end")
+
+Like `plotPerimeterRays` above, but plots into the given `scene`.
+"""
 function plotPerimeterRays!(scene, r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)
     Makie.arrows!(scene, [Makie.Point3f(a.base) for a in pr], [Makie.Point3f(a.dir) for a in pr], linecolor=color, arrowcolor=color, arrowsize=0.1)
 end
 
 
+"""
+    rayHeatmap(pts; mcbins::Int64=25, center=(0.,0.), width=25.)
+
+Bin `pts` (an iterable of 2D points, e.g. ray intercepts) into a
+`mcbins`x`mcbins` 2D histogram over a `width`x`width` window centered
+at `center`, and plot it as a new Makie heatmap figure.
+
+Returns `(d, fig)`: `d` is the `StatsBase.Histogram`, `fig` is the
+Makie heatmap plot object. See `rayHeatmap!` below for the mutating
+variant (into an existing axis).
+"""
 function rayHeatmap(pts; mcbins::Int64=25, center = (0., 0.), width = 25.)
     cprime=transpose(hcat(pts...))
     xmin = center[1] - width/2
@@ -565,6 +703,15 @@ function rayHeatmap(pts; mcbins::Int64=25, center = (0., 0.), width = 25.)
     (d,heatmap(d.edges[1], d.edges[2], d.weights))
 end
 
+"""
+    rayHeatmap!(ax, pts; mcbins::Int64=25, center=(0.,0.), width=25.)
+
+Like `rayHeatmap` above, but plots into the existing axis `ax`
+(`Makie.heatmap!`) instead of creating a new figure.
+
+Returns `(d, plt)`: `d` is the `StatsBase.Histogram`, `plt` is the
+Makie heatmap plot object.
+"""
 function rayHeatmap!(ax, pts; mcbins::Int64=25, center = (0., 0.), width = 25.)
     cprime=transpose(hcat(pts...))
     xmin = center[1] - width/2
@@ -580,6 +727,28 @@ function rayHeatmap!(ax, pts; mcbins::Int64=25, center = (0., 0.), width = 25.)
 end
 
 
+"""
+    computeExitPupilLoc(geo; epsilon=0.001, format="quiet")
+
+Estimate the z location (in the "stop" surface's local frame) of the
+system's exit pupil, by tracing a small-`epsilon`-angle ray from the
+stop through the rest of `geo` and finding where its y (and by
+assumption x) coordinate crosses zero. `format` is passed to
+`printTrcCoords` when not `"quiet"` (any other value prints the trace).
+
+Returns `(status, zpupil)`:
+- `status` -- `0` on success, `1` if the reference ray didn't make it
+  through `geo` (in which case the second value is `ORIGIN`, a
+  `Point3`, not a `Float64` -- callers must check `status` before using
+  the second value, since its type differs between the two cases)
+- `zpupil::Float64` -- the estimated exit pupil z location (on success)
+
+Only handles the case where the reference ray's final direction has a
+nonzero y component (`dirb[2] != 0.`); otherwise returns `zpupil = NaN`.
+The commented-out block below flags this as a known simplification
+("should calculate the distance in local coordinates rather than
+assume the global Z direction").
+"""
 function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
     surfnumStop = tracenumFromName("stop", geo)-1
     locgeo = geo[surfnumStop:end]
@@ -613,7 +782,7 @@ function computeExitPupilLoc(geo; epsilon = 0.001, format="quiet")
 
     localdir = geo[end].toLocalDir(dirb)
     localbase = geo[end].toLocalCoord(baseb)
-    
+
 =#
     if dirb[2] != 0.
         lenzero = -baseb[2]/dirb[2]
@@ -631,7 +800,8 @@ end
 
 """
     plotOPD!(scene, point, max angle, geometry; color=:blue ,surfview=Surface Name, points=33, θmin = min angle )
-    returns Makie scene of plot of OPD
+    plots the x- and y-fan OPD curves into scene
+    returns θr, opdx, opdy
 
     current version assumes telecentric pupil/stop (i.e. reference ray θ=0)
 
@@ -696,7 +866,7 @@ function plotOPD!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color
 
     for (i,θ) in enumerate(θr)
         #println("dir = $([0.,sin(θ), cos(θ)])")
-        opdy[i] = opdRel(Ray(r, Vec3(0.,sin(θ), cos(θ))), refTrace,testgeo)*1000.0/λ 
+        opdy[i] = opdRel(Ray(r, Vec3(0.,sin(θ), cos(θ))), refTrace,testgeo)*1000.0/λ
         opdx[i] = opdRel(Ray(r, Vec3(sin(θ), 0., cos(θ))), refTrace,testgeo)*1000.0/λ
     end
     ax = Axis(scene[1,1]; title=label)
@@ -705,6 +875,28 @@ function plotOPD!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color
     θr, opdx, opdy
 end
 
+"""
+    plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop="stop", surfview="end", color=:blue, points=33, focusOffset=0., label="")
+
+`ExtendedGeometry` sibling of `plotOPD!(scene, r::Point3, θmax::Float64,
+geo; ...)` above: rebuilds `egeo`'s geometry (`updateEGeo!`), picks a
+reference ray at normalized object height `h` (`0` to `1`) through the
+`egeo.surfaceObject`'s aperture, and plots x/y OPD-vs-position curves
+(rather than OPD-vs-angle, as the `geo` method does) into `scene`.
+Requires `egeo.geo[1]` to be named `"stop"` or `"pupil"`; prints a
+message and returns `nothing` if not (or if the reference/exit-pupil
+tracing fails).
+
+Intended to return `(θr, opdx, opdy)`, matching its sibling above.
+
+**This method is broken**: it references `θr`, which is never assigned
+anywhere in this method's body (the loop here iterates over `x =
+LinRange(-sizeP, sizeP, points)`, not an angle range) -- calling it
+throws `UndefVarError: θr not defined` at the final line, after all of
+the tracing/plotting work has already been done. Has no call site
+anywhere in `src/`/`test/`, which is presumably why this hasn't
+surfaced. See `TODO.md`.
+"""
 function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", surfview = "end", color = :blue, points=33, focusOffset = 0., label="")
     #trcStatMsg=("Normal","Missed","TIR","Clipped")
     opdy = Vector{Float64}(undef, points)
@@ -793,6 +985,16 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
     θr, opdx, opdy
 end
 
+"""
+    plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop="stop", surfview="end", color=:blue, points=33, focusOffset=0., label="")
+
+Like `plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; ...)` above
+(same reference-ray/exit-pupil setup, same `"stop"`/`"pupil"`
+requirement), but plots a full 2D OPD *surface* over an `x`/`y` grid
+(`Makie.surface!`) instead of two 1D x/y cross-section curves.
+
+Returns `scene`.
+"""
 function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", surfview = "end", color = :blue, points=33, focusOffset = 0., label="")
 
     updateEGeo!(egeo)
@@ -864,13 +1066,21 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     opdfunc(xi, yi) = opdRel(Ray(Point3(xi, yi, 0.), normalize(Vec3(xi, yi, z).-r)), refTrace, finalgeo)/wl
     opd = [opdfunc(xi, yi) for xi in x, yi in y]
 
-    
+
     Makie.surface!(scene, x,y,opd, label=label)
     #scale!(scene, 1, 1, 1000)
     scene
 end
 
 
+"""
+    plotXSag!(scene, xmax, ycut, profile)
+
+Plot `sag(x, ycut, profile)` for `x` ranging over `(-xmax, xmax)` (160
+points) into `scene` -- a cross-section of the surface's sag along the
+local x direction, at fixed y = `ycut`. See `plotYSag!` below for the
+analogous y-direction cross-section.
+"""
 function plotXSag!(scene, xmax, ycut, profile)
     sag1(x) = sag(x, Float64(ycut), profile)
     x = range(-xmax, stop = xmax, length = 160)
@@ -878,6 +1088,15 @@ function plotXSag!(scene, xmax, ycut, profile)
    lines!(scene, x,z, color=:blue)
 end
 
+"""
+    plotYSag!(scene, xmax, ycut, profile)
+
+Plot `sag(ycut, x, profile)` for `x` ranging over `(-xmax, xmax)` (160
+points) into `scene` -- a cross-section of the surface's sag along the
+local y direction, at fixed x = `ycut` (despite the parameter's name,
+which mirrors `plotXSag!`'s -- there, `ycut` fixes y; here, it fixes
+x). See `plotXSag!` above for the analogous x-direction cross-section.
+"""
 function plotYSag!(scene, xmax, ycut, profile)
     sag1(x) = sag(Float64(ycut), x, profile)
     x = range(-xmax, stop = xmax, length = 160)
@@ -902,6 +1121,21 @@ function plotSpotDiagram(fig, spts, center, rmsradius, deltaz; title = "Spot Dia
     fig
 end
 
+"""
+    plotSpotDiagram(fig, spts; title = "Spot Diagram")
+
+Like `plotSpotDiagram(fig, spts, center, rmsradius, deltaz; ...)`
+above, but without the RMS-radius circle/label overlay -- just the
+scatter plot of `spts`. See that method's docstring above for the
+general contract shared by both.
+
+**Likely bug**: unlike its sibling above (which correctly writes
+`Axis(fig[1,1]; title, tellwidth=false)`), this method's
+`Axis(fig[1,1], title, tellwidth=false)` passes `title` positionally
+rather than as a keyword (missing `;`) -- `Makie.Axis` doesn't accept a
+title positionally, so this likely throws a `MethodError`. See
+`TODO.md`.
+"""
 function plotSpotDiagram(fig, spts; title = "Spot Diagram")
     ax = Axis(fig[1,1], title, tellwidth = false)
     scatter!(ax, spts, markersize=2, color=:blue)

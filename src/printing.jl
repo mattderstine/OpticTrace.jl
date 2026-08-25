@@ -24,8 +24,7 @@ tracenumFromName(surfview, geo) = numsurfFromName(surfview, geo)+1
         surfview -string with user defined name of the surface
         geo - geometry
 
-    returns the surface number +1. This indexes properly for Trace results
-TBW
+    returns the surface number. tracenumFromName adds 1 to this to index properly for Trace results
 """
 function numsurfFromName(surfview, geo)
     if (surfview == "end")
@@ -41,8 +40,8 @@ function numsurfFromName(surfview, geo)
 end
 
 """
-    surfaceFromName(surfview, geo)
-    surfview -string with user defined name of the surface
+    surfaceFromName(name, geo)
+    name -string with user defined name of the surface
     geo - geometry
 
     returns the surface corresponding to the name
@@ -50,9 +49,9 @@ end
 surfaceFromName(name, geo)= geo[tracenumFromName(name,geo)-1]
 
 """
-printTrcCoords(ray::Ray, geo; color=:blue, clipmsg=false)
+printTrcCoords(status, trc, geo; format="normal")
     print a trace of ray on geo
-        
+
 """
 function printTrcCoords(status, trc, geo; format="normal")
 
@@ -74,9 +73,9 @@ function printTrcCoords(status, trc, geo; format="normal")
 end
 
 """
-trcandPrintRay(ray::Ray, geo; color=:blue, clipmsg=false)
+trcAndPrintRay(ray::Ray, geo)
     trace and print a trace of ray on geo
-    ray is in absolute coordinates    
+    ray is in absolute coordinates
 """
 function trcAndPrintRay(ray::Ray, geo)
     status, trc = traceGeometry(ray, geo)
@@ -85,10 +84,10 @@ function trcAndPrintRay(ray::Ray, geo)
 end
 
 """
-trcandPrintRayRel(ray::Ray, geo; color=:blue, clipmsg=false)
+trcAndPrintRayRel(ray::Ray, geo)
     trace and print a trace of ray on geo
-    ray is in local coordinates 
-    returns the trace   
+    ray is in local coordinates
+    returns the trace
 """
 function trcAndPrintRayRel(ray::Ray, geo)
     status, trc = traceGeometryRel(ray, geo)
@@ -99,8 +98,8 @@ end
 """
 printTrcLen(status, trc, geo)
     print the lengths of a trace, trc, on geo
-    
-    returns the totaldelta, total OPD and total reduced distance
+
+    returns the totaldelta, total OPL (optical path length) and total reduced distance
 """
 function printTrcLen(status, trc, geo)
     trcStatMsg=("Normal","Missed","TIR","Clipped")
@@ -133,17 +132,48 @@ function printTrcLen(status, trc, geo)
 end
 
 
+"""
+    trcAndPrintLengthsRel(ray::Ray, geo)
+
+Trace `ray` (in local coordinates, relative to `geo`'s first surface --
+see `traceGeometryRel`) and print its per-surface lengths/OPL/reduced
+distance via `printTrcLen`. Returns whatever `printTrcLen` returns
+(`[totaldelta, totalOPL, totalRD]`). See `trcAndPrintLengths` below for
+the absolute-coordinates sibling.
+"""
 function trcAndPrintLengthsRel(ray::Ray, geo)
     status, trc = traceGeometryRel(ray, geo)
     printTrcLen(status, trc, geo)
 end
 
+"""
+    trcAndPrintLengths(ray::Ray, geo)
+
+Trace `ray` (in absolute/global coordinates -- see `traceGeometry`) and
+print its per-surface lengths/OPL/reduced distance via `printTrcLen`.
+Returns whatever `printTrcLen` returns (`[totaldelta, totalOPL,
+totalRD]`). See `trcAndPrintLengthsRel` above for the local-coordinates
+sibling.
+"""
 function trcAndPrintLengths(ray::Ray, geo)
     status, trc = traceGeometry(ray, geo)
     printTrcLen(status, trc, geo)
 end
 
 
+"""
+    printSurfNames(geo; fulldir=:false)
+
+Print a numbered, one-line-per-surface listing of `geo`: each surface's
+name, base point, and local z direction, plus its local y direction too
+if `fulldir` is truthy.
+
+The default, `fulldir = :false`, looks like a `Symbol` but isn't one:
+`false` is a reserved literal token, not a valid identifier, so Julia's
+`:` quoting operator applied to it just evaluates to the plain boolean
+`false` (`typeof(:false) === Bool`). Equivalent to writing
+`fulldir = false`, just unusual style.
+"""
 function printSurfNames(geo; fulldir = :false)
     for (i, surf) in enumerate(geo)
         base = surf.base.base
@@ -173,13 +203,29 @@ function printMissed(m, geo)
     end
 end
 
+"""
+    printSurface(surf)
+
+Shorthand for `printSurface(1, surf)` -- print `surf` labeled as
+surface number 1. See `printSurface(n, surf::OptSurface)`/
+`printSurface(n, surf::ModelSurface)` below for what actually gets
+printed.
+"""
 printSurface(surf) = printSurface(1, surf)
 
+"""
+    printSurface(n, surf::OptSurface)
+
+Print one line for `surf`, labeled `n`: its name, base point, aperture,
+profile, and `mod` (refract/reflect/diffuse behavior). See
+`printSurface(n, surf::ModelSurface)` below for the sibling method
+(same, minus `mod`, since `ModelSurface` has none).
+"""
 function printSurface(n, surf::OptSurface)
     base = surf.base.base
     strbase = @sprintf("(%10.5f, %10.5f, %10.5f)",base[1], base[2], base[3] )
     println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $(strbase)\n$(" "^20)$(surf.aperture)  $(surf.profile)   $(surf.mod)")
-end  
+end
 #=
 struct ModelSurface <: AbstractSurface  #use the data to overload GemoetryBasics
     surfname::String
@@ -193,18 +239,42 @@ struct ModelSurface <: AbstractSurface  #use the data to overload GemoetryBasics
     toLocalDir::LinearMap
 end
 =#
+"""
+    printSurface(n, surf::ModelSurface)
+
+Print one line for `surf`, labeled `n`: its name, base point, aperture,
+and profile (no `mod` line, unlike `printSurface(n, surf::OptSurface)`
+above -- `ModelSurface` has no `mod` field).
+"""
 function printSurface(n, surf::ModelSurface)
     base = surf.base.base
     strbase = @sprintf("(%10.5f, %10.5f, %10.5f)",base[1], base[2], base[3] )
     println("$n  $(surf.surfname) $(" "^(20-length(surf.surfname)))  $strbase\n$(" "^20)$(surf.aperture)  $(surf.profile)")
-end  
+end
 
+"""
+    printGeo(geometry)
+
+Print every surface in `geometry`, numbered in order, via
+`printSurface` (dispatching per-surface to the `OptSurface`/
+`ModelSurface` method above as appropriate).
+"""
 function printGeo(geometry)
     for (n, geo) in enumerate(geometry)
         printSurface(n, geo)
     end
 end
 
+"""
+    printTrcStatus(status; flagNormal=false, clipmsg=true)
+
+Print the status message for a trace result (`"Normal"`, `"Missed"`,
+`"TIR"`, or `"Clipped"`, indexed by `status`), unless `clipmsg` is
+false. By default (`flagNormal=false`), a normal (`status==0`) result
+prints nothing; pass `flagNormal=true` to print `"Normal"` too. Despite
+the name, `clipmsg` gates every status message, not just the "Clipped"
+one.
+"""
 function printTrcStatus(status; flagNormal = false, clipmsg=true)
     trcStatMsg=("Normal","Missed","TIR","Clipped")
     if clipmsg &&(flagNormal || status != 0 )

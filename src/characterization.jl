@@ -7,13 +7,29 @@ export toLocalRay,  sizeOptic, sizeOpticSurface
 
 
 """
-    sizeOptic(aper::AbstractSize)
+    sizeOptic(aper::SizeLens)
     returns the size of the aperture
 """
 sizeOptic(aper::SizeLens) = aper.semiDiameter
 
+"""
+    sizeOptic(aper::RoundAperture)
+
+Returns `aper.semiDiameter`. See `sizeOptic(aper::SizeLens)`'s
+docstring above for the general contract shared by every `sizeOptic`
+method.
+"""
 sizeOptic(aper::RoundAperture) = aper.semiDiameter
 
+"""
+    sizeOptic(aper::RectAperture)
+
+Returns `norm([aper.wclear, aper.lclear])` (the Euclidean norm of the
+two clear-aperture half-widths -- an inline comment notes
+`max(aper.wclear, aper.lclear)` as an alternative that was considered).
+See `sizeOptic(aper::SizeLens)`'s docstring above for the general
+contract shared by every `sizeOptic` method.
+"""
 sizeOptic(aper::RectAperture) = norm([aper.wclear, aper.lclear]) #max(aper.wclear, aper.lclear)
 
 """
@@ -24,16 +40,12 @@ sizeOptic(surf::T) where (T<:AbstractSurface) = sizeOptic(surf.aperture)
 
 
 """
-    sag(curv, ϵ, r)
-    compute the sag of a conic surface
-        curv - curvature (1/radius)
-        ϵ - conic parameter
-        r - radial distance from axis
+    randomPointOnSquare(xhalf)
 
-    returns sag
-
+Return a uniformly random point `(x, y, 0.)` in the square
+`[-xhalf,xhalf] x [-xhalf,xhalf]`. See `randomPointOnDisk` below for
+the analogous uniform-in-a-disk sampler.
 """
-
 function randomPointOnSquare(xhalf)
     r = 2.0* rand(2) .- (1., 1.)
     a=xhalf * r
@@ -41,6 +53,14 @@ function randomPointOnSquare(xhalf)
 end
 
 
+"""
+    randomPointOnDisk(rmax)
+
+Return a uniformly random point `(x, y, 0.)` inside the disk of radius
+`rmax`, via rejection sampling (uniform in the enclosing square,
+retried until inside the unit circle). See `randomPointOnSquare` above
+for the analogous uniform-in-a-square sampler.
+"""
 function randomPointOnDisk(rmax)
     r = 2.0* rand(2) .- (1., 1.)
     while (norm(r) > 1.)
@@ -72,6 +92,20 @@ function surfClosestApproach(ray1::Ray, ray2::Ray; semiDiam = 5.0, ri=refIndexDe
     return refSurf, t1
 end
 
+"""
+    surfClosestApproach(ray1::Ray, ray2::Ray, ray3::Ray; semiDiam=5.0, ri=refIndexDefault, surfname="closest")
+
+Variant of `surfClosestApproach(ray1, ray2; ...)` above that computes
+the closest-approach parameter `t1` from `ray1`/`ray2` (via
+`distClosestApproach`), but builds the returned reference surface along
+`ray3` instead of `ray1` -- `ray3.base .+ t1 * ray3.dir`. Requires
+`ray1.dir == ray3.dir` (errors otherwise). Used by `findRFP` below to
+locate the rear principal plane: the closest-approach parameter between
+a ray's own start/end states is applied to a second, parallel ray to
+find where that plane actually is.
+
+Returns `(refSurf, t1)`, same as the 2-ray method.
+"""
 function surfClosestApproach(ray1::Ray, ray2::Ray, ray3::Ray; semiDiam = 5.0, ri=refIndexDefault, surfname="closest")
     t1,t2 = distClosestApproach(ray1, ray2)
 
@@ -86,6 +120,19 @@ function surfClosestApproach(ray1::Ray, ray2::Ray, ray3::Ray; semiDiam = 5.0, ri
 end
 
 
+"""
+    distClosestApproach(ray1::Ray, ray2::Ray)
+
+Compute the two parameters `t1`, `t2` (distance along `ray1`/`ray2`
+respectively) at which the two rays reach their closest approach to
+each other (standard skew-line closest-approach formula). Errors if
+the rays are parallel.
+
+**Assumes `ray1.dir`/`ray2.dir` are already unit vectors** (`d1d1`,
+`d2d2` are hardcoded to `1.0` rather than computed from the actual
+directions) -- passing non-normalized directions will silently give
+wrong results rather than erroring.
+"""
 function distClosestApproach(ray1::Ray, ray2::Ray)
     p1 = ray1.base
     d1 = ray1.dir
@@ -133,6 +180,13 @@ end
     pnts - number of rays to start
     surfnum is the number of the surface +1 to sample, -1 is last surface
 
+**This method is broken**: its very first executable line builds
+`badray = Ray((NaN, NaN, NaN), (NaN, NaN, NaN))` from raw tuples, but
+`Ray` requires an actual `Point{N,T}`/`Vec{N,T}` pair -- this throws a
+`MethodError` unconditionally, before the function ever reaches its own
+arguments or the ray-tracing loop. No call to this function can
+currently succeed regardless of inputs. Likely fix: `badray =
+Ray(Point3(NaN, NaN, NaN), Vec3(NaN, NaN, NaN))`. See `TODO.md`.
 """
 function traceMonteCarloRays(radiusfunc,anglefunc, radius::Float64, θmax::Float64, pnts::Int64,  geo::Array{AbstractSurface}; surfnum=-1)
     trcStatMsg=("Normal","Missed","TIR","Clipped")
@@ -173,6 +227,26 @@ function traceMonteCarloRays(radiusfunc,anglefunc, radius::Float64, θmax::Float
 end
 
 
+"""
+    computeRearFocalPlane(geo; epsilon=0.001)
+
+Estimate the system's rear focal length and focal-plane intersection
+points, by tracing three rays through `geo` -- a boresight (along
+`ZAXIS` from `ORIGIN`), and two rays offset by `epsilon` along x and y
+-- and comparing where the offset rays cross zero vs. where they'd
+cross at the original `epsilon` offset (a small-angle/paraxial
+construction). See `findRFP` below for a related, y-only calculation
+that additionally locates the rear principal plane.
+
+Returns `(status, fly, flx, yplane, xplane)`:
+- `status` -- `0` on success, `1` if any of the three rays didn't make
+  it through `geo` (in which case the other four values are
+  `NaN`/`NaN`/`ORIGIN`/`ORIGIN`)
+- `fly`, `flx` -- estimated focal length from the y-offset and
+  x-offset rays respectively
+- `yplane`, `xplane` -- the corresponding focal-plane intersection
+  points
+"""
 function computeRearFocalPlane(geo; epsilon = 0.001)
     statusb,bore = traceGeometryRel(Ray(ORIGIN, ZAXIS), geo)
     statusy,ytrace = traceGeometryRel(Ray(Point(0., epsilon, 0.), ZAXIS), geo)
@@ -253,7 +327,7 @@ function traceLoss(trc, l = 1.0)
     return l
 end
 """
-    findRFP(geo; epsilon = 0.001, ydir = YAXIS)
+    findRFP(geo; epsilon = 0.001, ydir = YAXIS, debug = false)
         geo - geometry
 
     returns
@@ -352,7 +426,7 @@ function localRaysHexapolar(geo, basept::Point{3,T}, pupil::P, rings::I) where {
         maxr = max(r, maxr)
         maxrhoj = max(rhoj, maxrhoj)
         deltaangle = pi/(3rhoj * rings)
-        for angle in 0.0:deltaangle:(2pi - EPSILON)
+        for angle in 0.0:deltaangle:(2pi - EPSILON_ANGLE)
             dir = Vec3(normalize(pupil.toGlobalCoord(Point3(r * cos(angle), r * sin(angle), 0.)) .- basept))
             localna = sqrt(1.0 - dir[3]^2)
             #println("lcoalNA = $localna asin(localna) = $(asin(localna))")

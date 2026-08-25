@@ -21,10 +21,29 @@
     spsAsphere = OpticTrace.SurfProfileAsphere(0.0, 0.0, [0.00,  asphere_coeff1,0.0, asphere_coeff2])
     spsEAsphere = OpticTrace.SurfProfileEvenAsphere(0.0, 0.0, [asphere_coeff1, asphere_coeff2])
 
-    simplesystem = [[referencePlane("object", ORIGIN, ZAXIS, 1.0, 10.0, "test coating")]
-        lens_TLAC254_060(Point(0.0, 0.0, 10.0), ZAXIS, 0.45; order="forward", lensname="TL_AC254-060");
-        [referencePlane("image", Point(0.0, 0.0, 70.0), ZAXIS, 1.0, 10.0, "test coating")]
-    ]
+    offsetOA = Vec3(0.3, -0.2, 0.05)
+    spOA = OpticTrace.SurfProfileOAConic(curve1, 0.0, offsetOA)
+    baseConicOA = OpticTrace.SurfProfileConic(curve1, 0.0)
+
+    spsCyl1 = OpticTrace.SurfProfileCyl(curve1, 0.0, Float64[])
+    spsCyl2 = OpticTrace.SurfProfileCyl(curve2, 1.0, Float64[])
+
+    curvYToroid = 0.3
+    curvXToroid = 0.2
+    spsToroid = OpticTrace.SurfProfileToroid(curvYToroid, curvXToroid)
+
+    # `simplesystem` is unused elsewhere in this file, but building it
+    # calls lens_TLAC254_060, which looks up real glass files from
+    # OpticTrace.dirBaseRefractiveIndex -- a machine-local directory,
+    # not part of the repo (see TODO.md). Guarded so this file still
+    # runs (skipping only this dead assignment) on a checkout without
+    # that directory, e.g. CI.
+    if HAS_GLASS_CATALOG
+        simplesystem = [[referencePlane("object", ORIGIN, ZAXIS, 1.0, 10.0, "test coating")]
+            lens_TLAC254_060(Point(0.0, 0.0, 10.0), ZAXIS, 0.45; order="forward", lensname="TL_AC254-060");
+            [referencePlane("image", Point(0.0, 0.0, 70.0), ZAXIS, 1.0, 10.0, "test coating")]
+        ]
+    end
 
     #sag tests
     @testset "sag tests" begin
@@ -62,17 +81,24 @@
         sag_value = sag(1.0, 1.0, spsEAsphere)
         @test sag_value ≈ factor1 * asphere_coeff1 + factor2 * asphere_coeff2
 
-        #=
-        spsC = OpticTrace.SurfProfileCyl(1.0, 0.0, [0.00, 0.1, 0.0, 0.01])
-        sag_value = sag(1.0, 1.0, spsC)
-        @test sag_value ≈ 1.0
+        # SurfProfileCyl: x does not appear in the formula (only y does)
+        sag_value = sag(1.0, 1.0, spsCyl1) # ϵ=0 branch: z = curv*y^2/2
+        @test sag_value ≈ curve1 * 1.0^2 * 0.5
+        @test sag(5.0, 1.0, spsCyl1) == sag_value # x is ignored
 
-        spsT = OpticTrace.SurfProfileToroid(1.0, sqrt(0.5), [0.00, 0.1, 0.0, 0.01])
-        sag_value = sag(1.0, 1.0, spsT)
-        @test sag_value ≈ 1.4142135623730951   
+        sag_value = sag(1.0, 1.0, spsCyl2) # ϵ=1 branch (circular cross-section)
+        @test sag_value ≈ sag(0.0, 1.0, sps) # reduces to SurfProfileSphere's formula along y
+        @test sag(-3.0, 1.0, spsCyl2) == sag_value # x is ignored
 
-        #Tests not implemented for SurfProfileCyl & SurfProfileToroid
-        =#
+        # SurfProfileToroid: author-flagged "likely incorrect" (see TODO.md).
+        # A toroid's x=0 cross-section should reduce to a plain circular sag
+        # along y with curvature curvY, matching SurfProfileSphere -- the
+        # current formula is dimensionally inconsistent with that (it's
+        # missing the division by curvY that every other sag formula in
+        # this codebase has), so this is expected to fail.
+        expectedToroidSag = sag(0.0, 0.5, OpticTrace.SurfProfileSphere(curvYToroid))
+        actualToroidSag = sag(0.0, 0.5, spsToroid)
+        @test_broken actualToroidSag ≈ expectedToroidSag
     end
 
     @testset "surfNormal & deltaToSurf tests" begin
@@ -93,7 +119,7 @@
         @test normal_from_sag(point, sps) ≈ normal
 
         #paraboloid test
-        sag_value = curve1 * offset^2 * 0.5 
+        sag_value = curve1 * offset^2 * 0.5
         delta = OpticTrace.deltaToSurf(ray, spc1)
         @test delta ≈ 1.0+sag_value
         point = rprop(ray, delta)
@@ -119,8 +145,31 @@
         normal = OpticTrace.surfNormal(point, spsEAsphere)
         @test normal_from_sag(point, spsEAsphere) ≈ normalize(normal)
 
-        #even cylinder test
-        
+        #off-axis conic test (sag & surfNormal correct; deltaToSurf has a
+        #known bug -- author's own comment flags "logic is flawed in this
+        #one", see TODO.md)
+        x0, y0 = 0.1, 0.15
+        z0 = sag(x0, y0, spOA)
+        @test z0 ≈ sag(x0 - offsetOA[1], y0 - offsetOA[2], baseConicOA) + offsetOA[3]
+
+        normalOA = OpticTrace.surfNormal(Point3(x0, y0, z0), spOA)
+        expectedNormalOA = OpticTrace.surfNormal(Point3(x0, y0, z0) .- offsetOA, baseConicOA)
+        @test normalOA ≈ expectedNormalOA
+        @test normal_from_sag(x0, y0, spOA) ≈ normalize(normalOA)
+
+        oaRay = Ray(Point3(x0, y0, -1.0), Vec3(0.0, 0.0, 1.0))
+        oaDelta = OpticTrace.deltaToSurf(oaRay, spOA)
+        oaPoint = rprop(oaRay, oaDelta)
+        @test_broken oaPoint ≈ Point3(x0, y0, z0)
+
+        #cylinder test (surfNormal only -- deltaToSurf(::SurfProfileCyl) is
+        #fully broken, references an undefined variable and always throws,
+        #see TODO.md, so it is excluded rather than tested here)
+        xC, yC = 0.3, 0.4
+        zC = sag(xC, yC, spsCyl2)
+        pointC = Point3(xC, yC, zC)
+        normalC = OpticTrace.surfNormal(pointC, spsCyl2)
+        @test normal_from_sag(xC, yC, spsCyl2) ≈ normalize(normalC)
     end
 
 
@@ -142,6 +191,33 @@
         @test nIn ≈ dR.refIndexIn
         @test dir ≈ Vec3(0.0, 0.4, -sqrt(1.0 - 0.4^2))
 
+        @testset "CDiffuser" begin
+            a = normalize(Vec3(0.1, 0.2, 0.97))
+            θ = 0.15
+            cd = OpticTrace.CDiffuser(tan(θ), 1.0, 1.5)
+            diffRay = Ray(Point3(0.0, 0.0, 0.0), a)
+
+            dirs = Vector{Vec3{Float64}}()
+            for _ in 1:20
+                status, dir, nIn = OpticTrace.modFunc(diffRay, normal, cd)
+                @test status == true
+                @test nIn == cd.refIndexIn # a ⋅ normal > 0 -> hitting "forward"
+                @test norm(dir) ≈ 1.0
+                @test dot(dir, a) >= cos(θ) - 1e-9 # stays within the diffuser cone
+                push!(dirs, dir)
+            end
+            @test length(unique(dirs)) > 1 # scattering is randomized
+        end
+
+        @testset "NoBendIndex" begin
+            nbRay = Ray(Point3(0.0, 0.0, 0.0), Vec3(0.1, 0.2, sqrt(1.0 - 0.1^2 - 0.2^2)))
+            nb = OpticTrace.NoBendIndex(1.33)
+            status, dir, nIn = OpticTrace.modFunc(nbRay, normal, nb)
+            @test status == true
+            @test dir == nbRay.dir
+            @test nIn == nb.refIndexIn
+        end
+
     end
     #=
         a test set for surfNormal methods
@@ -153,14 +229,4 @@
              and then find the gradient of the sag value at that point. The normal vector is then obtained by normalizing the gradient vector.
     =#
 
-
-
-
-    
-    @testset "Lens Tests" begin
-
-
-    end
-
 end
- 

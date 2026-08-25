@@ -1,16 +1,34 @@
 
 export  roundAperture, rectAperture, isAperture
 
+"""
+    isAperture(a::AbstractSize{T}) where T<:Real
+
+`false` for any `AbstractSize` without its own more specific method --
+i.e. `SizeLens`, which is just a size, not a clipping aperture. See
+`isAperture(a::TrueAperture{T})` below for the sibling method (`true`,
+for `RoundAperture`/`RectAperture`). Used by `traceSurf`/`traceSurf!`
+for `ModelSurface` (`src/tracing.jl`) to decide whether `clipAperture`
+needs to be checked at all for a given surface.
+"""
 function isAperture(a::AbstractSize{T}) where T<:Real
     false
 end
 
+"""
+    isAperture(a::TrueAperture{T}) where T<:Real
+
+`true` -- `RoundAperture`/`RectAperture` (the two `TrueAperture`
+subtypes) are actual clipping apertures. See
+`isAperture(a::AbstractSize{T})` above for the sibling method (`false`,
+for size types like `SizeLens` that aren't clipping apertures).
+"""
 function isAperture(a::TrueAperture{T}) where T<:Real
     true
 end
 """
-clipAperture(interceptPoint, aperture)
-    interceptPoint - ray interecept in local coordinates
+clipAperture(localBase, aperture)
+    localBase - ray interecept in local coordinates
     aperture - array structured, with apeture and/or obscuration
 
     returns Boolean
@@ -26,6 +44,16 @@ function clipAperture(localBase::Point3{T}, aperture::RoundAperture{T}) where T<
     t
 end
 
+"""
+    clipAperture(localBase, aperture::RectAperture)
+
+Rectangular-aperture implementation of `clipAperture` -- see that
+function's docstring above (`clipAperture(localBase,
+aperture::RoundAperture)`) for the shared `localBase`/return contract.
+`localBase[1]`/`[2]` are treated as the point's width/length position;
+clipped if inside the `wo`x`lo` obscuration rectangle, or outside the
+`wclear`x`lclear` clear-aperture rectangle.
+"""
 function clipAperture(localBase::Point3{T}, aperture::RectAperture{T}) where T<:Real
     x = localBase[1] #width
     y = localBase[2] #length

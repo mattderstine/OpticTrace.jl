@@ -38,3 +38,24 @@ function rprop(ray::Ray, delta::Float64)
     intersection_point = Point3(ray.base + delta * ray.dir)
     return intersection_point
 end
+
+"""
+A trivial constant refractive-index function, for surface/lens-builder
+tests that need a `riFunc` but shouldn't depend on any glass catalog.
+"""
+riFunc(λ) = 1.5
+
+"""
+Whether the real refractive-index glass catalog
+(`OpticTrace.dirBaseRefractiveIndex`) is present on this machine. It's a
+machine-local directory, not part of the repo (see `TODO.md`), so it
+won't exist on a fresh checkout or in CI -- tests that need it should
+check this and skip (not fail) when it's false, e.g.:
+
+    if HAS_GLASS_CATALOG
+        @testset "..." begin ... end
+    else
+        @info "Skipping ...: OpticTrace.dirBaseRefractiveIndex not found"
+    end
+"""
+const HAS_GLASS_CATALOG = isdir(OpticTrace.dirBaseRefractiveIndex)

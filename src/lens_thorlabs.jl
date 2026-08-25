@@ -12,6 +12,22 @@ export lens_TLAC254_060
 
 
 
+"""
+    lensAC508180AB(base, dir, lambda; order="forward", lensname="AC508180AB")
+
+Build a Thorlabs AC508-180-AB achromatic doublet (N-LAK22/N-SF6, 3
+refracting spherical surfaces) at `base`/`dir`, using dispersion data
+looked up by `lambda` (wavelength, via `getRefractiveIndexFunc`) from
+the default `dirBaseRefractiveIndex` glass directory. `order`
+(`"forward"` or `"reverse"`, else errors) reverses the surface order
+and flips curvature signs. See `lensAC127050A`/`lensAC127019AB` below
+for structurally identical triplet-surface achromats (different
+glasses/curvatures/thicknesses).
+
+Coating is hardcoded to `"testcoat"` for all three surfaces -- not
+exposed as a parameter, unlike e.g. `lensSinglet`/`lensASinglet`
+(`src/surfaces.jl`).
+"""
 function lensAC508180AB(base, dir, lambda; order = "forward", lensname = "AC508180AB")
     #compute the refractive indexes
 
@@ -75,6 +91,14 @@ const bflAC127050A= 4.721088792319E+1
 
 
 
+"""
+    lensAC127050A(base, dir, lambda; order="forward", lensname="AC127050A")
+
+Build a Thorlabs AC127-050-A achromatic doublet (N-BK7/SF2). See
+`lensAC508180AB` above for the shared structure/behavior (3 refracting
+spherical surfaces, `order` validated the same way, coating hardcoded
+to `"testcoat"`).
+"""
 function lensAC127050A(base, dir, lambda; order = "forward", lensname = "AC127050A")
     #compute the refractive indexes
     riN_SF2 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF2.yml")
@@ -127,6 +151,16 @@ const bflAC127019AB= 15.8738491298
 
 
 
+"""
+    lensAC127019AB(base, dir, lambda; order="forward", lensname="AC127019AB")
+
+Build a Thorlabs AC127-019-AB achromatic doublet (N-LAK10/N-SF57). Same
+structure as `lensAC508180AB`/`lensAC127050A` above (3 refracting
+spherical surfaces, coating hardcoded to `"testcoat"`), but note:
+unlike those two siblings, this method does **not** validate `order`
+-- anything other than exactly `"forward"` is silently treated as
+`"reverse"`, rather than erroring on an unrecognized value.
+"""
 function lensAC127019AB(base, dir, lambda; order = "forward", lensname = "AC127019AB")
     #compute the refractive indexes
     riN_SF57 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF57.yml")
@@ -254,6 +288,22 @@ const a940e=[1.,0.9966329966329965,0.9865319865319866,0.9696969696969696,0.93602
 const a940a=[0.,0.04960409453036531,0.15432384965002494,0.2314857744750374,0.3141592653589795,0.4023443223018509,0.46848311500900436,0.5401334737750872,0.6062722664822411,0.6889457573661831,0.7495729840144069,0.8212233427804903,0.9094083997233617,0.9920818906073032,1.0692438154323158,1.1519173063162573,1.2456139293180588,1.3448221183787887,1.4219840432038016,1.4770997037930957,1.5707963267948966]
 
 
+"""
+    lens_ACL12708U(base, dir, wl)
+
+Build a Thorlabs ACL1278-U aspheric condenser lens (one spherical
+surface, one even-asphere surface) at `base`/`dir`.
+
+Despite the parameter name, `wl` is not a wavelength: it's used
+directly as the refractive index between the two surfaces (passed as
+`rinOut` to the first `refractSphere` call and `rinIn` to the second
+`refractEvenAsphere` call). Callers need to already have a refractive
+index in hand -- compare `lens_TLF220APC`/`lens_TLF357775_405` below,
+which take an actual wavelength `λ` and look up the index themselves
+via `getRefractiveIndexFunc`. Also unlike every other lens builder in
+this file, `lens_ACL12708U` has no `order`/`lensname` keywords -- always
+forward orientation, always named `"ACL12708i"`/`"ACL12708o"`.
+"""
 function lens_ACL12708U(base, dir, wl)
     [
         refractSphere("ACL12708i", base, dir, refIndexDefault,wl,
@@ -273,6 +323,15 @@ const osurf2ASP_F220APC = [0.0, 0. ,0. , -8.924167336705E-5,0.,-4.384364140114E-
 const glass_F220APC="D-ZK3"
 
 
+"""
+    lens_TLF220APC(base, dir, λ; order = "forward", lensname = "TL_F220APC")
+
+    Creates a lens with the characteristics of the Thorlabs TL-F220APC lens.
+    located at base in the direction dir with wavelength λ.
+
+    Option parameters are order ("forward" or "reverse") and lensname (default "TL_F220APC").
+
+"""
 function lens_TLF220APC(base, dir,  λ; order = "forward", lensname = "TL_F220APC")
     riD_ZK3 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/cdgm/D-ZK3.yml")
 
@@ -311,7 +370,7 @@ end
     Creates a lens with the characteristics of the Thorlabs AC254-060
     located at base in the direction dir with wavelength λ.
 
-    Option parameters are order ("forward" or "reverse") and lensname (default "TL_254_060").
+    Option parameters are order ("forward" or "reverse") and lensname (default "TL_AC254-060").
 
 """
 function lens_TLAC254_060(base, dir,  λ; order = "forward", lensname = "TL_AC254-060")

@@ -81,6 +81,20 @@ SURF 3
 =#
 
 
+"""
+    lens_EO38398(base, dir, lambda; order = "forward", lensname = "EO38-398")
+
+Build an Edmund Optics #38-398 lens: "12.5mm Dia. x 15.0mm FL, NIR II
+Coated, Plano-Convex Lens" (per the Zemax NOTE field this file's
+constants were derived from, in the preceding comment block) -- a
+single N-SF11 spherical surface via `lensSinglet`. `order="reverse"`
+delegates to `lensSinglet`'s broken reverse-order branch (see its
+docstring, `src/surfaces.jl`) and currently throws a `MethodError`.
+
+**Not exported** (missing from this file's `export` line), unlike its
+three siblings below -- can currently only be called as
+`OpticTrace.lens_EO38398(...)`.
+"""
 function lens_EO38398(base, dir, lambda; order = "forward", lensname = "EO38-398")
   riN_SF11 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")
   lensSinglet(base, dir, 8.496176720475789867E-02, 0.0, 3.1, lambda, riN_SF11, 5.75; order = order, lensname = lensname)
@@ -151,6 +165,16 @@ SURF 3
   MEMA 0 0 0 0 1 ""
 =#
 
+"""
+    lens_EO68001(base, dir, lambda; order="forward", lensname = "EO68-001")
+
+Build an Edmund Optics #68-001 lens: "25mm Diameter x -50 FL, NIR II
+Coated, Plano-Concave Lens" (per the Zemax NOTE field this file's
+constants were derived from, in the preceding comment block) -- a
+single N-BK7 spherical surface via `lensSinglet`. `order="reverse"`
+delegates to `lensSinglet`'s broken reverse-order branch (see its
+docstring, `src/surfaces.jl`) and currently throws a `MethodError`.
+"""
 function lens_EO68001(base, dir, lambda; order="forward", lensname = "EO68-001")
   riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")  
   lensSinglet(base, dir, -3.869969040247679681E-02, 0.0, 3.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
@@ -222,6 +246,16 @@ SURF 3
 =#
 
 
+"""
+    lens_EO67548(base, dir, lambda; order = "forward", lensname = "EO67-548")
+
+Build an Edmund Optics #67-548 lens: "25.0mm Dia. x 75.0mm FL, NIR II
+Coated, Plano-Convex Lens" (per the Zemax NOTE field this file's
+constants were derived from, in the preceding comment block) -- a
+single N-BK7 spherical surface via `lensSinglet`. `order="reverse"`
+delegates to `lensSinglet`'s broken reverse-order branch (see its
+docstring, `src/surfaces.jl`) and currently throws a `MethodError`.
+"""
 function lens_EO67548(base, dir, lambda; order = "forward", lensname = "EO67-548")
   riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
   lensSinglet(base, dir, 2.579979360165119903E-02, 0.0, 4.5, lambda, riN_BK7, 12.5; order = order, lensname = lensname)
@@ -293,6 +327,17 @@ SURF 3
   MEMA 0 0 0 0 1 ""
 =#
 
+"""
+    lens_EO67652(base, dir, lambda; order="forward", lensname = "EO67-652")
+
+Build an Edmund Optics #67-652 lens: "25mm Dia. x 75mm FL, NIR II
+Coated, Double-Convex Lens" (per the Zemax NOTE field this file's
+constants were derived from, in the preceding comment block) -- a
+single N-BK7 biconvex spherical surface via `lensSinglet`.
+`order="reverse"` delegates to `lensSinglet`'s broken reverse-order
+branch (see its docstring, `src/surfaces.jl`) and currently throws a
+`MethodError`.
+"""
 function lens_EO67652(base, dir, lambda; order="forward", lensname = "EO67-652")
   riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
 

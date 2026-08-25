@@ -5,12 +5,12 @@ export attributesSurfaces, surfNormal, modFunc
 
 """
     sag - compute the z coordinate in local coordinates for decendants of
-    AbstractProfile
+    AbstractSurfProfile
 
-    The type of x,y and the argument to SurfProfieXXX are different so that ForwardDiff 
-    can be used to find the gradient of the sag function at the intersection point of the 
+    The type of x,y and the argument to SurfProfieXXX are different so that ForwardDiff
+    can be used to find the gradient of the sag function at the intersection point of the
     ray with the surface. The normal vector is then obtained by normalizing the gradient vector. THis is used as a check
-    
+
     returns z in local coordinates
 """
 function sag(x::T, y::T, s::SurfProfileConic{U}) where {T<:Real,U<:Real}
@@ -29,6 +29,16 @@ function sag(x::T, y::T, s::SurfProfileConic{U}) where {T<:Real,U<:Real}
     z
 end
 
+"""
+    sag(x, y, s::SurfProfileSphere)
+
+Sag of a spherical surface (equivalent to `SurfProfileConic` with
+`ϵ = 0`, computed directly rather than by delegating): `z = curv*r² /
+(1 + sqrt(1 - curv²*r²))` where `r² = x²+y²`. Returns `NaN` if `(x,y)`
+is beyond the sphere's radius (`1 - curv²*r² < 0`). See
+`sag(x, y, s::SurfProfileConic)`'s docstring above for the general
+x/y/s/return contract shared by every `sag` method.
+"""
 function sag(x::T, y::T, s::SurfProfileSphere{U}) where {T<:Real,U<:Real}
     r2 = (x^2 + y^2)
     sqrtarg = 1 - s.curv^2 * r2
@@ -42,6 +52,15 @@ function sag(x::T, y::T, s::SurfProfileSphere{U}) where {T<:Real,U<:Real}
     z
 end
 
+"""
+    sag(x, y, s::SurfProfileOAConic)
+
+Sag of an off-axis conic surface: shifts `(x,y)` by `s.offset[1:2]`,
+evaluates the equivalent `SurfProfileConic(s.curv, s.ϵ)`'s sag there,
+and adds `s.offset[3]` to the result. See
+`sag(x, y, s::SurfProfileConic)`'s docstring above for the general
+x/y/s/return contract shared by every `sag` method.
+"""
 function sag(x::T, y::T, s::SurfProfileOAConic{U}) where {T<:Real,U<:Real}
     #println("at sag for SurfProfileOAConic - offset = $(s.offset)")
     a = SurfProfileConic(s.curv, s.ϵ)
@@ -53,7 +72,7 @@ end
 
 """
     sag - compute the z coordinate in local coordinates for decendants of
-    AbstractProfile
+    AbstractSurfProfile
 
     returns z in local coordinates
     For SurfProfileAsphere, compute from 3rd order term onwards
@@ -79,6 +98,18 @@ function sag(x::T, y::T, s::OpticTrace.SurfProfileAsphere{U}) where {T<:Real,U<:
     sg
 end
 
+"""
+    sag(x, y, s::SurfProfileEvenAsphere)
+
+Sag of an even-aspheric surface: a `SurfProfileConic(s.curv, s.ϵ)` base
+plus a polynomial correction evaluated from `s.a`, whose coefficients
+are even orders starting at 4th order (see `SurfProfileEvenAsphere`).
+Returns `NaN` if `(x,y)` is beyond the base conic's domain. Compare
+`sag(x, y, s::SurfProfileAsphere)` (same idea, but `s.a`'s coefficients
+start at 3rd order and include odd orders). See
+`sag(x, y, s::SurfProfileConic)`'s docstring above for the general
+x/y/s/return contract shared by every `sag` method.
+"""
 function sag(x::T, y::T, s::SurfProfileEvenAsphere{U}) where {T<:Real,U<:Real}
     r2 = (x^2 + y^2)
 
@@ -98,6 +129,15 @@ function sag(x::T, y::T, s::SurfProfileEvenAsphere{U}) where {T<:Real,U<:Real}
     sg
 end
 
+"""
+    sag(x, y, s::SurfProfileCyl)
+
+Sag of a cylindrical surface: a conic cross-section in `y` only (`x`
+does not appear in the formula), using the same
+`SurfProfileConic`-style sag equation with `s.curv`/`s.ϵ`. See
+`sag(x, y, s::SurfProfileConic)`'s docstring above for the general
+x/y/s/return contract shared by every `sag` method.
+"""
 function sag(x::T, y::T, s::SurfProfileCyl{U}) where {T<:Real,U<:Real}
     if s.ϵ == 0. || s.curv == 0.
         z = s.curv * (y^2) * 0.5
@@ -107,6 +147,16 @@ function sag(x::T, y::T, s::SurfProfileCyl{U}) where {T<:Real,U<:Real}
     z
 end
 
+"""
+    sag(x, y, s::SurfProfileToroid)
+
+Sag of a toroidal surface, using independent curvatures `s.curvY`/
+`s.curvX` along y and x. The author's own code comment flags this
+formula as "likely incorrect", and no matching `deltaToSurf`/
+`surfNormal` method exists for `SurfProfileToroid` at all -- see
+`TODO.md`. See `sag(x, y, s::SurfProfileConic)`'s docstring above for
+the general x/y/s/return contract shared by every `sag` method.
+"""
 function sag(x::T, y::T, s::SurfProfileToroid{U}) where {T<:Real,U<:Real}
     #this is likely incorrect
     z = 1 - sqrt(1 - (s.curvY * y)^2 - (s.curvX * x)^2)
@@ -160,6 +210,14 @@ function deltaToSurf(r::Ray{3,T}, p::SurfProfileConic{T}) where T<:Real
     Δ
 end
 
+"""
+    deltaToSurf(r::Ray{3,T}, p::SurfProfileSphere{T}) where T<:Real
+
+Distance along `r` to its intersection with a `SurfProfileSphere`, in
+local coordinates -- the same quadratic-in-`Δ` solve as
+`deltaToSurf(r, p::SurfProfileConic)` (this file's canonical
+`deltaToSurf` docstring, above), specialized to `ϵ = 0`.
+"""
 function deltaToSurf(r::Ray{3,T}, p::SurfProfileSphere{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
@@ -195,6 +253,20 @@ end
 
 # logic is flawed in this one
 #change to add offset to ray to put it into the coordinate system of the offset parabola
+"""
+    deltaToSurf(r::Ray{3,T}, p::SurfProfileOAConic{T}) where T<:Real
+
+Distance along `r` to its intersection with an off-axis conic surface:
+offsets `r.base` by `p.offset` and delegates to
+`deltaToSurf(r, ::SurfProfileConic)` with the equivalent
+`SurfProfileConic(p.curv, p.ϵ)`.
+
+**The preceding code comments (`# logic is flawed in this one` /
+`#change to add offset to ray to put it into the coordinate system of
+the offset parabola`) are the original author's own note that this is
+believed incorrect** -- treat this method's results with suspicion
+until that's investigated (see `TODO.md`).
+"""
 function deltaToSurf(r::Ray{3,T}, p::SurfProfileOAConic{T}) where T<:Real
     #=
     if debugFlag
@@ -211,6 +283,15 @@ function deltaToSurf(r::Ray{3,T}, p::SurfProfileOAConic{T}) where T<:Real
     de
 end
 
+"""
+    deltaToSurf(r::Ray{3,T}, profile::AbstractAsphericProfile{T}) where T<:Real
+
+Distance along `r` to its intersection with an aspheric surface
+(`SurfProfileAsphere` or `SurfProfileEvenAsphere`): finds a numeric
+root of `sag(x0+Lδ, y0+Mδ, profile) - z0 - Nδ = 0` (via
+`Roots.find_zero`), using the equivalent base conic's `deltaToSurf`
+solution as the initial guess.
+"""
 function deltaToSurf(r::Ray{3,T}, profile::AbstractAsphericProfile{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
@@ -226,6 +307,19 @@ function deltaToSurf(r::Ray{3,T}, profile::AbstractAsphericProfile{T}) where T<:
     Δl
 end
 
+"""
+    deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T}) where T<:Real
+
+Intended to compute the distance along `r` to its intersection with a
+`SurfProfileCyl`, following the same quadratic-in-`Δ` solve as
+`deltaToSurf(r, p::SurfProfileConic)` restricted to `y`/`z`.
+
+**This method is broken**: its body refers to a variable `p` that is
+never defined (the parameter is named `profile`), so calling it throws
+`UndefVarError: p not defined`. It has no live call site currently --
+nothing in `src/` constructs a `SurfProfileCyl` -- so this has gone
+unnoticed. See `TODO.md`.
+"""
 function deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
@@ -299,17 +393,41 @@ function surfNormal(r::Point3{T}, s::SurfProfileConic{T}) where T<:Real
         (1.0 - s.curv * s.ϵ * r[3]) * denomI)
 end
 
+"""
+    surfNormal(r::Point3{T}, s::SurfProfileSphere{T}) where T<:Real
+
+Surface normal of a `SurfProfileSphere` at local point `r` (which must
+lie on the sphere, e.g. `r[3] == sag(r[1], r[2], s)`), in local
+coordinates. See `surfNormal(r, s::SurfProfileConic)`'s docstring above
+for the general contract shared by every `surfNormal` method.
+"""
 function surfNormal(r::Point3{T}, s::SurfProfileSphere{T}) where T<:Real
     #println("sag = $(sag(r[1],r[2],s))")
     grad = Vec3(-s.curv * r[1], -s.curv * r[2], (1.0 - s.curv * r[3]))
     #normalize(Vec3(-s.curv * r[1], -s.curv * r[2], (1.0 - s.curv * r[3])))
 end
 
+"""
+    surfNormal(r::Point3{T}, s::SurfProfileOAConic{T}) where T<:Real
+
+Surface normal of an off-axis conic surface: offsets `r` by `s.offset`
+and delegates to `surfNormal(r, ::SurfProfileConic)` with the
+equivalent `SurfProfileConic(s.curv, s.ϵ)`.
+"""
 function surfNormal(r::Point3{T}, s::SurfProfileOAConic{T}) where T<:Real
     #println("OA r = $r offset = $(s.offset) net = $(r .- s.offset)")
     surfNormal(r .- s.offset, SurfProfileConic(s.curv, s.ϵ))
 end
 
+"""
+    surfNormal(rr::Point3{T}, s::SurfProfileAsphere{T}) where T<:Real
+
+Surface normal of a `SurfProfileAsphere` at local point `rr`, in local
+coordinates -- the analytic gradient of
+`sag(x, y, s::SurfProfileAsphere)`, normalized. See
+`surfNormal(r, s::SurfProfileConic)`'s docstring above for the general
+contract shared by every `surfNormal` method.
+"""
 function surfNormal(rr::Point3{T}, s::SurfProfileAsphere{T}) where T<:Real
     x = rr[1]
     y = rr[2]
@@ -328,6 +446,15 @@ function surfNormal(rr::Point3{T}, s::SurfProfileAsphere{T}) where T<:Real
     Vec3(norm[1], norm[2], norm[3])
 end
 
+"""
+    surfNormal(rr::Point3{T}, s::SurfProfileEvenAsphere{T}) where T<:Real
+
+Surface normal of a `SurfProfileEvenAsphere` at local point `rr`, in
+local coordinates -- the analytic gradient of
+`sag(x, y, s::SurfProfileEvenAsphere)`, normalized. See
+`surfNormal(r, s::SurfProfileConic)`'s docstring above for the general
+contract shared by every `surfNormal` method.
+"""
 function surfNormal(rr::Point3{T}, s::SurfProfileEvenAsphere{T}) where T<:Real
     x = rr[1]
     y = rr[2]
@@ -348,6 +475,15 @@ function surfNormal(rr::Point3{T}, s::SurfProfileEvenAsphere{T}) where T<:Real
     Vec3(norm[1], norm[2], norm[3])
 end
 
+"""
+    surfNormal(r::Point3{T}, s::SurfProfileCyl{T}) where T<:Real
+
+Surface normal of a `SurfProfileCyl` at local point `r`, in local
+coordinates -- the same closed-form conic-normal formula as
+`surfNormal(r, s::SurfProfileConic)`, with the `x` component fixed at
+`0` (no curvature along local x). See that method's docstring above for
+the general contract shared by every `surfNormal` method.
+"""
 function surfNormal(r::Point3{T}, s::SurfProfileCyl{T}) where T<:Real
     #println("sag = $(sag(r[1],r[2],s))")
 
@@ -417,6 +553,15 @@ function traceGeometry!(trc::Vector{Trace}, r::Ray{3,T}, geo) where T<:Real
     status, i #only send the good ones!
 end
 
+"""
+    traceGeometryRel - trace a Ray through an array of OptSurfaces
+    rr      initial ray vector, in LOCAL coordinates relative to geo[1]
+            (converted to global coordinates via geo[1].toGlobalCoord/
+            toGlobalDir before tracing)
+    geo     the array of surfaces
+
+    returns status, array of results from traceGeometry
+"""
 function traceGeometryRel(rr::Ray{3,T}, geo) where T<:Real
     trc = Vector{Trace}(undef, length(geo) + 1)
     surf1 = geo[1]
@@ -435,6 +580,16 @@ function traceGeometryRel(rr::Ray{3,T}, geo) where T<:Real
     status, trc[1:i] #only send the good ones!
 end
 
+"""
+    traceGeometryRel! - trace a Ray through an array of OptSurfaces
+    trc is a Vector{Trace} of length(geo) + 1 (the output)
+    rr is the initial ray vector, in LOCAL coordinates relative to
+       geo[1] (converted to global coordinates via geo[1].toGlobalCoord/
+       toGlobalDir, then delegates to traceGeometry!)
+    geo is the array of surfaces
+
+    returns status, length of trace
+"""
 function traceGeometryRel!(trc, rr::Ray{3,T}, geo) where T<:Real
     #trc = Vector{Trace}(undef, length(geo)+1)
     surf1 = geo[1]
@@ -444,22 +599,34 @@ end
 
 
 """
-    traceSurf
+    traceSurf(r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
 
-    Compute the exit ray from a surface
+    Compute the exit ray from a refracting/reflecting OptSurface
 
-    returns error, newRay, index, delta, polarizationMatrices
+    returns (status, trc::Trace)
 
-    newray is tuple of ray & direction
-    polarzationMatrices is P & O matrices
-    error
+    trc.ray is the new ray (base & direction); trc.pmatrix holds the P & O
+    polarization matrices
+    status
         0 - Normal
         1 - missed
         2 - TIR when refraction is expected - no polarization
-        3 - Blocked by aperture/size of element
 
-    newRay will contain best representation of the ray on error so it could be
+    This method does not check `s.aperture`, so it never returns status 3
+    (aperture-clipped) -- that status is only returned by the ModelSurface
+    methods of traceSurf/traceSurf! (see their docstrings).
+
+    trc will contain best representation of the ray on error so it could be
     used in plotting and to continue a nonsequential raytrace
+
+    **This method is broken**: it checks `if delta == NaN` to detect a
+    missed ray (`deltaToSurf` returns `NaN` on a miss), but in IEEE 754
+    `NaN == NaN` is always `false`, so this branch is dead code -- status
+    1 is unreachable through this check. A ray that should miss instead
+    has the `NaN` silently propagate through the rest of the surface-
+    normal/`modFunc` math, ending in a false "success" (status 0) with a
+    garbage `NaN` trace. Likely fix: `isnan(delta)` instead of `delta ==
+    NaN`. See `TODO.md`.
 """
 function traceSurf(r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
     localRayStart = s.toLocalCoord(r.base)
@@ -502,6 +669,15 @@ function traceSurf(r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
     return (0, Trace(Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
+"""
+    Trace!(trc::Trace{T}, ray, index, delta, ampdata) where T<:Real
+
+Overwrite `trc`'s fields (`ray`, `nIn`, `delta`, `pmatrix`) in place
+with the given values, and return it. The in-place counterpart to
+constructing a new `Trace(ray, index, delta, ampdata)`; used by
+`traceGeometry!`/`traceSurf!` to avoid allocating a new `Trace` per
+step.
+"""
 function Trace!(trc::Trace{T}, ray, index, delta, ampdata) where T<:Real
     trc.ray = ray
     trc.nIn = index
@@ -510,6 +686,16 @@ function Trace!(trc::Trace{T}, ray, index, delta, ampdata) where T<:Real
     return trc
 end
 
+"""
+    traceSurf!(trc, r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
+
+In-place version of `traceSurf(r, s::OptSurface{3,T})` (see that
+method's docstring above for the full status-code contract, and the
+`delta == NaN` dead-code bug it shares with this method) -- writes
+the result into `trc` via `Trace!` instead of allocating a new `Trace`.
+
+returns (status, trc::Trace)
+"""
 function traceSurf!(trc, r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
     localRayStart = s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
@@ -551,6 +737,39 @@ function traceSurf!(trc, r::Ray{3,T}, s::OptSurface{3,T}) where T<:Real
     return (0, Trace!(trc, Ray(newRayBase, newRayDir), nIn, delta, ampMats))
 end
 
+"""
+    traceSurf(r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
+
+    Compute the exit ray from a non-refracting ModelSurface (a
+    pass-through reference/model surface used for characterization --
+    the ray's direction is unchanged, only its base point advances to the
+    surface and `s.aperture` is checked).
+
+    returns (status, trc::Trace)
+
+    trc.ray is the new ray (base advanced to the surface, direction
+    unchanged)
+    status
+        0 - Normal
+        1 - missed
+        3 - Blocked by aperture/size of element (`isAperture(s.aperture) &&
+            clipAperture(...)`)
+
+    Unlike traceSurf(r, s::OptSurface{3,T}), this method has no TIR/status-2
+    case, since no refraction or reflection is computed here.
+
+    trc will contain best representation of the ray on error so it could be
+    used in plotting and to continue a nonsequential raytrace
+
+    **This method is broken**: like `traceSurf(r, s::OptSurface{3,T})`
+    above, it checks `if delta == NaN` to detect a missed ray, but
+    `NaN == NaN` is always `false` in IEEE 754, so status 1 is
+    unreachable here too. The `NaN`'d intersection point makes
+    `clipAperture`'s comparisons all false as well, so a ray that should
+    miss instead silently reports status 0 ("not clipped") with a
+    garbage `NaN` trace. Likely fix: `isnan(delta)` instead of
+    `delta == NaN`. See `TODO.md`.
+"""
 function traceSurf(r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
     localRayStart = s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
@@ -574,6 +793,21 @@ function traceSurf(r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
     return (stat, Trace(Ray(newRayBase, r.dir), s.refIndex, delta, identityAmpMats()))
 end
 
+"""
+    traceSurf!(trc, r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
+
+    In-place version of traceSurf(r, s::ModelSurface{3,T}) (see that
+    method's docstring above for the `delta == NaN` dead-code bug this
+    method shares) -- writes the result into `trc` (via Trace!) instead
+    of allocating a new Trace.
+
+    returns (status, trc::Trace)
+    status
+        0 - Normal
+        1 - missed
+        3 - Blocked by aperture/size of element (`isAperture(s.aperture) &&
+            clipAperture(...)`)
+"""
 function traceSurf!(trc, r::Ray{3,T}, s::ModelSurface{3,T}) where T<:Real
     localRayStart = s.toLocalCoord(r.base)
     localRayDir = s.toLocalDir(r.dir)
@@ -600,11 +834,22 @@ end
 
 
 
-
-const AMPPERFECTSURFACE = AmpData(identityPol, identityPol, [1.])
 """
-    identityAmpMats
+    AMPPERFECTSURFACE
 
+The `AmpData` value representing a surface that doesn't alter
+polarization or transmission at all: `p`/`o` are both `identityPol`
+and `trans` is `[1.]`. Returned by `identityAmpMats`.
+"""
+const AMPPERFECTSURFACE = AmpData(identityPol, identityPol, [1.])
+
+"""
+    identityAmpMats()
+
+Return `AMPPERFECTSURFACE`, the shared identity `AmpData` value. Used
+as the polarization/amplitude result wherever a trace step doesn't (or
+can't yet) compute real polarization data -- e.g. missed/TIR traces,
+and `ModelSurface` tracing, which doesn't track polarization at all.
 """
 identityAmpMats() = AMPPERFECTSURFACE
 #=
@@ -616,8 +861,26 @@ end
 =#
 
 """
-    modFunc
+    modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S<:AbstractBendDielectric,T<:Real}
 
+Refract `ray` at a dielectric boundary with surface normal `normal` and
+refractive indices `d.refIndexIn`/`d.refIndexOut` (swapped if the ray
+is hitting the surface from the "back" side, `cosI < 0`), via Snell's
+law.
+
+Returns `(ok, newDir, nIn)`:
+- `ok::Bool` -- `false` on total internal reflection (in which case
+  `newDir` is the reflected direction instead of a refracted one);
+  `true` otherwise
+- `newDir::Vec3` -- the new (unit) ray direction
+- `nIn` -- the refractive index the ray was traveling in before this
+  surface (needed by the caller for OPD bookkeeping)
+
+See `modFunc(ray, normal, d::S) where S<:AbstractBendMirror`,
+`modFunc(ray, normal, d::CDiffuser)`, and
+`modFunc(ray, normal, d::NoBendIndex)` below for the other `mod` types
+this generic function dispatches on; all share this `(ok, newDir, nIn)`
+return shape.
 """
 function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S<:AbstractBendDielectric,T<:Real}
 
@@ -647,6 +910,20 @@ end
 
 
 
+"""
+    modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S<:AbstractBendMirror,T<:Real}
+
+Reflect `ray` off a mirror surface with normal `normal` (Welford 4.46).
+`d.refIndexIn`/`d.refIndexOut` select which side's index to report as
+`nIn`, depending on which way the ray hits the surface (`cosI < 0` or
+not) -- a mirror doesn't itself change refractive index.
+
+Returns `(true, newDir, nIn)` -- see
+`modFunc(ray, normal, d::S) where S<:AbstractBendDielectric`'s
+docstring above for the shared `(ok, newDir, nIn)` return shape (`ok`
+is always `true` here; reflection can't "fail" the way refraction can
+via TIR).
+"""
 function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S<:AbstractBendMirror,T<:Real}
     r = ray.base
     a = ray.dir
@@ -660,6 +937,19 @@ function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::S) where {S<:AbstractBendMir
     true, (a - (2. * (cosI)) .* normal), nIn  # Welford 4.46
 end
 
+"""
+    modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::CDiffuser{T}) where T<:Real
+
+Scatter `ray` within a cone around its own direction: builds two unit
+vectors perpendicular to `ray.dir`, samples a random point in the unit
+disk, scales it by `d.tanθ`, and adds the result to `ray.dir` before
+renormalizing. `d.refIndexIn`/`d.refIndexOut` select `nIn` the same way
+as the other `modFunc` methods.
+
+Returns `(true, newDir, nIn)` -- see
+`modFunc(ray, normal, d::S) where S<:AbstractBendDielectric`'s
+docstring above for the shared `(ok, newDir, nIn)` return shape.
+"""
 function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::CDiffuser{T}) where T<:Real
     r = ray.base
     a = ray.dir
@@ -686,10 +976,26 @@ function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::CDiffuser{T}) where T<:Real
 end
 
 
+"""
+    surfNormal(r::Point3{T}, s::NoProfile{T}) where T<:Real
+
+Surface normal of a flat `NoProfile` plane: always `(0,0,1)`,
+regardless of `r`. See `surfNormal(r, s::SurfProfileConic)`'s docstring
+above for the general contract shared by every `surfNormal` method.
+"""
 function surfNormal(r::Point3{T}, s::NoProfile{T}) where T<:Real
     Vec3(0., 0., 1.)
 end
 
+"""
+    deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real
+
+Distance along `r` to its intersection with the local `z=0` plane
+(`NoProfile`'s implicit flat surface): `Δ = -z0/N`. Returns `NaN` if
+the ray is parallel to the plane (`N ≈ 0`). See
+`deltaToSurf(r, p::SurfProfileConic)`'s docstring above for the general
+contract shared by every `deltaToSurf` method.
+"""
 function deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real
     x0, y0, z0 = r.base
     L, M, N = r.dir
@@ -702,6 +1008,13 @@ function deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real
     Δ
 end
 
+"""
+    modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where T<:Real
+
+Pass `ray` through unchanged: returns `(true, ray.dir, d.refIndexIn)`.
+See `modFunc(ray, normal, d::S) where S<:AbstractBendDielectric`'s
+docstring above for the shared `(ok, newDir, nIn)` return shape.
+"""
 function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where T<:Real
     true, ray.dir, d.refIndexIn
 end
@@ -709,8 +1022,22 @@ end
 
 
 """
-    surfAmpFunc
+    surfAmpFunc(dirIn::Vec3{T}, dirOut::Vec3{T}, normal::Vec3{T}, newLocalBase::Point3{T}, sndex::B, amp) where {T<:Real,B<:AbstractBendType{T}}
 
+Compute the amplitude/polarization transfer data and (possibly
+modified) outgoing direction for a trace step. This catch-all method
+does no actual polarization/amplitude calculation -- it returns
+`(identityAmpMats(), dirOut)` unchanged, for every `mod`/`amp`
+combination. (Two more specific methods, for `MirrorR`/`CDiffuser`, are
+commented out below with the same identity behavior -- polarization
+tracking isn't implemented for any surface type yet.)
+
+Arguments:
+- `dirIn`, `dirOut` -- incoming/outgoing ray direction
+- `normal` -- local surface normal at the intersection
+- `newLocalBase` -- local intersection point
+- `sndex` -- the surface's `mod` (`B<:AbstractBendType{T}`)
+- `amp` -- the surface's coating/amplitude parameter
 """
 function surfAmpFunc(dirIn::Vec3{T}, dirOut::Vec3{T}, normal::Vec3{T}, newLocalBase::Point3{T}, sndex::B, amp) where {T<:Real,B<:AbstractBendType{T}}
     identityAmpMats(), dirOut
@@ -727,13 +1054,40 @@ end
 
 =#
 
+"""
+    attributesSurfaces
+
+Global `Dict{String,Any}` cache mapping coating names to
+`AmpParam`/`NoAmpParam` objects, populated lazily by `getAmpParams` the
+first time a given coating name is seen. Threaded through as a keyword
+argument (`attributesSurfaces=...`) by most surface constructors in
+`src/surfaces.jl`.
+"""
 attributesSurfaces::Dict{String,Any} = Dict{String,Any}()
 
+"""
+    getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
+
+Look `s` up in `attributesSurfaces`, creating (and caching) a new
+`AmpParam(s)` if it isn't already present. Called when a surface's
+`coating` is given as a raw string name; see
+`getAmpParams(s::S) where S<:AbstractAmplitudeParam`'s docstring below
+for the other half of the `coating::APorString` dispatch.
+"""
 function getAmpParams(s::String; attributesSurfaces=attributesSurfaces)
     amp = get!(attributesSurfaces, s, AmpParam(s))
     return amp
 end
 
+"""
+    getAmpParams(s::S; attributesSurfaces=attributesSurfaces) where S<:AbstractAmplitudeParam
+
+Return `s` unchanged -- called when a surface's `coating` is already an
+`AbstractAmplitudeParam` object (e.g. `AmpParam`, `NoAmpParam`) rather
+than a string name. The `attributesSurfaces` keyword is accepted for a
+uniform call signature with `getAmpParams(s::String)`'s docstring
+above, but unused here.
+"""
 function getAmpParams(s::S; attributesSurfaces=attributesSurfaces) where S<:AbstractAmplitudeParam
     return s
 end

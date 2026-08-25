@@ -38,14 +38,17 @@ Propagate beamlets (initial translation then raytrace)
 
 =#
 
+# TODO: gaussBeamParams is unimplemented (function body is just `end`) and this
+# docstring documents a 5-argument signature/return value that doesn't exist yet.
+# Skipped in the docstring audit/fix pass -- revisit once the function is implemented.
 """
 gaussBeamParams(base, dir, w, curv, λ)
     base is the global coordinate of the origin
     dir is the diredtion of propagation
-    curv is the curvature (1/R(z)) 
+    curv is the curvature (1/R(z))
     λ is the wavelength
 
-    Returns 
+    Returns
 """
 function gaussBeamParams()
 end

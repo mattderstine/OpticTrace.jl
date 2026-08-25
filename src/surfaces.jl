@@ -150,6 +150,37 @@ end
 
 
 
+"""
+    reflectOAConic(surfname::String,
+        pointInPlane::Point3,
+        planenormal::Vec3,
+        ydir::Vec3,
+        offset::Vec3,
+        rinIn::Float64,
+        rinOut::Float64,
+        c::Float64,
+        ϵ::Float64,
+        semiDiam::Float64,
+        coating::APorString
+        ;color = :aquamarine2, attributesSurfaces = attributesSurfaces)
+
+Build a reflecting off-axis conic `OptSurface` (`SurfProfileOAConic`,
+`MirrorR`). Unlike its sibling refract/reflect constructors above,
+`ydir` is a required positional argument here rather than an optional
+keyword defaulting to `nothing` -- off-axis conics need an explicit y
+direction since `offset` is defined relative to it. See `reflectOAP`
+below for a convenience wrapper that computes `offset` from `c` for the
+common off-axis-parabola case.
+
+**This method's `attributesSurfaces` keyword default is broken**: it's
+written `attributesSurfaces = attributeSurfaces` (missing the second
+`s`), referencing an undefined variable -- calling this method without
+explicitly passing `attributesSurfaces` throws `UndefVarError:
+attributeSurfaces not defined`. Not currently hit internally: the only
+in-repo caller, `reflectOAP` below, always passes `attributesSurfaces`
+explicitly. But `reflectOAConic` is itself exported, so any direct
+external call relying on the default breaks. See `TODO.md`.
+"""
 function reflectOAConic(surfname::String,
     pointInPlane::Point3{T},
     planenormal::Vec3{T},
@@ -284,13 +315,13 @@ end
         rinOut::Float64,
         c::Float64,
         ϵ::Float64,
-        asphere::AbstractVector{Float64},
+        asphere::AbstractVector{T},
         semiDiam::Float64,
         coating::APorString
-        ;color = :aquamarine,  
-        attributesSurfaces = attributesSurfaces, 
+        ;color = :aquamarine,
+        attributesSurfaces = attributesSurfaces,
         ydir::Union{Vec3, Nothing}=nothing)
-    
+
 
 """
 function refractEvenAsphere(surfname::String,
@@ -390,23 +421,77 @@ function reflectEvenAsphere(surfname::String,
         )
 end
 
+"""
+    sag(x, y, s::NoProfile)
+
+Sag of a flat `NoProfile` plane: always `0.`, regardless of `x`/`y`.
+See `sag(x, y, s::SurfProfileConic)`'s docstring (`src/tracing.jl`) for
+the general x/y/s/return contract shared by every `sag` method.
+"""
 function sag(x::T, y::T, s::NoProfile) where T<:Real
     0.
 end
 
+"""
+    gbRadius(aperture::SizeLens{T}, profile::NoProfile) where T<:Real
+
+Bounding radius for a flat (`NoProfile`) surface sized by a `SizeLens`:
+its `semiDiameter`. Needed alongside `gbWidths(a::SizeLens,
+p::NoProfile)` below because `referencePlane` (below) pairs
+`SizeLens`/`NoProfile`, a combination `mesh_primitives.jl`'s
+`(SizeLens, SurfProfileConic)` method doesn't cover. See
+`gbRadius(aperture::SizeLens, profile::SurfProfileConic)`'s docstring
+(`src/mesh_primitives.jl`) for the general contract shared by every
+`gbRadius` method.
+"""
 function gbRadius(aperture::SizeLens{T}, profile::NoProfile) where T<:Real
     aperture.semiDiameter
 end
 
+"""
+    gbWidths(a::SizeLens{T}, p::NoProfile) where T<:Real
+
+Bounding-box widths for a flat (`NoProfile`) surface sized by a
+`SizeLens`: `(2*semiDiameter, 2*semiDiameter, 0.)`. See
+`gbRadius(aperture::SizeLens, profile::NoProfile)`'s docstring above
+for why this method exists alongside the `mesh_primitives.jl`
+`(SizeLens, SurfProfileConic)` method.
+"""
 function gbWidths(a::SizeLens{T}, p::NoProfile) where T<:Real
     diam = 2a.semiDiameter
     SVector(diam, diam, 0.)
 end
 
+"""
+    surfNormal(r::Point3{T}, s::NoProfile) where T<:Real
+
+Surface normal of a flat `NoProfile` plane: always `(0,0,1)`. Same as
+`surfNormal(r::Point3{T}, s::NoProfile{T}) where T<:Real`
+(`src/tracing.jl`), but with `s`'s type parameter left unconstrained
+rather than tied to `r`'s -- in practice this makes no difference,
+since the more specific `tracing.jl` method is always preferred by
+Julia's dispatch whenever both apply (confirmed: this method is
+effectively unreachable for normal same-type usage).
+"""
 function surfNormal(r::Point3{T}, s::NoProfile) where T<:Real
     Vec3(0., 0., 1.)
 end
 
+"""
+    deltaToSurf(r::Ray{T}, p::NoProfile) where T<:Real
+
+Distance along `r` to its intersection with the local `z=0` plane:
+`Δ = -z0/N`, `NaN` if the ray is parallel to the plane. Same idea as
+`deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real`
+(`src/tracing.jl`), but note the signature here is `Ray{T}`, not
+`Ray{3,T}` -- since `Ray` takes two type parameters, `Ray{T}` actually
+binds `T` to `Ray`'s *dimensionality* parameter (which is always an
+`Int`, hence `<:Real`), not its numeric-coordinate parameter, and
+leaves `NoProfile`'s type parameter unconstrained. In practice this
+makes no difference: the more specific `tracing.jl` method is always
+preferred by Julia's dispatch whenever both apply (confirmed: this
+method is effectively unreachable for normal same-type usage).
+"""
 function deltaToSurf(r::Ray{T}, p::NoProfile) where T<:Real
     x0, y0, z0 = r.base
     L,M,N = r.dir
@@ -419,6 +504,16 @@ function deltaToSurf(r::Ray{T}, p::NoProfile) where T<:Real
     Δ
 end
 
+"""
+    modFunc(ray::Ray{T}, normal::Vec3{T}, d::NoBendIndex) where T<:Real
+
+Pass `ray` through unchanged: `(true, ray.dir, d.refIndexIn)`. Same as
+`modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where
+T<:Real` (`src/tracing.jl`); see that signature-shadowing note in
+`deltaToSurf(r::Ray{T}, p::NoProfile)` above -- the same situation
+applies here (this method is effectively unreachable; the `tracing.jl`
+one is always preferred).
+"""
 function modFunc(ray::Ray{T}, normal::Vec3{T}, d::NoBendIndex) where T<:Real
     true, ray.dir, d.refIndexIn
 end
@@ -429,6 +524,22 @@ function surfAmpFunc(dirIn::Vec3, dirOut::Vec3, normal::Vec3, newRayBase::Point3
 end
 =#
 
+"""
+    referencePlane(surfname::String,
+        pointInPlane::Point3,
+        planenormal::Vec3,
+        rinIn::Float64,
+        semiDiam::Float64,
+        coating::APorString
+        ;color = :khaki3, ydir::Union{Vec3, Nothing}=nothing)
+
+Build a non-refracting, non-reflecting `OptSurface` (flat `NoProfile`,
+`NoBendIndex(rinIn)` -- same index on both sides, `NoAmpParam`): a
+reference/model plane used for object/image planes and other
+characterization surfaces that shouldn't alter a ray, only mark a
+position. See `planeMirror` below for the analogous reflecting (mirror)
+reference surface.
+"""
 function referencePlane(surfname::String,
     pointInPlane::Point3{T},
     planenormal::Vec3{T},
@@ -482,6 +593,19 @@ end
 
 """
 helper function for singlet lens
+
+Builds a two-surface spherical singlet lens (`refractSphere` x2), in
+either `order = "forward"` or `order = "reverse"`.
+
+**The `order = "reverse"` branch is broken**: its second
+`refractSphere` call passes `Base.compute_assumed_setting` (an
+unrelated Julia compiler internal function -- almost certainly a stray
+autocomplete/typo) as the `coating` argument instead of `coating`,
+which doesn't match `coating::APorString`'s type and throws a
+`MethodError`. Confirmed by direct testing. Not currently hit by any
+test (`lensSinglet` itself, and its four `lens_edmund.jl` callers, have
+no test coverage -- see `TODO.md`), but is reachable through the public
+API by passing `order="reverse"`.
 """
 function lensSinglet(base, dir, curv1, curv2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "Singlet", coating = "default")
     ri = riFunc(lambda)
@@ -510,8 +634,8 @@ end
 
 
 """
-lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, 
-      thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet")
+lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2,
+      thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet", coating = "default")
 """
 function lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet", coating="default")
     ri = riFunc(lambda)
@@ -540,8 +664,8 @@ function lensASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, thick
 end
 
 """
-lensEASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, 
-      thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet")
+lensEASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2,
+      thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet", coating = "default")
 """
 function lensEASinglet(base, dir, curv1, ϵ1, aphere1, curv2, ϵ2, aphere2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "ASinglet", coating="default")
     ri = riFunc(lambda)
