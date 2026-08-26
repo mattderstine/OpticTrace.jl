@@ -223,13 +223,15 @@ def zmx_to_system(data, item=None):
     return s
 ```
 
-### `.zar` archive reading — not yet ported to Julia
+### `.zar` archive reading — ported to Julia
 
 Zemax can bundle a `.zmx` file with its supporting data into a `.zar`
-archive. Nothing in `zemax.jl` reads `.zar` files yet; this Python
-reference implementation (LZW-decompressing the archive's packed
-entries) is kept here as the starting point for a future
-`readZemaxArchive`-style function.
+archive. `zemax.jl`'s `readZemaxArchive`/`listZemaxArchive`/
+`extractZemaxArchive` and `lzwDecompress` are a direct port of this
+Python reference implementation (LZW-decompressing the archive's packed
+entries), kept here for reference. Both header layouts described below
+("earlier"/`0xEA` and "latest"/`0xEC`) have been validated against real
+sample `.zar` files.
 
 ```python
 import logging
@@ -438,4 +440,100 @@ def repack(input_full_file: Union[Path, str], output_full_file: Union[Path, str,
             archive_file.writestr(f'{repack_directory}/{unpacked_data.file_name}', unpacked_data.unpacked_contents)
 
     log.info(f'Converted {input_full_file} to zip archive {output_full_file}.')
+```
+
+### `.zmf` catalog reading — ported to Julia
+
+Zemax lens vendors (Edmund Optics, Thorlabs, and many others) publish
+whole families of stock lenses as a single `.zmf` lens-catalog file.
+Unlike `.zar`, this format is not documented anywhere in Ansys/Zemax's
+own materials; the layout below is an unofficial, community
+reverse-engineering that several independent tools (this codebase
+included, now) rely on. `zemax.jl`'s `readZmfCatalog`/
+`listZmfCatalog`/`extractZmfCatalog` and `zmfDeobfuscate` are a direct
+port of `rayopt`'s `zmf_read`/`zmf_obfuscate`
+(https://github.com/quartiq/rayopt/blob/master/rayopt/zemax.py),
+re-implemented without `rayopt`'s SQLAlchemy-backed `Catalog`/session
+machinery (not needed here) and without the deprecated
+`numpy.fromstring`/`.tostring()` calls the original uses (removed in
+numpy >= 2.0).
+
+Binary layout, all fields little-endian:
+
+- A 4-byte `UInt32` file header: the catalog format version. Only
+  `1001` has ever been observed/documented; `readZmfCatalog` throws an
+  error on any other value rather than guessing.
+- Then, repeated to end of file, one fixed 144-byte record per lens:
+  - 100 bytes: the lens's catalog name/part number (NUL-padded, not
+    obfuscated).
+  - 7 × `UInt32`: per-lens format version (matches the `VERS` line in
+    that lens's decoded description), element count, a shape-code
+    index into `"?EBPM"`, and aspheric/GRIN/toroidal flags. None of
+    these beyond element count are currently surfaced on `ZmfEntry`.
+  - 2 × `Float64`: effective focal length (`efl`) and entrance pupil
+    diameter (`enp`).
+  - Immediately followed by that lens's *description*: `descLen` bytes
+    (from one of the `UInt32` fields above) of XOR-obfuscated text
+    which, once deobfuscated, is byte-for-byte the same `.zmx`-format
+    grammar `readZemax` already parses (starting with a `VERS ######`
+    line matching the record's version field).
+
+The obfuscation keystream (`zmf_obfuscate` in the Python source below;
+the same function both obfuscates and deobfuscates, since XOR is its
+own inverse) is derived per output byte from a fixed trigonometric
+formula seeded by that lens's own `efl`/`enp`, then reduced to a byte by
+formatting the intermediate value in `%.8e` scientific notation and
+taking 3 of its digit characters. This was validated empirically during
+development (not just read off the reference source) by running a
+from-scratch, dependency-free Python re-implementation against several
+real vendor `.zmf` catalogs and checking that the decoded description's
+own `VERS` line matched its record's version field exactly.
+
+```python
+from struct import Struct
+
+head = Struct("<I")
+lens = Struct("<100sIIIIIIIdd")
+shapes = "?EBPM"
+
+
+def zmf_read(file, session):
+    cat = Catalog()
+    cat.load(file)
+    f = open(file, "rb")
+    cat.version, = head.unpack(f.read(head.size))
+    assert cat.version in (1001, )
+    while True:
+        l = Lens()
+        li = f.read(lens.size)
+        if len(li) != lens.size:
+            break
+        li = list(lens.unpack(li))
+        l.name = li[0].decode("latin1").strip("\0")
+        l.shape = shapes[li[3]]
+        l.elements = li[2]
+        l.aspheric = li[4]
+        l.version = li[1]
+        l.grin = li[5]
+        l.toroidal = li[6]
+        l.efl = li[8]
+        l.enp = li[9]
+        description = f.read(li[7])
+        description = zmf_obfuscate(description, l.efl, l.enp)
+        description = description.decode("latin1")
+        assert description.startswith(f"VERS {l.version:06d}\n")
+        l.data = description
+        cat.lenses.append(l)
+    return cat
+
+
+def zmf_obfuscate(data, a, b):
+    iv = np.cos(6*a + 3*b)
+    iv = np.cos(655*(np.pi/180)*iv) + iv
+    p = np.arange(len(data))
+    k = 13.2*(iv + np.sin(17*(p + 3)))*(p + 1)
+    k = (int((f"{_:.8e}")[4:7]) for _ in k)
+    data = np.fromstring(data, np.uint8)
+    data ^= np.fromiter(k, np.uint8, len(data))
+    return data.tostring()
 ```

@@ -24,22 +24,7 @@ does the wrong thing. See "Code issues" below for missing features,
 cleanup candidates, and open design questions that aren't bugs. See
 `FIXED.md` for bugs already resolved.
 
-- **2.** `src/plotting.jl`, `perimeterRays`: on any ray that fails to
-  trace (`status != 0`), it stores a `NaN` `Ray` and then does a bare
-  `return` -- which returns `nothing`, discarding the whole `rays`
-  vector (including rays already successfully traced) instead of
-  continuing to the next perimeter angle. Almost certainly a `continue`
-  was intended. `plotPerimeterRays`/`plotPerimeterRays!` (both variants)
-  will fail if fed a `geo` where any perimeter ray misses, since they
-  iterate over the `nothing` return value.
-- **6.** `src/surface_manipulation.jl`, `reverseProfile!(profile::T)
-  where T<:AbstractSurfProfile` (the generic fallback for profile types
-  without their own specific method): assumes every such type has an
-  `a` field. That's false for `SurfProfileOAConic` (`curv`/`ϵ`/
-  `offset`), which falls through to this method -- calling it throws a
-  field-access error. (`NoProfile` used to hit this same fallback too,
-  but now has its own dedicated `reverseProfile!(profile::NoProfile)`
-  no-op method -- see `FIXED.md`.)
+(none currently open)
 
 ## Code issues
 
@@ -66,11 +51,6 @@ already resolved.
   `type`s `"STANDARD"` and `"EVENASPH"` are supported; any other type
   (e.g. toroidal, coordinate breaks) throws `error("Zemax surface type
   ... not implemented yet")`.
-- **5.** `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar`
-  archives (zipped Zemax file bundles) isn't implemented at all -- only
-  the Python reference implementation exists, kept in
-  `docs/zemax_reference.md` as a starting point for a future
-  `readZemaxArchive`-style function.
 - **6.** `src/surfaces.jl` (`lensASinglet`, `lensEASinglet`, lines ~518
   & ~548): both have a `#ToDo` comment -- "should check if the input is
   really an asphere. if not make the surface spherical" -- that
@@ -226,6 +206,14 @@ already resolved.
     (not grepping for identifier names) caught it. Grepping for a
     dependency's own name is not sufficient when the dependency can
     be reached indirectly through another function call.
+- **22.** `src/surface_manipulation.jl`, `reverseProfile!(profile::SurfProfileOAConic)`:
+  negates `profile.curv` but leaves `profile.offset` untouched, so the
+  reversed profile keeps describing the pre-reversal off-axis geometry
+  instead of the mirrored one. Added (see `FIXED.md` #6) to fix the
+  field-access crash the generic fallback previously hit on this type,
+  but deliberately incomplete -- the function prints a message noting
+  this at call time. Needs someone who understands `offset`'s sign/
+  coordinate convention relative to `curv` to finish it properly.
 
 ## Test-writing plan
 

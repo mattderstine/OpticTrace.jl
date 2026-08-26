@@ -171,15 +171,6 @@ keyword defaulting to `nothing` -- off-axis conics need an explicit y
 direction since `offset` is defined relative to it. See `reflectOAP`
 below for a convenience wrapper that computes `offset` from `c` for the
 common off-axis-parabola case.
-
-**This method's `attributesSurfaces` keyword default is broken**: it's
-written `attributesSurfaces = attributeSurfaces` (missing the second
-`s`), referencing an undefined variable -- calling this method without
-explicitly passing `attributesSurfaces` throws `UndefVarError:
-attributeSurfaces not defined`. Not currently hit internally: the only
-in-repo caller, `reflectOAP` below, always passes `attributesSurfaces`
-explicitly. But `reflectOAConic` is itself exported, so any direct
-external call relying on the default breaks. See `TODO.md`.
 """
 function reflectOAConic(surfname::String,
     pointInPlane::Point3{T},
@@ -596,16 +587,6 @@ helper function for singlet lens
 
 Builds a two-surface spherical singlet lens (`refractSphere` x2), in
 either `order = "forward"` or `order = "reverse"`.
-
-**The `order = "reverse"` branch is broken**: its second
-`refractSphere` call passes `Base.compute_assumed_setting` (an
-unrelated Julia compiler internal function -- almost certainly a stray
-autocomplete/typo) as the `coating` argument instead of `coating`,
-which doesn't match `coating::APorString`'s type and throws a
-`MethodError`. Confirmed by direct testing. Not currently hit by any
-test (`lensSinglet` itself, and its four `lens_edmund.jl` callers, have
-no test coverage -- see `TODO.md`), but is reachable through the public
-API by passing `order="reverse"`.
 """
 function lensSinglet(base, dir, curv1, curv2, thick, lambda, riFunc, semiDiam; order = "forward", lensname = "Singlet", coating = "default")
     ri = riFunc(lambda)

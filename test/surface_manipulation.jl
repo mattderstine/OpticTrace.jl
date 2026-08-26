@@ -61,9 +61,13 @@
             @test p.curvX == -0.2
         end
 
-        @testset "SurfProfileOAConic (generic fallback, known bug -- see TODO.md)" begin
-            pOA = OpticTrace.SurfProfileOAConic(0.02, 0.5, Vec3(0.0, 0.0, 0.0))
-            @test_throws FieldError OpticTrace.reverseProfile!(pOA)
+        @testset "SurfProfileOAConic (dedicated method, offset not handled -- see TODO.md)" begin
+            pOA = OpticTrace.SurfProfileOAConic(0.02, 0.5, Vec3(1.0, 2.0, 3.0))
+            result = OpticTrace.reverseProfile!(pOA)
+            @test result === pOA
+            @test pOA.curv == -0.02
+            @test pOA.ϵ == 0.5
+            @test pOA.offset == Vec3(1.0, 2.0, 3.0) # unchanged -- known-incomplete, see TODO.md
         end
 
         @testset "NoProfile (working)" begin

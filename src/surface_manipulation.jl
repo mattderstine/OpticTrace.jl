@@ -134,20 +134,34 @@ function reverseProfile!(profile::SurfProfileConic)
 end
 
 """
+    reverseProfile!(profile::SurfProfileOAConic)
+
+Negate `profile.curv` in place (leaving `profile.ϵ` unchanged) and
+return `profile`. See `reverseProfile!(profile::T) where
+T<:AbstractSurfProfile` below for the fallback used by profile types
+without their own specific method.
+
+**Not finished**: does not touch `profile.offset`, so the reversed
+profile's off-axis offset is left describing the pre-reversal geometry.
+See `TODO.md`.
+"""
+function reverseProfile!(profile::SurfProfileOAConic)
+    profile.curv = -profile.curv
+    println("reverseProfile!(profile::SurfProfileOAConic) is not finished because it does not handle the offset field properly.")
+    return profile
+end
+
+"""
     reverseProfile!(profile::T) where T<:AbstractSurfProfile
 
 Fallback for any `AbstractSurfProfile` subtype without its own more
 specific `reverseProfile!` method above/below: negates `profile.curv`
-and `profile.a` in place, and returns `profile`.
-
-**This method is broken for `SurfProfileOAConic`**: it assumes every
-such type has an `a` field, which isn't true for `SurfProfileOAConic`
-(fields: `curv`, `ϵ`, `offset`) -- calling this method on it throws a
-field-access error. In practice this fallback is only actually reached
-for `SurfProfileAsphere`/`SurfProfileEvenAsphere` (which do have `a`,
-so those work) and `SurfProfileOAConic` -- every other concrete profile
-type (including `NoProfile`, see its own method below) has its own more
-specific method above/below that takes precedence. See `TODO.md`.
+and `profile.a` in place, and returns `profile`. Assumes every such
+type has an `a` field -- true for `SurfProfileAsphere`/
+`SurfProfileEvenAsphere`, the only concrete profile types that actually
+reach this fallback (every other type, including `SurfProfileOAConic`
+and `NoProfile`, has its own more specific method above/below that
+takes precedence).
 """
 function reverseProfile!(profile::T) where T<:AbstractSurfProfile
     # Implement profile-specific reversal logic if needed

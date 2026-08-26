@@ -42,6 +42,29 @@ list doesn't.
   coverage `normals` has for `OptSurface`, and it keeps passing
   unchanged once dispatch falls through to the generic method.
 
+- **2.** `src/plotting.jl`, `perimeterRays`: on any ray that fails to
+  trace (`status != 0`), it stored a `NaN` `Ray` and then did a bare
+  `return` -- which returned `nothing`, discarding the whole `rays`
+  vector (including rays already successfully traced) instead of
+  continuing to the next perimeter angle. `plotPerimeterRays`/
+  `plotPerimeterRays!` (both variants) failed if fed a `geo` where any
+  perimeter ray missed, since they iterate over the `nothing` return
+  value.
+
+  **Fixed**: `return` changed to `continue` (`src/plotting.jl`,
+  `perimeterRays`), so a miss is now recorded (as a `NaN` `Ray`, still
+  logged via `println`) and tracing continues to the next perimeter
+  angle. Since a `continue` on a miss no longer advances the success
+  counter `i`, `rays` (preallocated to length `points`) can have
+  trailing unset slots after the loop -- the final line was changed
+  from `rays` to `rays[1:i-1]`, so the function now returns only the
+  rays that actually traced successfully (length `<= points`) rather
+  than a fixed-length vector with `NaN`/undef placeholders for misses.
+  Docstrings for `perimeterRays`/`plotPerimeterRays` (`src/plotting.jl`)
+  and the corresponding note in `test/plotting.jl`'s
+  `"perimeterRays / plotPerimeterRays"` testset were updated to drop
+  the "known bug" language and describe the truncated-length return.
+
 - **3.** `src/plotting.jl`, `perimeterRays` (separate, more severe bug
   than #2 -- found while writing `test/plotting.jl`, phase 12):
   `perimeterRays` never got far enough to reach bug #2. Its `Ray(...)`
@@ -63,8 +86,8 @@ list doesn't.
   function's miss-handling branch (`Ray([NaN,NaN,NaN], [NaN,NaN,NaN])`)
   was fixed the same way, to `Ray(Point3(NaN,NaN,NaN),
   Vec3(NaN,NaN,NaN))` -- note that branch's separate `return`-instead-
-  of-`continue` logic bug (Bugs #2 in `TODO.md`) is **not** fixed by
-  this; it's still open. `test/plotting.jl`'s
+  of-`continue` logic bug is **not** fixed by this; it was still open
+  at the time (fixed later, separately, see #2 above). `test/plotting.jl`'s
   `perimeterRays`/`plotPerimeterRays` testset was updated from four
   `@test_throws MethodError` assertions to real assertions (verified
   against the existing test fixture, whose 8 perimeter rays all hit
@@ -110,6 +133,37 @@ list doesn't.
   (`p, wl -> nothing`) to one returning the real geometry array (see
   #10 below for why that was necessary too).
 
+- **6.** `src/surface_manipulation.jl`, `reverseProfile!(profile::T)
+  where T<:AbstractSurfProfile` (the generic fallback for profile types
+  without their own specific method): assumed every such type has an
+  `a` field. That's false for `SurfProfileOAConic` (`curv`/`ϵ`/
+  `offset`), which fell through to this method -- calling it threw a
+  field-access error. (`NoProfile` used to hit this same fallback too,
+  but got its own dedicated `reverseProfile!(profile::NoProfile)` no-op
+  method separately -- see #7 below.)
+
+  **Fixed**: added a dedicated `reverseProfile!(profile::SurfProfileOAConic)`
+  method (`src/surface_manipulation.jl`, right after the
+  `SurfProfileConic` method), so `SurfProfileOAConic` no longer falls
+  through to the generic fallback at all. **Incomplete on purpose**: the
+  new method only negates `profile.curv` (matching its `SurfProfile{,OA}Conic`
+  siblings) and leaves `profile.offset` untouched -- reversing an
+  off-axis conic also needs the offset re-expressed in the reversed
+  geometry's frame, which whoever added this method didn't attempt; it
+  prints a message noting this at call time. Tracked as a new, separate
+  Code issue (`TODO.md` #22) rather than left silently wrong. (The first
+  attempt at this fix mistakenly typed the new method
+  `profile::SurfProfileConic` -- identical to the existing method's
+  signature just above it -- which Julia silently accepted as a
+  redefinition/overwrite of that method instead of a new one, so
+  `SurfProfileOAConic` still fell through to the generic fallback
+  unchanged; caught by re-running `using OpticTrace` and noticing the
+  "Method definition ... overwritten" warning, fixed by correcting the
+  type annotation.) `test/surface_manipulation.jl`'s `"SurfProfileOAConic"`
+  testset was updated from `@test_throws FieldError` to real assertions
+  (`curv` negated, `ϵ` and `offset` both unchanged -- `offset` being
+  unchanged is the known-incomplete behavior, not a regression check).
+
 - **7.** `src/surface_manipulation.jl`, `reverseGeo`/`reverseSurface!`:
   despite `reverseGeo`'s `Vector{T} where T<:AbstractSurface` signature,
   `reverseSurface!` only had a method for `OptSurface` -- a `geo`
@@ -123,12 +177,13 @@ list doesn't.
   `reverseProfile!` + recompute coordinate transforms) but skipping the
   `reverseMod!` call -- `ModelSurface` has no `.mod`/coating at all
   (just a fixed `.refIndex` scalar for OPD bookkeeping, no in/out pair
-  to swap), so `.refIndex` is left untouched. This depended on Bugs #6's
-  partial fix: `roundAperture`-built `ModelSurface`s use `NoProfile`, so
-  exercising this new method calls `reverseProfile!` on a `NoProfile`,
-  which needed its own no-op method to not throw (see #6 in `TODO.md` --
-  that item stays open there since its other case, `SurfProfileOAConic`,
-  is a separate, still-unfixed defect through the same generic fallback).
+  to swap), so `.refIndex` is left untouched. This depended on #6's
+  partial fix (above): `roundAperture`-built `ModelSurface`s use
+  `NoProfile`, so exercising this new method calls `reverseProfile!` on
+  a `NoProfile`, which needed its own no-op method to not throw. At the
+  time, #6 stayed open in `TODO.md` since its other case,
+  `SurfProfileOAConic`, was a separate, still-unfixed defect through the
+  same generic fallback -- fixed later, separately (see #6 above).
   `test/surface_manipulation.jl`'s `"geo containing a ModelSurface
   (known bug, see TODO.md)"` testset was updated from `@test_throws
   MethodError` to real assertions (order swap, position reflection for
@@ -234,4 +289,42 @@ list doesn't.
 
 ## Code issues
 
-(none yet)
+- **5.** `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar`
+  archives (Zemax file bundles) wasn't implemented at all -- only the
+  Python reference implementation existed, kept in
+  `docs/zemax_reference.md` as a starting point for a future
+  `readZemaxArchive`-style function.
+
+  **Fixed**: ported the reference implementation to `src/zemax.jl` as
+  `ZarEntry`, `lzwDecompress`, `readZemaxArchive`, `listZemaxArchive`,
+  and `extractZemaxArchive` (selected-entries and extract-all methods).
+  Validated byte-for-byte against a from-scratch Python re-port of the
+  same reference, run against two real sample `.zar` files covering
+  both header layouts ("earlier"/`0xEA` and "latest"/`0xEC`). Covered
+  by `test/zemax.jl`'s `lzwDecompress` unit test (a real, hand-verified
+  compressed/decompressed byte pair) and a `HAS_ZAR_SAMPLE`-gated
+  integration testset (see `test/helper.jl`) exercising listing and
+  both extraction forms against a real archive.
+
+- **23.** `src/zemax.jl`: reading `.zmf` lens-catalog files (how
+  vendors like Edmund/Thorlabs publish stock lens families) wasn't
+  implemented, and wasn't previously tracked anywhere in this repo --
+  found and fixed in the same pass as #5 above. The format is
+  undocumented by Ansys/Zemax; `docs/zemax_reference.md` now keeps the
+  community reverse-engineering reference this was ported from
+  (`rayopt`'s `zemax.py`), including the record layout and the
+  obfuscation formula.
+
+  **Fixed**: added `ZmfEntry`, `zmfDeobfuscate`, `readZmfCatalog`,
+  `listZmfCatalog`, and `extractZmfCatalog` (selected-lenses and
+  extract-all methods) to `src/zemax.jl`. `extractZmfCatalog` writes
+  each decoded lens as a `<name>.zmx` file, directly readable by the
+  existing `readZemax` -- no changes to that parser were needed.
+  Validated byte-for-byte against a from-scratch Python re-port of
+  `rayopt`'s `zmf_read`/`zmf_obfuscate` (re-implemented without
+  `rayopt`'s ORM/session machinery and without its now-removed
+  `numpy.fromstring`/`.tostring()` calls), run against three real
+  vendor catalogs. Covered by `test/zemax.jl`'s `zmfDeobfuscate` unit
+  test (a real, hand-verified obfuscated/plaintext byte pair) and a
+  `HAS_ZMF_SAMPLE`-gated integration testset (see `test/helper.jl`)
+  exercising listing and both extraction forms against a real catalog.

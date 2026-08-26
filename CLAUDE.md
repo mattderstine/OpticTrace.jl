@@ -141,11 +141,17 @@ but note where it diverges from the code as it exists today:
   adding regression tests for the specific surface/case that broke
   (e.g. aspheric traces) — follow that pattern for bug fixes here: add a
   regression test alongside the fix.
-- `TODO.md`'s "Code issues" section lists this project's known,
-  confirmed-by-testing bugs (many surfaced by writing the test suite
-  itself) — check it before assuming odd behavior you hit is a bug you
-  just found; it may already be tracked, with a `@test_broken`/
-  `@test_throws` regression test already covering it.
+- `TODO.md`'s "Bugs" section lists this project's known,
+  confirmed-by-testing defects (many surfaced by writing the test suite
+  itself; "Code issues" is a separate section for missing
+  features/cleanup/open design questions, not confirmed bugs) — check
+  it before assuming odd behavior you hit is a bug you just found; it
+  may already be tracked, with a `@test_broken`/`@test_throws`
+  regression test already covering it. Both sections use a stable,
+  never-renumbered `**N.**` item-number convention (see `TODO.md`'s own
+  header for why, and `FIXED.md`, which archives resolved entries under
+  their original number rather than deleting them) — don't renumber
+  surrounding items when removing or adding one.
 - The phased test-writing effort that built out `test/` (see `TODO.md`'s
   "Test-writing plan") is complete: every real, reachable function in
   `src/` has functional coverage, or an explicit, documented reason it's

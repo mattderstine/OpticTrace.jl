@@ -251,10 +251,7 @@ Render `s`'s round aperture into `scene`: a `Disk` mesh for the central
 obscuration (if `a.obscure != 0`), and a `Washer` mesh for the outer
 clear-aperture ring (if `a.semiDiameter != ∞`). `dsize` is accepted for
 signature symmetry with the `RectAperture` method above but is unused
-here (`Disk`/`Washer` don't take a frame-width parameter). See
-`Washer`/`Disk`'s docstrings (`src/mesh_primitives.jl`) for their known
-`GeometryBasics.radius`/`widths` bugs, which this rendering path can
-trigger (see `TODO.md`).
+here (`Disk`/`Washer` don't take a frame-width parameter).
 """
 function plotModelSurf!(scene, a::RoundAperture, s::ModelSurface, dsize = 0.3)
     if a.obscure != 0.
@@ -609,18 +606,10 @@ end
 Trace `points` rays arranged around a circle of `radius` centered at
 `r` (in the local x/y plane), all launched at polar angle `θ` from the
 local z axis, and collect each one's ray at `surfview` (see
-`tracenumFromName`). Intended to return a `Vector{Ray}` of length
-`points`.
-
-**This method has a bug**: if any ray fails to trace (`status != 0`),
-it prints a status message, stores a NaN `Ray` in `rays[i]`, and then
-executes a bare `return` -- which returns `nothing`, discarding the
-`rays` vector entirely (including any rays already successfully traced
-before this point), rather than continuing to the next perimeter angle
-or returning the partially-`NaN`-filled vector. Very likely a
-`continue` was intended instead of `return`. This also means
-`plotPerimeterRays`/`plotPerimeterRays!` below will fail if fed a `geo`
-where any perimeter ray misses. See `TODO.md`.
+`tracenumFromName`). Returns a `Vector{Ray}` of the rays that traced
+successfully -- shorter than `points` if any ray failed to trace
+(`status != 0`, e.g. a miss); a failed ray is skipped (after printing a
+status message) rather than included as a `NaN` placeholder.
 """
 function perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, points::Int64, geo;surfview = "end")
     trcStatMsg=("Normal","Missed","TIR","Clipped")
@@ -635,12 +624,12 @@ function perimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, poi
             println(trcStatMsg[status+1])
             rays[i] = Ray(Point3(NaN, NaN, NaN), Vec3(NaN, NaN, NaN))
 
-            return
+            continue
         end
         rays[i] = trc[surfnum].ray
         i += 1
     end
-    rays
+    rays[1:i-1]  #return only the successfully traced rays
 end
 
 """
@@ -650,7 +639,6 @@ Trace a ring of perimeter rays via `perimeterRays` and plot them as
 arrows (base point + direction) in a new figure. See
 `plotPerimeterRays!`/`plotPerimeterRays!(scene, ...)` below for the
 mutating variants (into the active scene, or into a given `scene`).
-Subject to the `perimeterRays` bug noted above if any ray misses.
 """
 function plotPerimeterRays(r::SVector{3, Float64}, radius::Float64, θ::Float64, pnts::Int64, geo; color=:blue, surfview = "end")
     pr = perimeterRays(r, radius, θ, pnts, geo, surfview = surfview)

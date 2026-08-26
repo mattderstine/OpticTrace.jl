@@ -161,8 +161,8 @@
         @test all(ray -> !any(isnan, ray.base) && !any(isnan, ray.dir), pr)
         # surfview="end" -> the image plane, geo's last surface (z=50)
         @test all(ray -> ray.base[3] ≈ 50.0, pr)
-        # TODO.md Bugs #2 (early return -> nothing on any miss) is still
-        # open, but none of these 8 rays miss, so it isn't exercised here.
+        # None of these 8 rays miss, so the truncated-length return path
+        # (FIXED.md #2) isn't exercised here.
 
         plt = plotPerimeterRays(r, 1.0, 0.01, 8, geo; surfview = "end")
         @test !isnothing(plt)

@@ -151,4 +151,90 @@
         @test geo[3].mod.refIndexOut == 1.0
     end
 
+    @testset "lzwDecompress" begin
+        # First 24 bytes of the real "3479-S02.ZMX.LZW" entry's payload
+        # inside ZAR_SAMPLE_PATH (see test/helper.jl), decoding to a
+        # clean 21-byte ZMX header line -- cross-checked against a
+        # from-scratch Python port of the reference decompressor.
+        compressed = UInt8[0x2b,0x11,0x4a,0x45,0x31,0x00,0xc4,0x60,0x30,0x1a,
+                            0x0c,0x46,0x82,0x01,0x80,0x80,0x64,0x36,0x1c,0x8d,
+                            0xc6,0x00,0xd0,0x51]
+        expected = UInt8[0x56,0x45,0x52,0x53,0x20,0x31,0x30,0x30,0x34,0x31,
+                          0x34,0x20,0x30,0x20,0x32,0x36,0x39,0x37,0x30,0x0d,0x0a]
+        @test OpticTrace.lzwDecompress(compressed) == expected
+        @test String(OpticTrace.lzwDecompress(compressed)) == "VERS 100414 0 26970\r\n"
+    end
+
+    @testset "zmfDeobfuscate" begin
+        # First 16 bytes of lens "5002"'s obfuscated description inside
+        # ZMF_SAMPLE_PATH (see test/helper.jl), with that lens's real
+        # efl/enp -- cross-checked against a from-scratch Python port
+        # of rayopt's zmf_obfuscate.
+        obfuscated = UInt8[0x9a,0x0c,0xa1,0xb0,0x16,0x51,0xc8,0xe4,
+                            0xec,0x89,0x40,0x0a,0xab,0xe5,0x0b,0x87]
+        expected = UInt8[0x56,0x45,0x52,0x53,0x20,0x31,0x30,0x30,
+                          0x35,0x30,0x33,0x0a,0x4d,0x4f,0x44,0x45]
+        @test OpticTrace.zmfDeobfuscate(obfuscated, 4.485, 5.2) == expected
+        @test String(OpticTrace.zmfDeobfuscate(obfuscated, 4.485, 5.2)) == "VERS 100503\nMODE"
+    end
+
+    if HAS_ZAR_SAMPLE
+        @testset "Zemax .zar archive reading" begin
+            names = listZemaxArchive(ZAR_SAMPLE_PATH)
+            @test names == ["3479-S02.ZMX", "SCHOTT.AGF", "INFRARED.AGF",
+                             "MISC.AGF", "COATINGTHOR.DAT"]
+
+            outdir = mktempdir()
+            paths = extractZemaxArchive(ZAR_SAMPLE_PATH; outputPath = outdir)
+            @test length(paths) == 5
+            @test all(isfile, paths)
+
+            zmxtext = read(joinpath(outdir, "3479-S02.ZMX"), String)
+            @test startswith(zmxtext, "VERS 100414 0 26970")
+            @test occursin("NAME LF1988 - Negative Meniscus - N-BK7", zmxtext)
+
+            outdir2 = mktempdir()
+            selected = extractZemaxArchive(ZAR_SAMPLE_PATH, ["3479-S02.ZMX"]; outputPath = outdir2)
+            @test selected == [joinpath(outdir2, "3479-S02.ZMX")]
+            @test readdir(outdir2) == ["3479-S02.ZMX"]
+
+            @test_throws ErrorException extractZemaxArchive(ZAR_SAMPLE_PATH, ["NOT_A_REAL_ENTRY"]; outputPath = mktempdir())
+        end
+    else
+        @info "Skipping Zemax .zar archive reading tests: $ZAR_SAMPLE_PATH not found"
+    end
+
+    if HAS_ZMF_SAMPLE
+        @testset "Zemax .zmf catalog reading" begin
+            names = listZmfCatalog(ZMF_SAMPLE_PATH)
+            @test names == ["5002", "8003"]
+
+            entries = readZmfCatalog(ZMF_SAMPLE_PATH)
+            @test length(entries) == 2
+            @test entries[1].name == "5002"
+            @test entries[1].efl == 4.485
+            @test entries[1].enp == 5.2
+            @test entries[1].elements == 1
+
+            outdir = mktempdir()
+            paths = extractZmfCatalog(ZMF_SAMPLE_PATH; outputPath = outdir)
+            @test length(paths) == 2
+            @test all(isfile, paths)
+
+            zmxtext = read(joinpath(outdir, "5002.zmx"), String)
+            @test startswith(zmxtext, "VERS 100503")
+            @test occursin("GLAS ACRYLIC", zmxtext)
+            @test occursin("CURV 3.752562061747658500E-001", zmxtext)
+
+            outdir2 = mktempdir()
+            selected = extractZmfCatalog(ZMF_SAMPLE_PATH, ["8003"]; outputPath = outdir2)
+            @test selected == [joinpath(outdir2, "8003.zmx")]
+            @test readdir(outdir2) == ["8003.zmx"]
+
+            @test_throws ErrorException extractZmfCatalog(ZMF_SAMPLE_PATH, ["NOT_A_REAL_LENS"]; outputPath = mktempdir())
+        end
+    else
+        @info "Skipping Zemax .zmf catalog reading tests: $ZMF_SAMPLE_PATH not found"
+    end
+
 end

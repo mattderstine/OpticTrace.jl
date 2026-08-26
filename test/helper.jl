@@ -59,3 +59,23 @@ check this and skip (not fail) when it's false, e.g.:
     end
 """
 const HAS_GLASS_CATALOG = isdir(OpticTrace.dirBaseRefractiveIndex)
+
+"""
+Machine-local sample files for the `.zar`/`.zmf` reader tests in
+`test/zemax.jl`. Both are real vendor/Zemax-derived files that live
+outside the repo (possible IP concerns), not part of the repo -- same
+situation as [`HAS_GLASS_CATALOG`](@ref) above. Tests that need them
+should check the corresponding `HAS_...` constant and skip (not fail)
+when it's false, e.g.:
+
+    if HAS_ZAR_SAMPLE
+        @testset "..." begin ... end
+    else
+        @info "Skipping ...: $ZAR_SAMPLE_PATH not found"
+    end
+"""
+const ZAR_SAMPLE_PATH = "/Users/matt/Desktop/Zemax lenses/LF1988-Zemax.zar"
+const HAS_ZAR_SAMPLE = isfile(ZAR_SAMPLE_PATH)
+
+const ZMF_SAMPLE_PATH = "/Users/matt/Development/Software/Zemax/Stockcat/DiverseOptics.ZMF"
+const HAS_ZMF_SAMPLE = isfile(ZMF_SAMPLE_PATH)
