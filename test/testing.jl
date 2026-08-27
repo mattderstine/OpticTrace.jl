@@ -381,3 +381,4 @@ printGeo([rfpp])
 ##
 
 
+zemaxBrowser(".")

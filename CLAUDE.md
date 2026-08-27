@@ -7,8 +7,10 @@ Guidance for Claude Code when working in this repository.
 OpticTrace.jl is a Julia package for optical ray tracing of illumination
 systems (as opposed to imaging-only raytracers): sequential/non-sequential
 tracing of rays through lens surfaces, aperture handling, glass/refractive
-index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry, and
-3D visualization via GLMakie.
+index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry,
+3D visualization via GLMakie, and a Bonito.jl-based web UI
+(`src/zemax_browser.jl`) for browsing a directory of `.zmx`/`.zar`/`.zmf`
+Zemax files and extracting archive contents.
 
 ## Environment
 
@@ -46,7 +48,13 @@ index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry, and
   - `mesh_primitives.jl` — `GeometryBasics`/`MeshIO` mesh construction.
   - `lens_refractive_index.jl`, `lens_edmund.jl`, `lens_thorlabs.jl` —
     glass/catalog data and refractive index models.
-  - `zemax.jl` — Zemax file import.
+  - `zemax.jl` — Zemax file import (`.zmx` parsing, `.zar`/`.zmf`
+    archive reading and extraction).
+  - `zemax_browser.jl` — Bonito.jl web UI over `zemax.jl`'s functions:
+    directory-tree browsing of `.zmx`/`.zar`/`.zmf` files, content
+    preview, and archive extraction (`zemaxBrowser` is the entry point).
+    See the "Bonito/GLMakie name collision" note under Dependencies
+    below before touching this file's imports.
   - `characterization.jl` — spot diagrams, system characterization.
   - `plotting.jl` — GLMakie-based visualization.
   - `printing.jl` — `Base.show`/pretty-printing for core types.
@@ -55,17 +63,27 @@ index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry, and
   "Test-writing plan" section — all 12 phases are done): `foundations.jl`,
   `optics.jl`, `surface_builders.jl`, `mesh_primitives.jl`,
   `trace_geometry.jl`, `surface_manipulation.jl`, `characterization.jl`,
-  `refractive_index.jl`, `lens_catalogs.jl`, `zemax.jl`, `printing.jl`,
-  `plotting.jl`. Every real, reachable function in `src/` has functional
+  `refractive_index.jl`, `lens_catalogs.jl`, `zemax.jl`,
+  `zemax_browser.jl`, `printing.jl`, `plotting.jl` (`zemax_browser.jl`
+  was added after the phased plan completed, not part of it, but follows
+  the same "every reachable function gets coverage" bar). Every real,
+  reachable function in `src/` has functional
   coverage (or a documented exclusion reason, see `TODO.md`); known-broken
   cases are captured as `Test.@test_broken`/`@test_throws` rather than
   left uncovered. `test/testing.jl` is currently commented out there —
   check before assuming it runs. `test/helper.jl` has shared test helpers
   (e.g. `normal_from_sag` computed via `ForwardDiff` for validating
   analytic surface normals, and a `riFunc` stub for catalog-independent
-  lens-builder tests). `test/fixtures/` holds checked-in test data (e.g.
-  a minimal `.zmx` file for `zemax.jl`'s tests) — prefer this over
-  depending on machine-local paths when a test needs a real file to read.
+  lens-builder tests). `test/fixtures/` holds checked-in test data: a
+  minimal `.zmx` file for `zemax.jl`'s tests, plus synthetic
+  `test_archive.zar`/`test_catalog.zmf` (built by
+  `test/fixtures/generate_synthetic_zemax.jl`, a maintenance script *not*
+  wired into `runtests.jl` — rerun it by hand if the `.zar`/`.zmf` byte
+  layout understanding ever changes) so `zemax_browser.jl`'s archive
+  tests get real CI coverage instead of depending on the machine-local
+  `HAS_ZAR_SAMPLE`/`HAS_ZMF_SAMPLE` samples `zemax.jl`'s own tests still
+  use (see below) — prefer checked-in fixtures like these over depending
+  on machine-local paths when a test needs a real file to read.
   `test/scratch.jl` is scratch/manual exploration, not wired into the
   test suite. `refractive_index.jl`, `lens_catalogs.jl`, and part of
   `optics.jl` (via `lens_TLAC254_060`) depend on real glass-catalog
@@ -79,11 +97,18 @@ index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry, and
   gets **zero coverage** of catalog-dependent code paths — vendoring the
   glass database (or at least a subset, as `test/fixtures/` does for
   Zemax) would fix that but hasn't been done yet.
-- No `scripts/` directory currently exists in this repo. A `docs/`
-  directory does exist, but only holds `docs/zemax_reference.md` (a
-  kept Python reference for a future `.zar`-archive-reading feature,
-  see `TODO.md`) — there's no generated/Documenter.jl-style
-  documentation site (unlike what
+- No top-level `scripts/` directory exists in this repo (the closest
+  thing, `test/fixtures/generate_synthetic_zemax.jl`, is a test-fixture
+  maintenance script, not a general scripts area). A `docs/` directory
+  does exist, but only holds `docs/zemax_reference.md` — **note this
+  file's own purpose has changed since it was created**: it was
+  originally kept as a Python reference for a *future* `.zar`-archive-
+  reading feature, but that feature (plus `.zmf` catalog reading) is now
+  fully implemented in `src/zemax.jl` (see `FIXED.md` #5/#23) and
+  `src/zemax_browser.jl` builds a UI on top of it — the file is now kept
+  as historical reference for the binary format layouts the Julia code
+  was ported from, not a pointer to unstarted work. There's still no
+  generated/Documenter.jl-style documentation site (unlike what
   `.github/instructions/copilot-instructions.md` implies).
 
 ## Code conventions actually used in this codebase
@@ -158,19 +183,52 @@ but note where it diverges from the code as it exists today:
   excluded (unused *and* unexported, or entirely non-functional).
   Memory-allocation/type-stability testing is explicitly out of scope
   for that effort and remains open future work.
+- **Testing Bonito UI code** (`test/zemax_browser.jl`): split coverage
+  into (1) plain unit tests of any logic layer that doesn't touch Bonito
+  at all (dispatch, path handling, struct-building — the bulk of the
+  coverage, cheapest to write and to trust), and (2) Bonito "smoke"
+  tests that build the real `Bonito.App`/DOM nodes and render them via
+  `Bonito.export_static` to a temp HTML file, then assert on substrings
+  in the rendered output. That second layer only checks the *initial*
+  render, not click-driven interactivity (button callbacks, live
+  Observable updates) — deliberately out of scope for this project's
+  automated suite; a real headless-browser-driven test would be the only
+  way to cover that and isn't worth the added CI dependency/flakiness at
+  this project's size. No `xvfb-run` is needed for either layer: Bonito
+  is a plain HTTP/WebSocket server, unlike GLMakie's GLFW/OpenGL
+  requirement.
 
 ## Dependencies
 
 Key deps (see `Project.toml`): `StaticArrays`, `GeometryBasics`,
 `CoordinateTransformations` (core geometry/types), `GLMakie` (plotting),
-`ForwardDiff` (autodiff, used both in the library and in tests),
-`Optim`/`Roots` (numerical solving), `DataInterpolations`, `YAML`/`FileIO`/
-`MeshIO` (data and mesh I/O), `StatsBase` (histogram binning behind
-`rayHeatmap`/`rayHeatmap!`, `src/plotting.jl`). Don't add new
-dependencies without updating `Project.toml`'s `[deps]` and `[compat]`.
+`Bonito` (the `zemax_browser.jl` web UI; Julia 1.12+ floor, see
+"Environment," is partly driven by `Bonito@5`'s own `julia = "1.11"`
+compat floor), `ForwardDiff` (autodiff, used both in the library and in
+tests), `Optim`/`Roots` (numerical solving), `DataInterpolations`,
+`YAML`/`FileIO`/`MeshIO` (data and mesh I/O), `StatsBase` (histogram
+binning behind `rayHeatmap`/`rayHeatmap!`, `src/plotting.jl`). Don't add
+new dependencies without updating `Project.toml`'s `[deps]` and
+`[compat]`.
 `test/runtests.jl` also directly `using`s several of these (`GLMakie`,
 `StatsBase`, `GeometryBasics`, `ForwardDiff`, `LinearAlgebra`,
 `StaticArrays`) for use inside the test files themselves, not just
 transitively through `OpticTrace` — add to that `using` list there if a
 new test file needs direct access to one of these packages' own
 exports/types.
+
+**Bonito/GLMakie name collision — never add `using Bonito` to a shared
+`using` block.** GLMakie and Bonito both export several identical names
+bound to unrelated types: `Button`, `Slider`, `Checkbox`, `Dropdown`.
+Confirmed directly: after `using GLMakie, Bonito` in the same scope, a
+bare `Button` throws `UndefVarError` (Julia leaves a genuinely
+conflicting exported name unresolved rather than picking one) — and
+`src/plotting.jl`'s `multipleFigures` already uses GLMakie's unqualified
+`Button`, so a top-level `using Bonito` in `src/OpticTrace.jl` (which
+already has `using GLMakie`) would break it. `src/zemax_browser.jl` does
+`import Bonito` instead and qualifies every reference (`Bonito.App`,
+`Bonito.DOM`, `Bonito.Button`, `Bonito.TextField`, `Bonito.Server`,
+`Bonito.on`, `Bonito.Observable`, ...); `test/zemax_browser.jl` does the
+same (`import Bonito` local to that file, not added to
+`test/runtests.jl`'s shared `using` block, for the identical reason).
+Keep this pattern for any future Bonito-dependent code in this package.

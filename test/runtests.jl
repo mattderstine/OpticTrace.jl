@@ -27,6 +27,7 @@ include("helper.jl")
     include("refractive_index.jl")
     include("lens_catalogs.jl")
     include("zemax.jl")
+    include("zemax_browser.jl")
     include("printing.jl")
     include("plotting.jl")
 

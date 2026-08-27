@@ -214,6 +214,20 @@ already resolved.
   but deliberately incomplete -- the function prints a message noting
   this at call time. Needs someone who understands `offset`'s sign/
   coordinate convention relative to `curv` to finish it properly.
+- **24.** `src/zemax_browser.jl`, `_archiveContentPane`: the extraction
+  output-path field is a plain editable text box pre-filled from
+  `defaultExtractionOutputPath` -- there's no folder-picker UI, by
+  deliberate choice, not oversight. A native `<input type="file">`
+  picker can't work here: browsers withhold the real filesystem path
+  from that input, and extraction runs server-side (needs a real path).
+  If a picker is wanted later, two options were identified: (a) a
+  server-side directory-tree picker panel reusing this same file's
+  `walkZemaxDirectory`/tree-rendering code (no new dependency, correct
+  regardless of whether the browser and the Bonito server are on the
+  same machine -- recommended if this is revisited), or (b) shelling out
+  to a native OS folder dialog from the server process (only correct
+  when browser and server are the same machine, needs per-OS handling, a
+  new dependency, and a no-op path for headless CI -- not recommended).
 
 ## Test-writing plan
 
