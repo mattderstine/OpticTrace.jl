@@ -31,5 +31,6 @@ include("lens_thorlabs.jl")
 include("characterization.jl")
 include("zemax.jl")
 include("surface_manipulation.jl")
+include("UItools/filepicker.jl")
 include("zemax_browser.jl")
 end

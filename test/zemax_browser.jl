@@ -14,47 +14,6 @@
         @test OpticTrace.zemaxFileKind("foo") === nothing
     end
 
-    @testset "walkZemaxDirectory" begin
-        tmp = mktempdir()
-        mkpath(joinpath(tmp, "sub"))
-        write(joinpath(tmp, "a.zmx"), "")
-        write(joinpath(tmp, "b.zar"), "")
-        write(joinpath(tmp, "ignored.txt"), "")
-        write(joinpath(tmp, "sub", "c.zmf"), "")
-
-        node = OpticTrace.walkZemaxDirectory(tmp)
-        @test node.isDir
-        @test node.kind == :dir
-        @test node.path == tmp
-
-        names = [c.name for c in node.children]
-        @test "a.zmx" in names
-        @test "b.zar" in names
-        @test "sub" in names
-        @test !("ignored.txt" in names)
-
-        aNode = node.children[findfirst(==("a.zmx"), names)]
-        @test aNode.kind == :zmx
-        @test !aNode.isDir
-        @test isempty(aNode.children)
-
-        subNode = node.children[findfirst(==("sub"), names)]
-        @test subNode.isDir
-        @test length(subNode.children) == 1
-        @test subNode.children[1].name == "c.zmf"
-        @test subNode.children[1].kind == :zmf
-
-        @testset "on test/fixtures itself" begin
-            fixturesNode = OpticTrace.walkZemaxDirectory(fixturesDir)
-            fixtureNames = [c.name for c in fixturesNode.children]
-            @test "test_singlet.zmx" in fixtureNames
-            @test "test_archive.zar" in fixtureNames
-            @test "test_catalog.zmf" in fixtureNames
-            # generate_synthetic_zemax.jl has no browsable extension
-            @test !("generate_synthetic_zemax.jl" in fixtureNames)
-        end
-    end
-
     @testset "zemaxFileSummary" begin
         summary = OpticTrace.zemaxFileSummary(zmxPath)
         @test summary isa OpticTrace.ZemaxFileSummary
@@ -85,6 +44,25 @@
         @test_throws ErrorException OpticTrace.listZemaxArchiveEntities(zmxPath)
     end
 
+    @testset "zemaxEntityBytes" begin
+        bytes = OpticTrace.zemaxEntityBytes(zarPath, "SYNTH.AGF")
+        @test String(bytes) == "synthetic glass catalog stub, not real glass data\n"
+
+        zmxBytes = OpticTrace.zemaxEntityBytes(zmfPath, "LENS1")
+        @test !isempty(zmxBytes)
+        @test startswith(String(zmxBytes), "VERS")
+
+        @test_throws ErrorException OpticTrace.zemaxEntityBytes(zarPath, "NOT_A_REAL_ENTRY")
+        @test_throws ErrorException OpticTrace.zemaxEntityBytes(zmxPath, "SYNTH.ZMX")
+    end
+
+    @testset "looksLikeText" begin
+        @test OpticTrace.looksLikeText(UInt8[])
+        @test OpticTrace.looksLikeText(Vector{UInt8}("plain ascii text\nsecond line"))
+        @test !OpticTrace.looksLikeText(UInt8[0x68, 0x69, 0x00, 0x6a])
+        @test !OpticTrace.looksLikeText(UInt8[0xff, 0xfe, 0xfd])
+    end
+
     @testset "zemaxEntitySummary" begin
         @testset ".zar entity" begin
             summary = OpticTrace.zemaxEntitySummary(zarPath, "SYNTH.ZMX")
@@ -106,6 +84,8 @@
             paths = OpticTrace.extractZemaxEntities(zarPath; outputPath = outdir)
             @test length(paths) == 2
             @test all(isfile, paths)
+            nestedDir = joinpath(outdir, splitext(basename(zarPath))[1])
+            @test all(p -> dirname(p) == nestedDir, paths)
         end
 
         @testset ".zar extract named" begin
@@ -119,6 +99,8 @@
             paths = OpticTrace.extractZemaxEntities(zmfPath; outputPath = outdir)
             @test length(paths) == 2
             @test all(isfile, paths)
+            nestedDir = joinpath(outdir, splitext(basename(zmfPath))[1])
+            @test all(p -> dirname(p) == nestedDir, paths)
         end
 
         @testset ".zmf extract named" begin
@@ -131,8 +113,8 @@
     end
 
     @testset "defaultExtractionOutputPath" begin
-        @test OpticTrace.defaultExtractionOutputPath(zarPath) == OpticTrace._stripExtension(zarPath, ".zar")
-        @test OpticTrace.defaultExtractionOutputPath(zmfPath) == OpticTrace._stripExtension(zmfPath, ".zmf")
+        @test OpticTrace.defaultExtractionOutputPath(zarPath) == dirname(zarPath)
+        @test OpticTrace.defaultExtractionOutputPath(zmfPath) == dirname(zmfPath)
         @test_throws ErrorException OpticTrace.defaultExtractionOutputPath(zmxPath)
     end
 
@@ -148,8 +130,8 @@
             return read(path, String)
         end
 
-        @testset "_zemaxBrowserApp" begin
-            app = OpticTrace._zemaxBrowserApp(fixturesDir)
+        @testset "zemaxBrowserApp" begin
+            app = OpticTrace.zemaxBrowserApp(fixturesDir)
             @test app isa Bonito.App
             path = joinpath(mktempdir(), "out.html")
             Bonito.export_static(path, app)
@@ -158,34 +140,44 @@
             @test occursin("test_archive.zar", html)
             @test occursin("test_catalog.zmf", html)
             @test occursin("Select a file", html)
+            @test occursin("↑", html)
+            @test occursin(">File<", html)
         end
 
-        @testset "_contentPane .zmx" begin
-            html = renderToString(() -> OpticTrace._contentPane(zmxPath))
+        @testset "contentPane .zmx" begin
+            html = renderToString(() -> Bonito.DOM.div(OpticTrace.contentPane(zmxPath)...))
             @test occursin("Test Singlet", html)
             @test occursin("EVENASPH", html)
             @test occursin("TESTGLASS", html)
         end
 
-        @testset "_contentPane .zar" begin
-            html = renderToString(() -> OpticTrace._contentPane(zarPath))
+        @testset "contentPane .zar" begin
+            html = renderToString(() -> Bonito.DOM.div(OpticTrace.contentPane(zarPath)...))
             @test occursin("SYNTH.ZMX", html)
             @test occursin("SYNTH.AGF", html)
             @test occursin("no preview", html)
             @test occursin("Output path", html)
+            @test occursin("Browse", html)
             @test occursin("Extract All", html)
         end
 
-        @testset "_contentPane .zmf" begin
-            html = renderToString(() -> OpticTrace._contentPane(zmfPath))
-            @test occursin("LENS1", html)
-            @test occursin("LENS2", html)
+        @testset "contentPane .zmf" begin
+            html = renderToString(() -> Bonito.DOM.div(OpticTrace.contentPane(zmfPath)...))
+            @test occursin("LENS1.zmx", html)
+            @test occursin("LENS2.zmx", html)
             @test occursin("Extract All", html)
         end
 
-        @testset "_contentPane empty selection" begin
-            html = renderToString(() -> OpticTrace._contentPane(""))
+        @testset "contentPane empty selection" begin
+            html = renderToString(() -> Bonito.DOM.div(OpticTrace.contentPane("")...))
             @test occursin("Select a file", html)
+        end
+
+        @testset "renderTextPreview" begin
+            bytes = OpticTrace.zemaxEntityBytes(zarPath, "SYNTH.AGF")
+            html = renderToString(() -> OpticTrace.renderTextPreview("SYNTH.AGF", bytes))
+            @test occursin("SYNTH.AGF", html)
+            @test occursin("synthetic glass catalog stub", html)
         end
     end
 

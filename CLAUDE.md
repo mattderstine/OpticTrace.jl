@@ -8,9 +8,10 @@ OpticTrace.jl is a Julia package for optical ray tracing of illumination
 systems (as opposed to imaging-only raytracers): sequential/non-sequential
 tracing of rays through lens surfaces, aperture handling, glass/refractive
 index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry,
-3D visualization via GLMakie, and a Bonito.jl-based web UI
+3D visualization via GLMakie, a Bonito.jl-based web UI
 (`src/zemax_browser.jl`) for browsing a directory of `.zmx`/`.zar`/`.zmf`
-Zemax files and extracting archive contents.
+Zemax files and extracting archive contents, and a generic, reusable
+Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
 
 ## Environment
 
@@ -51,10 +52,19 @@ Zemax files and extracting archive contents.
   - `zemax.jl` — Zemax file import (`.zmx` parsing, `.zar`/`.zmf`
     archive reading and extraction).
   - `zemax_browser.jl` — Bonito.jl web UI over `zemax.jl`'s functions:
-    directory-tree browsing of `.zmx`/`.zar`/`.zmf` files, content
-    preview, and archive extraction (`zemaxBrowser` is the entry point).
-    See the "Bonito/GLMakie name collision" note under Dependencies
-    below before touching this file's imports.
+    browsing `.zmx`/`.zar`/`.zmf` files via `UItools/filepicker.jl`'s
+    `filePicker` (`:file` mode, filtered to those three extensions),
+    content preview, and archive extraction -- including browsing for
+    an extraction output directory via a "Browse..." toggle over
+    another `filePicker` (`:directory` mode) in `archiveContentPane`
+    (`zemaxBrowser` is the entry point). See the "Bonito/GLMakie name
+    collision" note under Dependencies below before touching this
+    file's imports.
+  - `UItools/filepicker.jl` — a standalone, generic Bonito.jl
+    file/directory picker component (`filePicker` is the entry point,
+    `filePickerApp` a standalone-app wrapper for previewing/testing it),
+    used by `zemax_browser.jl` (see above; this is `TODO.md`/`FIXED.md`
+    item #24). Same "qualify every Bonito symbol" rule applies here too.
   - `characterization.jl` — spot diagrams, system characterization.
   - `plotting.jl` — GLMakie-based visualization.
   - `printing.jl` — `Base.show`/pretty-printing for core types.
@@ -64,9 +74,10 @@ Zemax files and extracting archive contents.
   `optics.jl`, `surface_builders.jl`, `mesh_primitives.jl`,
   `trace_geometry.jl`, `surface_manipulation.jl`, `characterization.jl`,
   `refractive_index.jl`, `lens_catalogs.jl`, `zemax.jl`,
-  `zemax_browser.jl`, `printing.jl`, `plotting.jl` (`zemax_browser.jl`
-  was added after the phased plan completed, not part of it, but follows
-  the same "every reachable function gets coverage" bar). Every real,
+  `zemax_browser.jl`, `filepicker.jl`, `printing.jl`, `plotting.jl`
+  (`zemax_browser.jl` and `filepicker.jl` were added after the phased
+  plan completed, not part of it, but follow the same "every reachable
+  function gets coverage" bar). Every real,
   reachable function in `src/` has functional
   coverage (or a documented exclusion reason, see `TODO.md`); known-broken
   cases are captured as `Test.@test_broken`/`@test_throws` rather than
@@ -124,7 +135,11 @@ but note where it diverges from the code as it exists today:
   but that's inconsistency, not a second accepted style. **For new code,
   use `camelCase` for variables and functions, `PascalCase` for types and
   structs** (per `copilot-instructions.md`) — don't propagate the
-  `snake_case` outlier into new functions.
+  `snake_case` outlier into new functions. Functions should not be
+  prefixed with a leading underscore (`_foo`) to signal "private"/
+  internal — Julia gives leading underscores no special meaning, so this
+  repo does not use that convention; keep internal helper names the same
+  `camelCase` as public functions.
 - **Multiple dispatch over branching**: surface-specific behavior
   (`sag`, `deltaToSurf`, `surfNormal`) is implemented as dispatch across
   `SurfProfile*`/`OptSurface`/`ModelSurface` subtypes — add new surface
@@ -183,7 +198,7 @@ but note where it diverges from the code as it exists today:
   excluded (unused *and* unexported, or entirely non-functional).
   Memory-allocation/type-stability testing is explicitly out of scope
   for that effort and remains open future work.
-- **Testing Bonito UI code** (`test/zemax_browser.jl`): split coverage
+- **Testing Bonito UI code** (`test/zemax_browser.jl`, `test/filepicker.jl`): split coverage
   into (1) plain unit tests of any logic layer that doesn't touch Bonito
   at all (dispatch, path handling, struct-building — the bulk of the
   coverage, cheapest to write and to trust), and (2) Bonito "smoke"
@@ -207,15 +222,22 @@ Key deps (see `Project.toml`): `StaticArrays`, `GeometryBasics`,
 compat floor), `ForwardDiff` (autodiff, used both in the library and in
 tests), `Optim`/`Roots` (numerical solving), `DataInterpolations`,
 `YAML`/`FileIO`/`MeshIO` (data and mesh I/O), `StatsBase` (histogram
-binning behind `rayHeatmap`/`rayHeatmap!`, `src/plotting.jl`). Don't add
+binning behind `rayHeatmap`/`rayHeatmap!`, `src/plotting.jl`),
+`BenchmarkTools` (used directly by `test/runtests.jl` and
+`test/scratch.jl`, not by any file under `src/`). Don't add
 new dependencies without updating `Project.toml`'s `[deps]` and
 `[compat]`.
 `test/runtests.jl` also directly `using`s several of these (`GLMakie`,
 `StatsBase`, `GeometryBasics`, `ForwardDiff`, `LinearAlgebra`,
-`StaticArrays`) for use inside the test files themselves, not just
-transitively through `OpticTrace` — add to that `using` list there if a
-new test file needs direct access to one of these packages' own
-exports/types.
+`StaticArrays`, `BenchmarkTools`) for use inside the test files
+themselves, not just transitively through `OpticTrace` — add to that
+`using` list there if a new test file needs direct access to one of
+these packages' own exports/types.
+
+`Project.toml` also lists `IterTools`, `using`'d in
+`src/OpticTrace.jl` -- but no file under `src/` actually calls any of
+its functions (see `TODO.md` Code issues #25); treat it as unused
+rather than as a dependency backing any current feature.
 
 **Bonito/GLMakie name collision — never add `using Bonito` to a shared
 `using` block.** GLMakie and Bonito both export several identical names

@@ -260,13 +260,13 @@ Overloads for referencePlane
         rinOut::Float64,
         c::Float64,
         ϵ::Float64,
-        asphere::AbstractVector{Float64},
+        asphere::AbstractVector{T},
         semiDiam::Float64,
         coating::APorString
-        ;color = :aquamarine,  
-        attributesSurfaces = attributesSurfaces, 
+        ;color = :aquamarine,
+        attributesSurfaces = attributesSurfaces,
         ydir::Union{Vec3, Nothing}=nothing)
-    
+
 
 """
 function refractAsphere(surfname::String,
@@ -276,7 +276,7 @@ function refractAsphere(surfname::String,
     rinOut::T,
     c::T,
     ϵ::T,
-    asphere::AbstractVector{Float64},
+    asphere::AbstractVector{T},
     semiDiam::T,
     coating::APorString
     ;color = :aquamarine,  
@@ -451,62 +451,6 @@ for why this method exists alongside the `mesh_primitives.jl`
 function gbWidths(a::SizeLens{T}, p::NoProfile) where T<:Real
     diam = 2a.semiDiameter
     SVector(diam, diam, 0.)
-end
-
-"""
-    surfNormal(r::Point3{T}, s::NoProfile) where T<:Real
-
-Surface normal of a flat `NoProfile` plane: always `(0,0,1)`. Same as
-`surfNormal(r::Point3{T}, s::NoProfile{T}) where T<:Real`
-(`src/tracing.jl`), but with `s`'s type parameter left unconstrained
-rather than tied to `r`'s -- in practice this makes no difference,
-since the more specific `tracing.jl` method is always preferred by
-Julia's dispatch whenever both apply (confirmed: this method is
-effectively unreachable for normal same-type usage).
-"""
-function surfNormal(r::Point3{T}, s::NoProfile) where T<:Real
-    Vec3(0., 0., 1.)
-end
-
-"""
-    deltaToSurf(r::Ray{T}, p::NoProfile) where T<:Real
-
-Distance along `r` to its intersection with the local `z=0` plane:
-`Δ = -z0/N`, `NaN` if the ray is parallel to the plane. Same idea as
-`deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real`
-(`src/tracing.jl`), but note the signature here is `Ray{T}`, not
-`Ray{3,T}` -- since `Ray` takes two type parameters, `Ray{T}` actually
-binds `T` to `Ray`'s *dimensionality* parameter (which is always an
-`Int`, hence `<:Real`), not its numeric-coordinate parameter, and
-leaves `NoProfile`'s type parameter unconstrained. In practice this
-makes no difference: the more specific `tracing.jl` method is always
-preferred by Julia's dispatch whenever both apply (confirmed: this
-method is effectively unreachable for normal same-type usage).
-"""
-function deltaToSurf(r::Ray{T}, p::NoProfile) where T<:Real
-    x0, y0, z0 = r.base
-    L,M,N = r.dir
-
-    if N ≈ 0.
-        Δ =  NaN #ray parallel to flat surface
-    else
-        Δ = -z0/N
-    end
-    Δ
-end
-
-"""
-    modFunc(ray::Ray{T}, normal::Vec3{T}, d::NoBendIndex) where T<:Real
-
-Pass `ray` through unchanged: `(true, ray.dir, d.refIndexIn)`. Same as
-`modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where
-T<:Real` (`src/tracing.jl`); see that signature-shadowing note in
-`deltaToSurf(r::Ray{T}, p::NoProfile)` above -- the same situation
-applies here (this method is effectively unreachable; the `tracing.jl`
-one is always preferred).
-"""
-function modFunc(ray::Ray{T}, normal::Vec3{T}, d::NoBendIndex) where T<:Real
-    true, ray.dir, d.refIndexIn
 end
 
 #=

@@ -5,7 +5,7 @@
 
 =#
 
-export lensAC508180AB, lensAC127050A, lens_ACL12708U, lens_TLF220APC, lens_TLF357775_405
+export lensAC508180AB, lensAC127050A, lensAC127019AB, lens_ACL12708U, lens_TLF220APC, lens_TLF357775_405
 export lens_TLAC254_060
 
 
@@ -154,12 +154,10 @@ const bflAC127019AB= 15.8738491298
 """
     lensAC127019AB(base, dir, lambda; order="forward", lensname="AC127019AB")
 
-Build a Thorlabs AC127-019-AB achromatic doublet (N-LAK10/N-SF57). Same
-structure as `lensAC508180AB`/`lensAC127050A` above (3 refracting
-spherical surfaces, coating hardcoded to `"testcoat"`), but note:
-unlike those two siblings, this method does **not** validate `order`
--- anything other than exactly `"forward"` is silently treated as
-`"reverse"`, rather than erroring on an unrecognized value.
+Build a Thorlabs AC127-019-AB achromatic doublet (N-LAK10/N-SF57). See
+`lensAC508180AB` above for the shared structure/behavior (3 refracting
+spherical surfaces, `order` validated the same way, coating hardcoded
+to `"testcoat"`).
 """
 function lensAC127019AB(base, dir, lambda; order = "forward", lensname = "AC127019AB")
     #compute the refractive indexes
@@ -180,7 +178,7 @@ function lensAC127019AB(base, dir, lambda; order = "forward", lensname = "AC1270
         refractSphere("$(lensname)_3", base2, dir, riLens2, refIndexDefault,
             curvAC127019AB_3, semiDiamAC127019AB, "testcoat")
         ]
-    else
+    elseif (order == "reverse" )
         base1 = base + thickAC127019AB_2 .* dir
         base2 = base1 + thickAC127019AB_1 .* dir
 
@@ -192,6 +190,8 @@ function lensAC127019AB(base, dir, lambda; order = "forward", lensname = "AC1270
         refractSphere("$(lensname)_1", base2, dir, riLens1, refIndexDefault,
             -curvAC127019AB_1, semiDiamAC127019AB, "testcoat")
         ]
+    else
+        error("lensAC127019AB: order must be 'forward' or 'reverse'")
     end
     lens
 end

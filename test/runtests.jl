@@ -28,6 +28,7 @@ include("helper.jl")
     include("lens_catalogs.jl")
     include("zemax.jl")
     include("zemax_browser.jl")
+    include("filepicker.jl")
     include("printing.jl")
     include("plotting.jl")
 

@@ -289,6 +289,17 @@ list doesn't.
 
 ## Code issues
 
+- **1.** `src/zemax.jl`: `ZemaxGeometry` struct was defined but never
+  constructed anywhere -- `readZemax` returned its parsed data as a
+  plain `(zsurfs, name, units, wavelengths)` tuple instead of wrapping
+  it in a `ZemaxGeometry`.
+
+  **Fixed**: removed the unused `ZemaxGeometry` struct and its
+  docstring, and the two stale commented-out lines inside `readZemax`
+  that referenced constructing one. The stale docstring copy in
+  `docs/zemax_reference.md` was removed too. No test changes needed --
+  nothing referenced the type.
+
 - **5.** `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar`
   archives (Zemax file bundles) wasn't implemented at all -- only the
   Python reference implementation existed, kept in
@@ -305,6 +316,92 @@ list doesn't.
   compressed/decompressed byte pair) and a `HAS_ZAR_SAMPLE`-gated
   integration testset (see `test/helper.jl`) exercising listing and
   both extraction forms against a real archive.
+
+- **7.** `src/surfaces.jl`: `refractAsphere`'s `asphere` parameter was
+  typed `AbstractVector{Float64}` (hardcoded), unlike its sibling
+  `refractEvenAsphere`'s `asphere::AbstractVector{T}` (generic). Per
+  `CLAUDE.md`'s stated convention ("numeric types are generally
+  parameterized... rather than hardcoded to Float64... so functions
+  stay compatible with ForwardDiff"), this hardcoding would silently
+  break autodiff-based normal/gradient computations through
+  `refractAsphere` specifically, unlike through `refractEvenAsphere`.
+
+  **Fixed**: changed the parameter to `asphere::AbstractVector{T}`
+  (matching `refractEvenAsphere`), and updated the signature shown in
+  `refractAsphere`'s docstring the same way. `test/surface_builders.jl`'s
+  existing `"refractAsphere"` testset (which passes a plain `Float64`
+  vector) still passes unchanged, since `Vector{Float64} <:
+  AbstractVector{Float64}` is one valid instantiation of the now-generic
+  signature.
+
+- **8.** `src/surfaces.jl`: `surfNormal(r::Point3{T}, s::NoProfile)`,
+  `deltaToSurf(r::Ray{T}, p::NoProfile)`, and `modFunc(ray::Ray{T},
+  normal::Vec3{T}, d::NoBendIndex)` were all effectively dead code --
+  each had a more specific same-named method in `src/tracing.jl`
+  (`NoProfile{T}`/`NoBendIndex{T}` tied to the ray's own type `T`)
+  that Julia's dispatch always preferred when both applied, confirmed
+  via `@which`. Not incorrect, just redundant.
+
+  **Fixed**: deleted all three methods (and their docstrings) from
+  `src/surfaces.jl`. Confirmed nothing in `test/` called any of them
+  directly (only through the `tracing.jl` methods that already shadow
+  them), so no test changes were needed. `sag(x,y,s::NoProfile)`,
+  `gbRadius(aperture::SizeLens{T}, profile::NoProfile)`, and
+  `gbWidths(a::SizeLens{T}, p::NoProfile)` were left in place -- those
+  have no `tracing.jl`/`mesh_primitives.jl` equivalent shadowing them
+  and are still needed by `referencePlane`.
+
+- **10.** `src/lens_edmund.jl`, `lens_EO38398`: was not exported
+  (missing from this file's `export` line, unlike its three siblings
+  `lens_EO68001`/`lens_EO67548`/`lens_EO67652`) -- an oversight; could
+  previously only be reached as `OpticTrace.lens_EO38398(...)`.
+
+  **Fixed**: added `lens_EO38398` to `src/lens_edmund.jl`'s `export`
+  line, and dropped the "not exported" note from its docstring.
+  `test/lens_catalogs.jl`'s `"lens_EO38398"` testset was updated to
+  call it unqualified instead of via `OpticTrace.lens_EO38398`.
+
+- **11.** `src/lens_thorlabs.jl`, `lensAC127019AB`: was **also not
+  exported** (missing from this file's two `export` lines, unlike
+  every other builder in the file) -- found while writing
+  `test/lens_catalogs.jl` (phase 9); only reachable as
+  `OpticTrace.lensAC127019AB(...)`, same pattern as `lens_EO38398`
+  above. Separately, unlike its two structurally identical siblings
+  (`lensAC508180AB`, `lensAC127050A`), it didn't validate `order` --
+  any value other than exactly `"forward"` was silently treated as
+  `"reverse"` instead of erroring on an unrecognized value.
+
+  **Fixed**: added `lensAC127019AB` to `src/lens_thorlabs.jl`'s first
+  `export` line, and changed its unconditional `else` (silently
+  treating anything non-`"forward"` as reverse) into an explicit
+  `elseif (order == "reverse")` with a final `else error(...)` branch,
+  matching `lensAC508180AB`/`lensAC127050A`'s existing pattern exactly.
+  Dropped the corresponding notes from its docstring.
+  `test/lens_catalogs.jl`'s `"lensAC127019AB"` testset now calls it
+  unqualified and asserts `@test_throws ErrorException` for a garbage
+  `order` value, matching its siblings' tests, instead of asserting the
+  old silent-fallback behavior.
+
+- **15.** `test/optics.jl`: `sag` tests for `SurfProfileCyl` and
+  `SurfProfileToroid` were written but disabled inside a `#= =#` block,
+  with the comment "Tests not implemented for SurfProfileCyl &
+  SurfProfileToroid" -- unclear at the time whether they were disabled
+  because the expected values were wrong or the feature was incomplete.
+
+  **Fixed**: resolved as part of the phase 2 test-writing work (see
+  "Test-writing plan" -- extended `test/optics.jl`), which predates
+  this entry being moved here: the disabled block/comment no longer
+  exist. `SurfProfileCyl`'s `sag`/`surfNormal`/`deltaToSurf` now have
+  real, passing tests (the old disabled block used an outdated formula
+  and a stale expected value, replaced rather than re-enabled);
+  `SurfProfileToroid`'s `sag` is covered with `Test.@test_broken`,
+  documenting its known "likely incorrect" formula (see `TODO.md`
+  item 18) rather than leaving it untested. This entry was only
+  discovered to already be resolved -- and moved here -- while
+  double-checking `TODO.md`'s line-number references in a later
+  session; see the "Tests needed" section's own matching
+  "✅ Covered (phase 2, extended `test/optics.jl`)" entry for the same
+  functions.
 
 - **23.** `src/zemax.jl`: reading `.zmf` lens-catalog files (how
   vendors like Edmund/Thorlabs publish stock lens families) wasn't
@@ -328,3 +425,37 @@ list doesn't.
   test (a real, hand-verified obfuscated/plaintext byte pair) and a
   `HAS_ZMF_SAMPLE`-gated integration testset (see `test/helper.jl`)
   exercising listing and both extraction forms against a real catalog.
+
+- **24.** `src/zemax_browser.jl`, `archiveContentPane`: the extraction
+  output-path field was a plain editable text box pre-filled from
+  `defaultExtractionOutputPath` -- there was no folder-picker UI, by
+  deliberate choice, not oversight. A native `<input type="file">`
+  picker can't work here: browsers withhold the real filesystem path
+  from that input, and extraction runs server-side (needs a real path).
+  Two options were identified: (a) a server-side directory-tree picker
+  panel (no new dependency, correct regardless of whether the browser
+  and the Bonito server are on the same machine -- recommended), or (b)
+  shelling out to a native OS folder dialog from the server process
+  (only correct when browser and server are the same machine, needs
+  per-OS handling, a new dependency, and a no-op path for headless CI
+  -- not recommended).
+
+  **Fixed**: built option (a) as a standalone, generic component,
+  `src/UItools/filepicker.jl`'s `filePicker` (breadcrumb bar, up-arrow,
+  double-click navigation, `:file`/`:directory`/`:multipleFiles`
+  modes), then wired it into `zemax_browser.jl` in two places:
+  `archiveContentPane`'s output-path field gained a "Browse..." button
+  that toggles a `filePicker` (`:directory` mode) open beneath it --
+  picking a directory writes it into the field and collapses the picker
+  again; separately, `zemaxBrowserApp`'s left-hand file-selection pane
+  (previously a fully-expanded recursive tree, `_treeNode`/
+  `walkZemaxDirectory`, which couldn't bound its own height) was
+  replaced outright with a `filePicker` (`:file` mode, filtered to
+  `.zmx`/`.zar`/`.zmf`) -- `ZemaxFileNode`, `walkZemaxDirectory`,
+  `_kindLabel`, and `_treeNode` were deleted as a result, having no
+  remaining callers. One behavior change from the old tree: the content
+  preview now refreshes on double-click/"Select" rather than on every
+  single click, matching `filePicker`'s picker-then-confirm interaction
+  model. Covered by `test/filepicker.jl` (the component's own logic and
+  Bonito smoke tests) and `test/zemax_browser.jl`'s updated
+  `"zemaxBrowserApp"`/`"contentPane .zar"` smoke tests.

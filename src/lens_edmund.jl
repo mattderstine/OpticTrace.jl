@@ -5,7 +5,7 @@
 
 =#
 
-export lens_EO68001, lens_EO67652,lens_EO67548
+export lens_EO38398, lens_EO68001, lens_EO67652,lens_EO67548
 
 #riN_SF11 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")
 #riN_BK7 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-BK7.yml")
@@ -90,10 +90,6 @@ constants were derived from, in the preceding comment block) -- a
 single N-SF11 spherical surface via `lensSinglet`. `order="reverse"`
 delegates to `lensSinglet`'s broken reverse-order branch (see its
 docstring, `src/surfaces.jl`) and currently throws a `MethodError`.
-
-**Not exported** (missing from this file's `export` line), unlike its
-three siblings below -- can currently only be called as
-`OpticTrace.lens_EO38398(...)`.
 """
 function lens_EO38398(base, dir, lambda; order = "forward", lensname = "EO38-398")
   riN_SF11 = getRefractiveIndexFunc(dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")

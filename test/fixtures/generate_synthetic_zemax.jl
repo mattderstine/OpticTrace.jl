@@ -17,7 +17,7 @@
 =#
 using OpticTrace
 
-function _buildZarEntryBytes(name::String, payload::Vector{UInt8})
+function buildZarEntryBytes(name::String, payload::Vector{UInt8})
     io = IOBuffer()
     write(io, UInt8(0xEA)) # version byte (checked: "earlier" header layout)
     write(io, UInt8(0x00)) # second version-tag byte (not inspected by the reader)
@@ -47,8 +47,8 @@ function generateSyntheticZar(path::String)
       GLAS TESTGLASS 0 0 1.5
       DIAM 10.0
     """
-    entry1 = _buildZarEntryBytes("SYNTH.ZMX", Vector{UInt8}(zmxText))
-    entry2 = _buildZarEntryBytes("SYNTH.AGF", Vector{UInt8}("synthetic glass catalog stub, not real glass data\n"))
+    entry1 = buildZarEntryBytes("SYNTH.ZMX", Vector{UInt8}(zmxText))
+    entry2 = buildZarEntryBytes("SYNTH.AGF", Vector{UInt8}("synthetic glass catalog stub, not real glass data\n"))
 
     io = IOBuffer()
     write(io, entry1)
@@ -56,7 +56,7 @@ function generateSyntheticZar(path::String)
     write(path, take!(io))
 end
 
-function _buildZmfEntryBytes(name::String, elements::Int, efl::Float64, enp::Float64, plaintext::Vector{UInt8})
+function buildZmfEntryBytes(name::String, elements::Int, efl::Float64, enp::Float64, plaintext::Vector{UInt8})
     io = IOBuffer()
     nameBytes = zeros(UInt8, 100)
     nb = Vector{UInt8}(name)
@@ -84,8 +84,8 @@ function generateSyntheticZmf(path::String)
 
     io = IOBuffer()
     write(io, UInt32(1001))
-    write(io, _buildZmfEntryBytes("LENS1", 1, 4.485, 5.2, lens1))
-    write(io, _buildZmfEntryBytes("LENS2", 2, 10.0, 8.0, lens2))
+    write(io, buildZmfEntryBytes("LENS1", 1, 4.485, 5.2, lens1))
+    write(io, buildZmfEntryBytes("LENS2", 2, 10.0, 8.0, lens2))
     write(path, take!(io))
 end
 

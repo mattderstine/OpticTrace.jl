@@ -4,30 +4,16 @@ This file collects two things that used to live as comments inside
 `src/zemax.jl`:
 
 1. The docstrings now attached to each type/function in `src/zemax.jl`
-   (reproduced here for a single-page overview).
+   (reproduced here for a single-page overview of the original,
+   pre-archive-support API -- `readZemax`/`zemaxsurfToSurface`/etc.;
+   the `.zar`/`.zmf` archive-reading functions added later are not
+   reproduced here, see below).
 2. The original reference Python code those docstrings/implementations
-   were informed by (or, for the `.zar` reader, code that has not been
-   ported to Julia at all yet).
+   were informed by, for `readZemax` itself, plus the separate Python
+   references the `.zar`/`.zmf` archive-reading code (now implemented
+   in `src/zemax.jl`, see below) was ported from.
 
 ## Docstrings
-
-### `ZemaxGeometry{N, T}`
-
-Container type intended to hold a fully-imported Zemax system: the traced
-geometry, the base point/direction the geometry starts from, and the
-system's wavelength/name/units metadata.
-
-Fields:
-- `geo::Vector{AbstractSurface{N,T}}` — the imported optical surfaces
-- `basept::Point{N, T}` — global coordinate the geometry starts at
-- `dir::Vec{N, T}` — propagation direction the geometry starts along
-- `wavelengths::Vector{T}` — wavelengths defined in the Zemax file
-- `name::String` — system name, from the Zemax file's NAME field
-- `units::String` — length units, from the Zemax file's UNIT field (e.g. "MM")
-
-Not currently constructed anywhere in `zemax.jl` — `readZemax` returns
-its parsed data as a plain tuple rather than wrapping it in a
-`ZemaxGeometry`.
 
 ### `ZemaxSurf{T}`
 
@@ -95,7 +81,7 @@ s.distance * dir` is the starting point for the next surface, and
 `rinOut` is passed through unchanged so it can be reused as the next
 surface's `rinIn`.
 
-### `zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64; glassCatalog = defaultGlassCatalog)`
+### `zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64; glassCatalog::Dict{AbstractString, Any} = defaultGlassCatalog)`
 
 Convert a vector of `ZemaxSurf` records (as returned by `readZemax`)
 into a traceable geometry at the given wavelength, by repeatedly calling

@@ -32,11 +32,6 @@ Missing features, cleanup candidates, and open design questions -- not
 confirmed bugs (see "Bugs" above for those). See `FIXED.md` for issues
 already resolved.
 
-- **1.** `src/zemax.jl`: `ZemaxGeometry` struct is defined but never
-  constructed anywhere -- `readZemax` returns its parsed data as a
-  plain `(zsurfs, name, units, wavelengths)` tuple instead of wrapping
-  it in a `ZemaxGeometry`. Either start using `ZemaxGeometry` as the
-  return type, or remove it if it's not needed.
 - **2.** `src/zemax.jl`: `readZemax`'s `basept`/`dir` keyword args are
   accepted but not actually used during parsing (the
   `basecurrent`/`dircurrent` variables they seed are only read by
@@ -51,27 +46,11 @@ already resolved.
   `type`s `"STANDARD"` and `"EVENASPH"` are supported; any other type
   (e.g. toroidal, coordinate breaks) throws `error("Zemax surface type
   ... not implemented yet")`.
-- **6.** `src/surfaces.jl` (`lensASinglet`, `lensEASinglet`, lines ~518
-  & ~548): both have a `#ToDo` comment -- "should check if the input is
+- **6.** `src/surfaces.jl` (`lensASinglet`, `lensEASinglet`, lines ~567
+  & ~597): both have a `#ToDo` comment -- "should check if the input is
   really an asphere. if not make the surface spherical" -- that
   validation isn't implemented; passing non-aspheric coefficients
   silently proceeds as-is.
-- **7.** `src/surfaces.jl`: `refractAsphere`'s `asphere` parameter is
-  typed `AbstractVector{Float64}` (hardcoded), unlike its sibling
-  `refractEvenAsphere`'s `asphere::AbstractVector{T}` (generic). Per
-  `CLAUDE.md`'s stated convention ("numeric types are generally
-  parameterized... rather than hardcoded to Float64... so functions
-  stay compatible with ForwardDiff"), this hardcoding will silently
-  break autodiff-based normal/gradient computations through
-  `refractAsphere` specifically, unlike through `refractEvenAsphere`.
-- **8.** `src/surfaces.jl`: `surfNormal(r::Point3{T}, s::NoProfile)`,
-  `deltaToSurf(r::Ray{T}, p::NoProfile)`, and `modFunc(ray::Ray{T},
-  normal::Vec3{T}, d::NoBendIndex)` are all effectively dead code --
-  each has a more specific same-named method in `src/tracing.jl`
-  (`NoProfile{T}`/`NoBendIndex{T}` tied to the ray's own type `T`)
-  that Julia's dispatch always prefers when both apply, confirmed via
-  `@which`. Not incorrect, just redundant -- low-priority cleanup
-  candidates.
 - **9.** `src/lens_thorlabs.jl`, `lens_ACL12708U(base, dir, wl)`: `wl`
   is actually used as a refractive index (passed as `rinOut`/`rinIn` to
   the two surface constructors), not a wavelength despite the name --
@@ -80,20 +59,6 @@ already resolved.
   do. Not a crash bug, but worth fixing the parameter name/behavior
   for consistency. Also has no `order`/`lensname` keywords, unlike
   every other lens builder in the file.
-- **10.** `src/lens_edmund.jl`, `lens_EO38398`: not exported (missing
-  from this file's `export` line, unlike its three siblings
-  `lens_EO68001`/`lens_EO67548`/`lens_EO67652`) -- likely an
-  oversight; currently only reachable as
-  `OpticTrace.lens_EO38398(...)`.
-- **11.** `src/lens_thorlabs.jl`, `lensAC127019AB`: **also not
-  exported** (missing from this file's two `export` lines, unlike
-  every other builder in the file) -- found while writing
-  `test/lens_catalogs.jl` (phase 9); only reachable as
-  `OpticTrace.lensAC127019AB(...)`, same pattern as `lens_EO38398`
-  above. Separately, unlike its two structurally identical siblings
-  (`lensAC508180AB`, `lensAC127050A`), doesn't validate `order` -- any
-  value other than exactly `"forward"` is silently treated as
-  `"reverse"` instead of erroring on an unrecognized value.
 - **12.** `src/mesh_primitives.jl`: `GeometryBasics.radius`/`widths`
   for `OptSurface` dispatch to `gbRadius`/`gbWidths`, which only have a
   method for the `(SizeLens, SurfProfileConic)` aperture/profile
@@ -101,24 +66,18 @@ already resolved.
   non-conic profile (sphere, asphere, even-asphere, cylinder, toroid,
   off-axis conic) will throw a `MethodError` when its mesh bounds are
   computed (e.g. for 3D plotting).
-- **13.** `src/plotting.jl` (~line 250-261): a non-mutating
+- **13.** `src/plotting.jl` (~line 325-336): a non-mutating
   `trcAndPlotRay` (counterpart to `trcAndPlotRay!`) is commented out
   with the note "see if this method is needed" -- open question on
   whether to implement it.
-- **14.** `src/characterization.jl` (`traceLoss`, line ~236): docstring
+- **14.** `src/characterization.jl` (`traceLoss`, line ~314): docstring
   ends with a bare `TBW` ("to be written") placeholder -- description
   is incomplete/unfinished.
-- **15.** `test/optics.jl` (line ~74): `sag` tests for `SurfProfileCyl`
-  and `SurfProfileToroid` are written but disabled inside a `#= =#`
-  block, with the comment "Tests not implemented for SurfProfileCyl &
-  SurfProfileToroid". Worth revisiting -- unclear if they're disabled
-  because the expected values are wrong or because the feature is
-  incomplete.
 - **16.** `src/lens_definitions.jl` (`ExtendedGeometry.geo` field, line
-  ~220): typed as `Array{AbstractSurface}` with the comment "needs to
+  ~661): typed as `Array{AbstractSurface}` with the comment "needs to
   be changed to `AbstractOpticalObject`" -- that abstract type
-  already exists (`lens_definitions.jl:18`) but nothing uses it yet.
-- **17.** `src/surfaces.jl` (`planeMirror`, line ~458): docstring notes
+  already exists (`lens_definitions.jl:93`) but nothing uses it yet.
+- **17.** `src/surfaces.jl` (`planeMirror`, line ~503): docstring notes
   it "could use `NoProfile` to speed things up but then would need to
   potentially overload other functions" -- a known, deliberately
   deferred performance optimization.
@@ -214,20 +173,16 @@ already resolved.
   but deliberately incomplete -- the function prints a message noting
   this at call time. Needs someone who understands `offset`'s sign/
   coordinate convention relative to `curv` to finish it properly.
-- **24.** `src/zemax_browser.jl`, `_archiveContentPane`: the extraction
-  output-path field is a plain editable text box pre-filled from
-  `defaultExtractionOutputPath` -- there's no folder-picker UI, by
-  deliberate choice, not oversight. A native `<input type="file">`
-  picker can't work here: browsers withhold the real filesystem path
-  from that input, and extraction runs server-side (needs a real path).
-  If a picker is wanted later, two options were identified: (a) a
-  server-side directory-tree picker panel reusing this same file's
-  `walkZemaxDirectory`/tree-rendering code (no new dependency, correct
-  regardless of whether the browser and the Bonito server are on the
-  same machine -- recommended if this is revisited), or (b) shelling out
-  to a native OS folder dialog from the server process (only correct
-  when browser and server are the same machine, needs per-OS handling, a
-  new dependency, and a no-op path for headless CI -- not recommended).
+- **25.** `src/OpticTrace.jl`: `using IterTools` (line 8) appears to be
+  an unused import -- no file under `src/` calls any `IterTools`
+  function (confirmed by grepping for common ones: `partition`,
+  `product`, `chain`, `groupby`, `subsets`, `distinct`, etc., all with
+  zero hits). `test/testing.jl` (commented out of `runtests.jl`, see
+  "Project structure" in `CLAUDE.md`) also has its own `using
+  IterTools`, so it isn't even exercised indirectly by the disabled
+  file. Low priority -- candidate for removal from both `src/OpticTrace.jl`
+  and `Project.toml`'s `[deps]`, unless it was meant to back some
+  not-yet-written feature.
 
 ## Test-writing plan
 

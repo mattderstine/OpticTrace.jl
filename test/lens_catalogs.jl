@@ -21,10 +21,10 @@
 
     @testset "lens_edmund.jl" begin
 
-        @testset "lens_EO38398 (not exported -- see TODO.md)" begin
+        @testset "lens_EO38398" begin
             riN_SF11 = getRefractiveIndexFunc(OpticTrace.dirBaseRefractiveIndex, "glass/schott/N-SF11.yml")
 
-            lens = OpticTrace.lens_EO38398(base, dir, λ)
+            lens = lens_EO38398(base, dir, λ)
             @test length(lens) == 2
             @test lens[1].profile.curv == 8.496176720475789867E-02
             @test lens[2].profile.curv == 0.0
@@ -36,7 +36,7 @@
             @test lens[2].mod.refIndexIn ≈ riN_SF11(λ)
             @test lens[2].mod.refIndexOut == refIndexDefault
 
-            lensRev = OpticTrace.lens_EO38398(base, dir, λ; order = "reverse")
+            lensRev = lens_EO38398(base, dir, λ; order = "reverse")
             @test length(lensRev) == 2
             @test lensRev[1].profile.curv == 0.0
             @test lensRev[2].profile.curv == -8.496176720475789867E-02
@@ -151,25 +151,20 @@
             @test_throws ErrorException lensAC127050A(base, dir, λ; order = "sideways")
         end
 
-        @testset "lensAC127019AB (not exported, no order validation -- see TODO.md)" begin
+        @testset "lensAC127019AB" begin
             riN_LAK10 = getRefractiveIndexFunc(OpticTrace.dirBaseRefractiveIndex, "glass/schott/N-LAK10.yml")
             riN_SF57 = getRefractiveIndexFunc(OpticTrace.dirBaseRefractiveIndex, "glass/schott/N-SF57.yml")
 
-            lensFwd = OpticTrace.lensAC127019AB(base, dir, λ)
+            lensFwd = lensAC127019AB(base, dir, λ)
             @test lensFwd[1].profile.curv == OpticTrace.curvAC127019AB_1
             @test lensFwd[2].profile.curv == OpticTrace.curvAC127019AB_2
             @test lensFwd[1].mod.refIndexOut ≈ riN_LAK10(λ)
             @test lensFwd[2].mod.refIndexOut ≈ riN_SF57(λ)
 
-            lensRev = OpticTrace.lensAC127019AB(base, dir, λ; order = "reverse")
+            lensRev = lensAC127019AB(base, dir, λ; order = "reverse")
             @test lensRev[1].profile.curv ≈ -OpticTrace.curvAC127019AB_3
 
-            # any order value other than exactly "forward" is silently
-            # treated as "reverse" -- confirmed here rather than erroring
-            lensGarbage = OpticTrace.lensAC127019AB(base, dir, λ; order = "sideways")
-            @test lensGarbage[1].profile.curv == lensRev[1].profile.curv
-            @test lensGarbage[2].profile.curv == lensRev[2].profile.curv
-            @test lensGarbage[3].profile.curv == lensRev[3].profile.curv
+            @test_throws ErrorException lensAC127019AB(base, dir, λ; order = "sideways")
         end
 
         @testset "lens_ACL12708U" begin

@@ -188,8 +188,10 @@
             paths = extractZemaxArchive(ZAR_SAMPLE_PATH; outputPath = outdir)
             @test length(paths) == 5
             @test all(isfile, paths)
+            nestedDir = joinpath(outdir, splitext(basename(ZAR_SAMPLE_PATH))[1])
+            @test all(p -> dirname(p) == nestedDir, paths)
 
-            zmxtext = read(joinpath(outdir, "3479-S02.ZMX"), String)
+            zmxtext = read(joinpath(nestedDir, "3479-S02.ZMX"), String)
             @test startswith(zmxtext, "VERS 100414 0 26970")
             @test occursin("NAME LF1988 - Negative Meniscus - N-BK7", zmxtext)
 
@@ -220,8 +222,10 @@
             paths = extractZmfCatalog(ZMF_SAMPLE_PATH; outputPath = outdir)
             @test length(paths) == 2
             @test all(isfile, paths)
+            nestedDir = joinpath(outdir, splitext(basename(ZMF_SAMPLE_PATH))[1])
+            @test all(p -> dirname(p) == nestedDir, paths)
 
-            zmxtext = read(joinpath(outdir, "5002.zmx"), String)
+            zmxtext = read(joinpath(nestedDir, "5002.zmx"), String)
             @test startswith(zmxtext, "VERS 100503")
             @test occursin("GLAS ACRYLIC", zmxtext)
             @test occursin("CURV 3.752562061747658500E-001", zmxtext)

@@ -5,35 +5,6 @@ export readZemax, printZemaxSurfs, zemaxsurfsToGeo, viewZemaxFile
 export ZarEntry, lzwDecompress, readZemaxArchive, listZemaxArchive, extractZemaxArchive
 export ZmfEntry, zmfDeobfuscate, readZmfCatalog, listZmfCatalog, extractZmfCatalog
 
-"""
-    ZemaxGeometry{N, T}
-
-Container type intended to hold a fully-imported Zemax system: the traced
-geometry, the base point/direction the geometry starts from, and the
-system's wavelength/name/units metadata.
-
-Fields:
-    geo::Vector{AbstractSurface{N,T}}  - the imported optical surfaces
-    basept::Point{N, T}                - global coordinate the geometry starts at
-    dir::Vec{N, T}                     - propagation direction the geometry starts along
-    wavelengths::Vector{T}             - wavelengths defined in the Zemax file
-    name::String                       - system name, from the Zemax file's NAME field
-    units::String                      - length units, from the Zemax file's UNIT field (e.g. "MM")
-
-Not currently constructed anywhere in this file -- [`readZemax`](@ref)
-returns its parsed data as a plain tuple rather than wrapping it in a
-`ZemaxGeometry`.
-"""
-struct ZemaxGeometry{N, T}
-    geo::Vector{AbstractSurface{N,T}}
-    basept::Point{N, T}
-    dir::Vec{N, T}
-    wavelengths::Vector{T}
-    name::String
-    units::String
-end
-
-
 const     parmlength = 20
 
 """
@@ -206,8 +177,6 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
     end
     #surf = zemaxsurf_to_surface(zemaxsurf,basecurrent, dircurrent, rinCur)
     #push!(geo, surf)
-    # Create the ZemaxGeometry object
-    #zgeo = ZemaxGeometry(geo, basepnt, dir, wavelengths, name, units)
     push!(zsurfs, zsurf)
     return zsurfs, name, units, wavelengths
 end
@@ -352,14 +321,14 @@ struct ZarEntry
 end
 
 """
-    _readBits(data::Vector{UInt8}, bitIndex::Int, n::Int) -> Int
+    readBits(data::Vector{UInt8}, bitIndex::Int, n::Int) -> Int
 
 Read `n` bits starting at zero-based bit offset `bitIndex` from `data`,
 treating the byte vector as one contiguous, most-significant-bit-first
 bitstream. Used by [`lzwDecompress`](@ref) to read variable-width LZW
 codewords.
 """
-function _readBits(data::Vector{UInt8}, bitIndex::Int, n::Int)::Int
+function readBits(data::Vector{UInt8}, bitIndex::Int, n::Int)::Int
     value = 0
     for i in 0:n-1
         globalBit = bitIndex + i
@@ -384,7 +353,7 @@ dictionary.
 Ported from the Python reference kept in `docs/zemax_reference.md`
 (itself adapted from
 https://gist.github.com/BertrandBordage/611a915e034c47aa5d38911fc0bc7df9),
-reading bits directly from `compressed` via [`_readBits`](@ref) rather
+reading bits directly from `compressed` via [`readBits`](@ref) rather
 than materializing a giant binary string.
 """
 function lzwDecompress(compressed::Vector{UInt8})::Vector{UInt8}
@@ -406,7 +375,7 @@ function lzwDecompress(compressed::Vector{UInt8})::Vector{UInt8}
         if bitIndex + codeWordLength > totalBits
             break
         end
-        code = _readBits(compressed, bitIndex, codeWordLength)
+        code = readBits(compressed, bitIndex, codeWordLength)
         bitIndex += codeWordLength
 
         latestWord = code < length(words) ? words[code + 1] : vcat(previousWord, previousWord[1:1])
@@ -421,14 +390,14 @@ function lzwDecompress(compressed::Vector{UInt8})::Vector{UInt8}
 end
 
 """
-    _stripExtension(path::AbstractString, ext::AbstractString)
+    stripExtension(path::AbstractString, ext::AbstractString)
 
 Return `path` with a trailing `ext` removed (case-insensitively), or
 `path` unchanged if it doesn't end with `ext`. Used by
 [`extractZemaxArchive`](@ref)/[`extractZmfCatalog`](@ref) to compute a
 default extraction directory.
 """
-function _stripExtension(path::AbstractString, ext::AbstractString)
+function stripExtension(path::AbstractString, ext::AbstractString)
     return endswith(lowercase(path), lowercase(ext)) ? path[1:end-length(ext)] : path
 end
 
@@ -523,7 +492,7 @@ error if a requested name isn't present in the archive.
 """
 function extractZemaxArchive(filename::String, names::AbstractVector{<:AbstractString}; outputPath=nothing)
     entries = readZemaxArchive(filename)
-    outDir = outputPath === nothing ? _stripExtension(filename, ".zar") : outputPath
+    outDir = outputPath === nothing ? stripExtension(filename, ".zar") : outputPath
     mkpath(outDir)
     paths = String[]
     for name in names
@@ -539,14 +508,18 @@ end
 """
     extractZemaxArchive(filename::String; outputPath=nothing) -> Vector{String}
 
-Extract every entry from a Zemax `.zar` archive `filename` into
-`outputPath` (default: `filename` with its `.zar` extension stripped,
-created via `mkpath` if it doesn't already exist). Returns the paths
-written.
+Extract every entry from a Zemax `.zar` archive `filename` into a new
+subdirectory named after `filename` with its `.zar` extension stripped
+(created via `mkpath` if it doesn't already exist), itself created under
+`outputPath` (default: `filename`'s own directory) -- e.g.
+`extractZemaxArchive("/a/b/lens.zar")` writes into `/a/b/lens/`, and
+`extractZemaxArchive("/a/b/lens.zar"; outputPath="/x")` writes into
+`/x/lens/`. Returns the paths written.
 """
 function extractZemaxArchive(filename::String; outputPath=nothing)
     entries = readZemaxArchive(filename)
-    outDir = outputPath === nothing ? _stripExtension(filename, ".zar") : outputPath
+    base = outputPath === nothing ? dirname(filename) : outputPath
+    outDir = joinpath(base, basename(stripExtension(filename, ".zar")))
     mkpath(outDir)
     paths = String[]
     for e in entries
@@ -715,7 +688,7 @@ catalog.
 """
 function extractZmfCatalog(filename::String, names::AbstractVector{<:AbstractString}; outputPath=nothing)
     entries = readZmfCatalog(filename)
-    outDir = outputPath === nothing ? _stripExtension(filename, ".zmf") : outputPath
+    outDir = outputPath === nothing ? stripExtension(filename, ".zmf") : outputPath
     mkpath(outDir)
     paths = String[]
     for name in names
@@ -732,13 +705,17 @@ end
     extractZmfCatalog(filename::String; outputPath=nothing) -> Vector{String}
 
 Decode every lens in a Zemax `.zmf` catalog `filename` and write each as
-`<name>.zmx` under `outputPath` (default: `filename` with its
-`.zmf`/`.ZMF` extension stripped, created via `mkpath` if it doesn't
-already exist). Returns the paths written.
+`<name>.zmx` into a new subdirectory named after `filename` with its
+`.zmf`/`.ZMF` extension stripped (created via `mkpath` if it doesn't
+already exist), itself created under `outputPath` (default: `filename`'s
+own directory) -- e.g. `extractZmfCatalog("/a/b/cat.zmf")` writes into
+`/a/b/cat/`, and `extractZmfCatalog("/a/b/cat.zmf"; outputPath="/x")`
+writes into `/x/cat/`. Returns the paths written.
 """
 function extractZmfCatalog(filename::String; outputPath=nothing)
     entries = readZmfCatalog(filename)
-    outDir = outputPath === nothing ? _stripExtension(filename, ".zmf") : outputPath
+    base = outputPath === nothing ? dirname(filename) : outputPath
+    outDir = joinpath(base, basename(stripExtension(filename, ".zmf")))
     mkpath(outDir)
     paths = String[]
     for e in entries
