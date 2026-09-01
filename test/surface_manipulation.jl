@@ -38,6 +38,23 @@
             @test p.a == [-0.001, -0.0001]
         end
 
+        @testset "SurfProfileOddAsphere (working, via generic fallback)" begin
+            p = OpticTrace.SurfProfileOddAsphere(0.02, 0.5, [0.01, 0.001])
+            OpticTrace.reverseProfile!(p)
+            @test p.curv == -0.02
+            @test p.ϵ == 0.5
+            @test p.a == [-0.01, -0.001]
+        end
+
+        @testset "SurfProfileXYPoly (working, via generic fallback)" begin
+            p = OpticTrace.SurfProfileXYPoly(0.02, 0.5, 14.0, [0.001, 0.0, -0.01])
+            OpticTrace.reverseProfile!(p)
+            @test p.curv == -0.02
+            @test p.ϵ == 0.5
+            @test p.normRadius == 14.0 # unchanged, a length scale not a sign-dependent quantity
+            @test p.a == [-0.001, 0.0, 0.01]
+        end
+
         @testset "SurfProfileCyl (working)" begin
             p = OpticTrace.SurfProfileCyl(0.02, 0.5, [0.001])
             OpticTrace.reverseProfile!(p)
@@ -54,10 +71,11 @@
         end
 
         @testset "SurfProfileToroid (working)" begin
-            p = OpticTrace.SurfProfileToroid(0.3, 0.2)
+            p = OpticTrace.SurfProfileToroid(0.3, 0.5, 0.2)
             result = OpticTrace.reverseProfile!(p)
             @test result === p
             @test p.curvY == -0.3
+            @test p.ϵY == 0.5 # unchanged, matching SurfProfileConic's ϵ
             @test p.curvX == -0.2
         end
 

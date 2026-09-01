@@ -130,6 +130,85 @@ function sag(x::T, y::T, s::SurfProfileEvenAsphere{U}) where {T<:Real,U<:Real}
 end
 
 """
+    sag(x, y, s::SurfProfileOddAsphere)
+
+Sag of an "odd asphere" surface: a `SurfProfileConic(s.curv, s.ϵ)` base
+plus a polynomial correction evaluated from `s.a`, whose coefficients
+start at 1st order (`s.a[i]` is the coefficient of `r^i`) -- unlike
+`sag(x, y, s::SurfProfileAsphere)` (starts at 3rd order), this needs no
+extra `r²` factor after the Horner evaluation, since there's no order
+offset to account for. Returns `NaN` if `(x,y)` is beyond the base
+conic's domain. See `sag(x, y, s::SurfProfileConic)`'s docstring above
+for the general x/y/s/return contract shared by every `sag` method.
+"""
+function sag(x::T, y::T, s::SurfProfileOddAsphere{U}) where {T<:Real,U<:Real}
+    r2 = (x^2 + y^2)
+    r = sqrt(r2)
+
+    sqrtarg = 1 - s.ϵ * s.curv^2 * r2
+    if sqrtarg < 0.
+        return NaN
+    end
+
+    asp = zero(promote_type(T, U))
+    for ss in Iterators.reverse(s.a)
+        asp = (asp + ss) * r
+    end
+    s.curv * r2 / (1 + sqrt(sqrtarg)) + asp
+end
+
+"""
+    xyPolyTermPowers(k::Int) -> (m::Int, n::Int)
+
+Zemax's standard bivariate polynomial term ordering, used by
+`SurfProfileXYPoly` (Zemax `TYPE XPOLYNOM`): for 1-based term index `k`,
+returns the `(m, n)` exponents of that term's `x^m * y^n` monomial.
+Terms are ordered degree-by-degree (`m+n` increasing), with `m`
+descending within each degree: `k=1 -> (1,0)` (`x`), `k=2 -> (0,1)`
+(`y`), `k=3 -> (2,0)` (`x²`), `k=4 -> (1,1)` (`xy`), `k=5 -> (0,2)`
+(`y²`), `k=6 -> (3,0)` (`x³`), and so on. Generic in `k` (not limited to
+any fixed term count), so it keeps working regardless of how many terms
+a given `XPOLYNOM` surface actually defines.
+"""
+function xyPolyTermPowers(k::Int)
+    d = 1
+    while k > d + 1
+        k -= d + 1
+        d += 1
+    end
+    m = d - (k - 1)
+    n = d - m
+    m, n
+end
+
+"""
+    sag(x, y, s::SurfProfileXYPoly)
+
+Sag of a general 2D polynomial surface: a `SurfProfileConic(s.curv,
+s.ϵ)` base plus `Σ s.a[k] * (x/s.normRadius)^m * (y/s.normRadius)^n`,
+where `(m,n) = xyPolyTermPowers(k)` for each term `k`. Zero coefficients
+are skipped (both for speed and to avoid a `0^0` ambiguity for any term
+whose `(m,n)` includes a zero exponent at `x=0`/`y=0`). Returns `NaN` if
+`(x,y)` is beyond the base conic's domain. See `sag(x, y,
+s::SurfProfileConic)`'s docstring above for the general x/y/s/return
+contract shared by every `sag` method.
+"""
+function sag(x::T, y::T, s::SurfProfileXYPoly{U}) where {T<:Real,U<:Real}
+    base = sag(x, y, SurfProfileConic(s.curv, s.ϵ))
+    isnan(base) && return base
+
+    ρx = x / s.normRadius
+    ρy = y / s.normRadius
+    poly = zero(promote_type(T, U))
+    for (k, coeff) in enumerate(s.a)
+        coeff == 0 && continue
+        m, n = xyPolyTermPowers(k)
+        poly += coeff * ρx^m * ρy^n
+    end
+    base + poly
+end
+
+"""
     sag(x, y, s::SurfProfileCyl)
 
 Sag of a cylindrical surface: a conic cross-section in `y` only (`x`
@@ -150,16 +229,37 @@ end
 """
     sag(x, y, s::SurfProfileToroid)
 
-Sag of a toroidal surface, using independent curvatures `s.curvY`/
-`s.curvX` along y and x. The author's own code comment flags this
-formula as "likely incorrect", and no matching `deltaToSurf`/
-`surfNormal` method exists for `SurfProfileToroid` at all -- see
-`TODO.md`. See `sag(x, y, s::SurfProfileConic)`'s docstring above for
-the general x/y/s/return contract shared by every `sag` method.
+Sag of a toroidal surface: the sag of the base y-z conic curve
+(`s.curvY`/`s.ϵY`, evaluated at `y` alone, the same closed form as
+`sag(x, y, s::SurfProfileConic)` restricted to y) plus the sag of a
+circular arc of curvature `s.curvX` evaluated at `x` alone -- these two
+contributions are independent and additive, matching Zemax's own
+`TOROIDAL` surface definition (the y-z profile curve swept along local
+x by a circular arc of radius `1/s.curvX`). At `x=0` this reduces
+exactly to the base y-z conic's own sag; when `s.curvX == 0` it reduces
+to a pure extrusion of the y-z curve along x (no x sweep at all, per
+`SurfProfileToroid`'s own docstring). See `sag(x, y,
+s::SurfProfileConic)`'s docstring above for the general x/y/s/return
+contract shared by every `sag` method.
 """
 function sag(x::T, y::T, s::SurfProfileToroid{U}) where {T<:Real,U<:Real}
-    #this is likely incorrect
-    z = 1 - sqrt(1 - (s.curvY * y)^2 - (s.curvX * x)^2)
+    if s.curvY == 0.
+        zyz = zero(promote_type(T, U))
+    elseif s.ϵY == 0.
+        zyz = s.curvY * y^2 * 0.5
+    else
+        sqrtargY = 1 - s.ϵY * s.curvY^2 * y^2
+        zyz = sqrtargY < 0. ? oftype(sqrtargY, NaN) : s.curvY * y^2 / (1 + sqrt(sqrtargY))
+    end
+
+    if s.curvX == 0.
+        zx = zero(promote_type(T, U))
+    else
+        sqrtargX = 1 - s.curvX^2 * x^2
+        zx = sqrtargX < 0. ? oftype(sqrtargX, NaN) : s.curvX * x^2 / (1 + sqrt(sqrtargX))
+    end
+
+    zyz + zx
 end
 
 
@@ -356,6 +456,25 @@ function deltaToSurf(r::Ray{3,T}, profile::SurfProfileCyl{T}) where T<:Real
     Δ
 end
 
+"""
+    deltaToSurf(r::Ray{3,T}, p::SurfProfileToroid{T}) where T<:Real
+
+Distance along `r` to its intersection with a `SurfProfileToroid`: no
+closed-form root exists for a general toroid (unlike the conic/sphere/
+cylinder cases above), so this follows the same numerical pattern used
+for `AbstractAsphericProfile` (`deltaToSurf(r, ::AbstractAsphericProfile)`
+above) -- a `Roots.find_zero` refinement of `sag(x,y,p) - z0 - Nδ = 0`,
+seeded from the base y-z conic's own (closed-form) intersection as the
+initial guess.
+"""
+function deltaToSurf(r::Ray{3,T}, p::SurfProfileToroid{T}) where T<:Real
+    x0, y0, z0 = r.base
+    L, M, N = r.dir
+
+    guess = deltaToSurf(r, SurfProfileConic(p.curvY, p.ϵY))
+    f(δ) = sag(x0 + L * δ, y0 + M * δ, p) - z0 - N * δ
+    find_zero(f, guess)
+end
 
 
 
@@ -470,6 +589,23 @@ function surfNormal(rr::Point3{T}, s::SurfProfileEvenAsphere{T}) where T<:Real
 end
 
 """
+    surfNormal(r::Point3{T}, s::AbstractAsphericProfile{T}) where T<:Real
+
+Generic fallback `surfNormal` for any `AbstractAsphericProfile` subtype
+that doesn't have its own dedicated method (currently
+`SurfProfileOddAsphere`/`SurfProfileXYPoly`; `SurfProfileAsphere`/
+`SurfProfileEvenAsphere` have more specific closed-form methods above
+that Julia dispatches to instead): the `ForwardDiff` gradient of `sag`
+at `r`, normalized -- mirrors the `gbRadius`/`gbWidths` generic-fallback
+pattern in `src/mesh_primitives.jl`, avoiding a hand-derived closed-form
+gradient for every new aspheric-family type.
+"""
+function surfNormal(r::Point3{T}, s::AbstractAsphericProfile{T}) where T<:Real
+    grad = ForwardDiff.gradient(xy -> sag(xy[1], xy[2], s), SVector(r[1], r[2]))
+    normalize(Vec3(-grad[1], -grad[2], one(T)))
+end
+
+"""
     surfNormal(r::Point3{T}, s::SurfProfileCyl{T}) where T<:Real
 
 Surface normal of a `SurfProfileCyl` at local point `r`, in local
@@ -496,6 +632,25 @@ function surfNormal(r::Point3{T}, s::SurfProfileCyl{T}) where T<:Real
         end
     end
     Vec3(0., -s.curv * r[2] * denomI, (1.0 - s.curv * s.ϵ * r[3]) * denomI)
+end
+
+"""
+    surfNormal(r::Point3{T}, s::SurfProfileToroid{T}) where T<:Real
+
+Surface normal of a `SurfProfileToroid` at local point `r`, in local
+coordinates -- the analytic gradient of `sag(x, y, s::SurfProfileToroid)`
+(itself a sum of an independent x term and y term, so its gradient is
+just the two 1D conic derivatives stacked together), normalized. See
+`surfNormal(r, s::SurfProfileConic)`'s docstring above for the general
+contract shared by every `surfNormal` method.
+"""
+function surfNormal(r::Point3{T}, s::SurfProfileToroid{T}) where T<:Real
+    x, y = r[1], r[2]
+
+    dzdx = s.curvX == 0 ? zero(T) : s.curvX * x / sqrt(1 - s.curvX^2 * x^2)
+    dzdy = s.curvY == 0 ? zero(T) : s.curvY * y / sqrt(1 - s.ϵY * s.curvY^2 * y^2)
+
+    normalize(Vec3(-dzdx, -dzdy, one(T)))
 end
 
 """
@@ -984,6 +1139,47 @@ function deltaToSurf(r::Ray{3,T}, p::NoProfile{T}) where T<:Real
 end
 
 """
+    deltaToSurf(r::Ray{3,T}, p::ParaxialProfile{T}) where T<:Real
+
+Distance along `r` to its intersection with the local `z=0` plane
+(`ParaxialProfile`'s implicit flat surface, same as `NoProfile`'s) --
+identical formula to `deltaToSurf(r, ::NoProfile)`. See
+`deltaToSurf(r, p::SurfProfileConic)`'s docstring above for the general
+contract shared by every `deltaToSurf` method.
+"""
+function deltaToSurf(r::Ray{3,T}, p::ParaxialProfile{T}) where T<:Real
+    x0, y0, z0 = r.base
+    L, M, N = r.dir
+
+    if N ≈ 0.
+        Δ = NaN #ray parallel to flat surface
+    else
+        Δ = -z0 / N
+    end
+    Δ
+end
+
+"""
+    surfNormal(r::Point3{T}, s::ParaxialProfile{T}) where T<:Real
+
+**Not a true normal.** Returns the local intersection coordinates
+`(x, y, 0)` unchanged (not unit length) -- see `ParaxialProfile`'s own
+docstring (`src/lens_definitions.jl`) for why: an ideal thin lens's
+`modFunc(::ParaxialLensT)` needs the ray's position on the lens, not a
+surface normal, and this is how that position reaches it through
+`traceSurf`'s existing (otherwise unmodified) `surfNormal` ->
+`s.toGlobalDir` -> `modFunc` pipeline. Because `GeometryBasics.normals`
+(`src/mesh_primitives.jl`) also calls this generic `surfNormal`, that
+file has a dedicated, more specific method for `ParaxialProfile`-
+profiled surfaces that returns the real `(0,0,1)` normal for mesh
+shading instead of calling this method -- don't remove that override
+without keeping shading normals correct in mind.
+"""
+function surfNormal(r::Point3{T}, s::ParaxialProfile{T}) where T<:Real
+    Vec3(r[1], r[2], zero(T))
+end
+
+"""
     modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where T<:Real
 
 Pass `ray` through unchanged: returns `(true, ray.dir, d.refIndexIn)`.
@@ -992,6 +1188,42 @@ docstring above for the shared `(ok, newDir, nIn)` return shape.
 """
 function modFunc(ray::Ray{3,T}, normal::Vec3{T}, d::NoBendIndex{T}) where T<:Real
     true, ray.dir, d.refIndexIn
+end
+
+"""
+    modFunc(ray::Ray{3,T}, offset::Vec3{T}, bend::ParaxialLensT{T}) where T<:Real
+
+Ideal thin-lens ray transfer for a `ParaxialLensT` bend. `offset` is
+**not a surface normal** -- per `ParaxialProfile`'s docstring
+(`src/lens_definitions.jl`), it's the ray's global transverse offset
+from the lens's own optical axis, computed by `traceSurf` from
+`surfNormal(::ParaxialProfile)`'s repurposed return value the same way
+every other bend type's real normal is computed, just carrying
+different information. The bend itself is a direct vector form of the
+textbook paraxial thin-lens transfer law (`slope' = slope - height/f`):
+
+    newDir = normalize(ray.dir - offset / bend.focalLength)
+
+This is exact for near-axial rays and an approximation farther
+off-axis (reusing the `normal` argument slot for position means this
+method has no way to decompose `ray.dir` into axial/transverse
+components the way an exact-for-any-angle ideal-lens formula would
+need) -- an intentional scope match to a surface literally named
+"paraxial", not a shortfall.
+
+Always succeeds (`true`, no TIR-style failure mode for an ideal lens),
+and always reports `bend.refIndexOut` as `nIn`: unlike `DielectricT`/
+`MirrorR`, this method has no true normal available to test which
+physical side a ray hit from, so it can't pick between
+`refIndexIn`/`refIndexOut` the way those methods do. A narrow,
+documented simplification -- real Zemax `PARAXIAL` samples sit in an
+unchanged medium on both sides, so `refIndexIn == refIndexOut` in
+practice anyway. See `modFunc(ray, normal, d::S) where
+S<:AbstractBendDielectric`'s docstring above for the shared `(ok,
+newDir, nIn)` return shape.
+"""
+function modFunc(ray::Ray{3,T}, offset::Vec3{T}, bend::ParaxialLensT{T}) where T<:Real
+    true, normalize(ray.dir - offset / bend.focalLength), bend.refIndexOut
 end
 
 

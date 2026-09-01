@@ -40,6 +40,45 @@ function findPerpenMap(planenormal::Vec3, ydir::Union{Nothing, Vec3})
     newy, LinearMap(SMatrix{3,3}([newx; newy; planenormal]))
 end
 
+"""
+    rotationX(θ::T) where T<:Real -> SMatrix{3,3,T}
+
+Right-hand-rule active rotation matrix about the x-axis by angle `θ`
+(radians): rotates the y-axis toward the z-axis for positive `θ`.
+Applied to column vectors (`Rx * v`). Used to build up coordinate-break
+tilts (`src/zemax.jl`'s `zemaxCoordBreakFrame`) by hand, per the
+codebase's existing convention (`findPerpenMap`, above) of building
+rotation matrices directly with `SMatrix`/trig rather than depending on
+a `Rotations.jl`-style package.
+"""
+rotationX(θ::T) where T<:Real = SMatrix{3,3}(one(T), zero(T), zero(T),
+    zero(T), cos(θ), sin(θ),
+    zero(T), -sin(θ), cos(θ))
+
+"""
+    rotationY(θ::T) where T<:Real -> SMatrix{3,3,T}
+
+Right-hand-rule active rotation matrix about the y-axis by angle `θ`
+(radians): rotates the z-axis toward the x-axis for positive `θ`. See
+[`rotationX`](@ref)'s docstring for the general contract shared by
+these three rotation-matrix helpers.
+"""
+rotationY(θ::T) where T<:Real = SMatrix{3,3}(cos(θ), zero(T), -sin(θ),
+    zero(T), one(T), zero(T),
+    sin(θ), zero(T), cos(θ))
+
+"""
+    rotationZ(θ::T) where T<:Real -> SMatrix{3,3,T}
+
+Right-hand-rule active rotation matrix about the z-axis by angle `θ`
+(radians): rotates the x-axis toward the y-axis for positive `θ`. See
+[`rotationX`](@ref)'s docstring for the general contract shared by
+these three rotation-matrix helpers.
+"""
+rotationZ(θ::T) where T<:Real = SMatrix{3,3}(cos(θ), sin(θ), zero(T),
+    -sin(θ), cos(θ), zero(T),
+    zero(T), zero(T), one(T))
+
 
 
 """

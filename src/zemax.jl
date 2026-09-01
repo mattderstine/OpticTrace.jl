@@ -2,6 +2,7 @@
     read a zemax file and return the data as a geometry object
 =#
 export readZemax, printZemaxSurfs, zemaxsurfsToGeo, viewZemaxFile
+export ZemaxHeader, readZemaxSystem
 export ZarEntry, lzwDecompress, readZemaxArchive, listZemaxArchive, extractZemaxArchive
 export ZmfEntry, zmfDeobfuscate, readZmfCatalog, listZmfCatalog, extractZmfCatalog
 
@@ -25,6 +26,12 @@ Fields:
     coating::String        - coating name, from COAT
     type::String           - Zemax surface type, e.g. "STANDARD" or "EVENASPH", from TYPE
     comm::String           - surface comment, from COMM
+    extraData::Vector{T}   - Zemax "Extra Data" coefficients, indexed by XDAT number
+                             (e.g. TYPE XPOLYNOM's normalization radius + polynomial
+                             terms) -- unlike `aspherics`, grows on demand rather than
+                             being preallocated to a fixed length, since XDAT can run
+                             longer than `parmlength`; empty when the surface has no
+                             XDAT lines at all (the common case)
 """
 mutable struct ZemaxSurf{T}
     curvature::T
@@ -37,7 +44,18 @@ mutable struct ZemaxSurf{T}
     coating::String
     type::String
     comm::String
+    extraData::Vector{T}
 end
+
+"""
+    ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm)
+
+Convenience constructor omitting `extraData` (defaults to an empty
+vector -- the common case, since only a few Zemax surface types like
+`TYPE XPOLYNOM` use `XDAT` lines at all).
+"""
+ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm) =
+    ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm, eltype(aspherics)[])
 
 """
     ZemaxSurf()
@@ -45,7 +63,7 @@ end
 Construct a `ZemaxSurf{Float64}` with default values: zero curvature,
 distance, and conic; `"DEFAULT"` material; not a stop; `parmlength`
 zeroed aspheric coefficients; empty coating; `"STANDARD"` type; empty
-comment.
+comment; empty extra data.
 """
 ZemaxSurf() = ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, zeros(Float64, parmlength), "", "STANDARD","")
 
@@ -53,34 +71,76 @@ ZemaxSurf() = ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, zeros(Float64, par
 #resetZemaxSurf!(s::ZemaxSurf) = (s.curvature = 0.0; s.distance = 0.0; s.material = "AIR"; s.radius = 0.0; s.stop = false; s.conic = 0.0; s.aspherics = zeros(Float64, parmlength); s.coating = ""; s.type = "STANDARD")
 
 """
-    readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
+    ZemaxHeader{T}
+
+System-level metadata parsed from a Zemax `.zmx` file's header block
+(everything before its first `SURF` line), as returned by
+[`readZemax`](@ref) alongside the per-surface [`ZemaxSurf`](@ref)
+vector. Absorbed into an [`OpticalSystem`](@ref) by
+[`readZemaxSystem`](@ref).
+
+Fields:
+    name::String                   - system name, from NAME
+    units::String                  - length units, from UNIT
+    wavelengths::Vector{T}         - fixed-length (24-element) array indexed by Zemax wavelength number, from WAVM
+    primaryWavelengthIndex::Int    - index into `wavelengths`, from PWAV (defaults to 1 if PWAV is absent)
+    apertureType::String           - which aperture spec is active: "ENPD", "OBNA", "FNUM", or "FLOA" (no value)
+    apertureValue::T                - the value for whichever `apertureType` is active (`NaN` for "FLOA")
+    fieldType::Int                  - field-type code, from FTYP's first field (angle/object height/image height/...)
+    fields::Vector{Point2{T}}      - design field points, XFLN/YFLN zipped pairwise into (x,y)
+    fieldWeight::Vector{T}          - per-field weight, from FWGN, index-aligned with `fields`
+    glassCatalogs::Vector{String}  - glass catalog names, from GCAT
+    mode::String                   - "SEQ" or "NSC", from MODE
+    notes::String                  - freeform system notes, reconstructed from NOTE lines
+"""
+mutable struct ZemaxHeader{T<:Real}
+    name::String
+    units::String
+    wavelengths::Vector{T}
+    primaryWavelengthIndex::Int
+    apertureType::String
+    apertureValue::T
+    fieldType::Int
+    fields::Vector{Point2{T}}
+    fieldWeight::Vector{T}
+    glassCatalogs::Vector{String}
+    mode::String
+    notes::String
+end
+
+"""
+    ZemaxHeader()
+
+Construct a `ZemaxHeader{Float64}` with default values: `"Zemax
+System"` name, `"MM"` units, 24 zeroed wavelengths, primary wavelength
+index 1, no aperture spec, field type 0, no fields, no glass catalogs,
+`"SEQ"` mode, and empty notes.
+"""
+ZemaxHeader() = ZemaxHeader("Zemax System", "MM", zeros(Float64, 24), 1,
+    "", NaN, 0, Point2{Float64}[], Float64[], String[], "SEQ", "")
+
+"""
+    readZemax(filename::String)
 
 Read a Zemax `.zmx` sequential-lens text file and parse it into a vector
 of [`ZemaxSurf`](@ref) records, one per `SURF` block (plus a leading
-record for the object surface).
+record for the object surface), and a [`ZemaxHeader`](@ref) of
+system-level metadata.
 
-Recognized line keywords: `UNIT`, `NAME`, `WAVM`, `CURV`, `DISZ`, `GLAS`,
-`DIAM`, `STOP`, `TYPE`, `CONI`, `PARM`, `COAT`, `COMM`. Any other
-keyword is silently ignored. `basept`/`dir` are accepted but not
-currently used during parsing itself -- surface positions are computed
-later, by [`zemaxsurfToSurface`](@ref)/[`zemaxsurfsToGeo`](@ref).
+Recognized `SURF`-scoped line keywords: `CURV`, `DISZ`, `GLAS`, `DIAM`,
+`STOP`, `TYPE`, `CONI`, `PARM`, `XDAT`, `COAT`, `COMM`. Recognized header
+keywords: `UNIT`, `NAME`, `WAVM`, `PWAV`, `ENPD`/`OBNA`/`FNUM`/`FLOA`,
+`FTYP`, `XFLN`/`YFLN`/`FWGN`, `GCAT`, `MODE`, `NOTE`. Any other keyword
+is silently ignored. Surface positions/orientations are computed later,
+by [`zemaxsurfToSurface`](@ref)/[`zemaxsurfsToGeo`](@ref).
 
-Returns `(zsurfs, name, units, wavelengths)`:
-    zsurfs::Vector{ZemaxSurf}    - the parsed surfaces, in file order
-    name::String                 - system name, from the NAME field
-    units::String                 - length units, from the UNIT field
-    wavelengths::Vector{Float64}  - fixed-length (24-element) array indexed by Zemax wavelength number, from WAVM
+Returns `(zsurfs, header)`:
+    zsurfs::Vector{ZemaxSurf}   - the parsed surfaces, in file order (zsurfs[1] is the object surface)
+    header::ZemaxHeader          - system-level metadata
 """
-function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
+function readZemax(filename::String)
 
-
-    geo = Vector{AbstractSurface}()
-
-
-    units = "MM"
-    name = "Zemax System"
-
-    wavelengths = zeros(Float64, 24) #array of 24 wavelengths
+    header = ZemaxHeader()
     surfnum =0
 
     lines = readlines(filename)
@@ -88,9 +148,8 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
     zsurfs = Vector{ZemaxSurf}()
     zsurf = ZemaxSurf()
 
-    basecurrent = basept #this variable gets updated by zemaxsurfToSurface!
-    dircurrent = dir #this variable will get updated by zemaxsurfToSurface! if coordinate breaks are implemented
-    rinCur = rInDef() # initial refractive index, thhis variable gets updated by zemaxsurfToSurface!
+    xfln = Float64[] # accumulated from XFLN, zipped with yfln into header.fields once parsing is done
+    yfln = Float64[] # accumulated from YFLN
 
     # Parse the file to extract the necessary data
     for l in lines
@@ -118,8 +177,6 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
                 # Finalize the previous surface before starting a new one
                 # Example: geo.geo[end].aspherics = copy(parm)
                 push!(zsurfs, zsurf)
-                #surf = zemaxsurfToSurface!(zemaxsurf,basecurrent, dircurrent, rinCur)
-                #push!(geo, surf)
                 zsurf = ZemaxSurf()
                 #resetZemaxSurf!(zsurf)
             end
@@ -127,20 +184,64 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
             # Example: geo.geo.push!(Spheroid(...))
         elseif startswith(entries[1], "UNIT")
             # Handle unit definitions
-            units = entries[2]
+            header.units = entries[2]
         elseif startswith(entries[1], "NAME")
-            # Handle name definitions
-            name = strip(split(curline, " ", limit=2)[2], '"')
+            # Handle name definitions -- a bare `NAME` line (no quoted
+            # name following) is valid Zemax output for an unnamed
+            # system; leave header.name empty in that case instead of
+            # throwing (see TODO.md Bug #13)
+            parts = split(curline, " ", limit=2)
+            header.name = length(parts) > 1 ? strip(parts[2], '"') : ""
         elseif startswith(entries[1], "WAVM")
             # Handle wavelength definitions
-            wavelengths[parse(Int32,entries[2])] = parse(Float64, entries[3])
+            header.wavelengths[parse(Int32,entries[2])] = parse(Float64, entries[3])
+        elseif startswith(entries[1], "PWAV")
+            # Handle primary wavelength index
+            header.primaryWavelengthIndex = parse(Int, entries[2])
+        elseif startswith(entries[1], "ENPD") || startswith(entries[1], "OBNA") || startswith(entries[1], "FNUM")
+            # Handle aperture definitions -- value is the 2nd token; a
+            # trailing flag digit (e.g. afocal/telecentric) is ignored
+            header.apertureType = string(entries[1])
+            header.apertureValue = parse(Float64, entries[2])
+        elseif startswith(entries[1], "FLOA")
+            # Handle float-by-stop aperture -- bare flag, no value
+            header.apertureType = "FLOA"
+            header.apertureValue = NaN
+        elseif startswith(entries[1], "FTYP")
+            # Handle field-type definitions -- only the field-type code
+            # (1st token) is parsed; other FTYP tokens (telecentricity,
+            # field count, afocal-image-space flag) aren't decoded yet,
+            # see TODO.md
+            header.fieldType = parse(Int, entries[2])
+        elseif startswith(entries[1], "XFLN")
+            # Handle field X positions -- zipped with YFLN into header.fields after parsing
+            append!(xfln, parse.(Float64, entries[2:end]))
+        elseif startswith(entries[1], "YFLN")
+            # Handle field Y positions -- zipped with XFLN into header.fields after parsing
+            append!(yfln, parse.(Float64, entries[2:end]))
+        elseif startswith(entries[1], "FWGN")
+            # Handle field weights
+            append!(header.fieldWeight, parse.(Float64, entries[2:end]))
+        elseif startswith(entries[1], "GCAT")
+            # Handle glass catalog list
+            header.glassCatalogs = string.(entries[2:end])
+        elseif startswith(entries[1], "MODE")
+            # Handle system mode (SEQ/NSC)
+            header.mode = entries[2]
+        elseif startswith(entries[1], "NOTE")
+            # Handle system notes -- only "NOTE 0 <text>" lines carry
+            # text; other note-line codes (e.g. "NOTE 4") are formatting
+            # markers, not text, and are skipped
+            if length(entries) >= 2 && entries[2] == "0"
+                noteText = length(entries) > 2 ? join(entries[3:end], " ") : ""
+                header.notes = isempty(header.notes) ? noteText : header.notes * "\n" * noteText
+            end
         elseif startswith(entries[1], "CURV")
             # Handle curvature definitions
             zsurf.curvature = parse(Float64, entries[2])
         elseif startswith(entries[1], "DISZ")
             # Handle distance definitions
             zsurf.distance = parse(Float64, entries[2])
-            basecurrent += zsurf.distance * dircurrent
         elseif startswith(entries[1], "GLAS")
             # Handle glass/material definitions
             zsurf.material = entries[2]
@@ -165,6 +266,18 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
             else
                 @warn "PARM index $idx out of bounds"
             end
+        elseif startswith(entries[1], "XDAT")
+            # Handle "Extra Data" definitions (e.g. TYPE XPOLYNOM's
+            # normalization radius + polynomial terms) -- unlike PARM,
+            # not preallocated to a fixed length: grow extraData on
+            # demand so an index beyond its current length doesn't need
+            # a bounds warning the way an out-of-range PARM index does
+            idx = parse(Int, entries[2])  # 1-based index
+            val = parse(Float64, entries[3])
+            while length(zsurf.extraData) < idx
+                push!(zsurf.extraData, 0.0)
+            end
+            zsurf.extraData[idx] = val
         elseif startswith(entries[1], "COAT")
             # Handle coating definitions
             zsurf.coating = entries[2]
@@ -175,10 +288,9 @@ function readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)
             # Handle other commands or ignore
         end
     end
-    #surf = zemaxsurf_to_surface(zemaxsurf,basecurrent, dircurrent, rinCur)
-    #push!(geo, surf)
     push!(zsurfs, zsurf)
-    return zsurfs, name, units, wavelengths
+    header.fields = Point2.(xfln, yfln)
+    return zsurfs, header
 end
 
 """
@@ -199,103 +311,371 @@ function printZemaxSurfs(zsurfs::Vector{ZemaxSurf})
 end
 
 """
-    zemaxsurfToSurface(num, rinIn::Float64, rinOut::Float64, basept::Point, dir::Vec3, s::ZemaxSurf)
+    zemaxsurfToSurface(num, rinIn::Float64, rinOut::Float64, basept::Point, dir::Vec3,
+        ydir::Union{Vec3,Nothing}, s::ZemaxSurf)
 
 Convert one parsed [`ZemaxSurf`](@ref) record into an `OptSurface`
-located at `basept`, oriented along `dir`, with entering/exiting
-refractive indices `rinIn`/`rinOut`. `num` is only used to build the
-surface's name (`s.comm * " \$num"`).
+located at `basept`, oriented along `dir`/`ydir` (`ydir = nothing`
+resolves to the same default guess `updateCoordChange` uses elsewhere),
+with entering/exiting refractive indices `rinIn`/`rinOut`. `num` is only
+used to build the surface's name (`s.comm * " \$num"`).
 
-Supports Zemax `type`s `"STANDARD"` (built as a `SurfProfileConic`) and
-`"EVENASPH"` (built as a `SurfProfileEvenAsphere`, using
-`s.aspherics[2:end]`); any other type throws an error.
+The profile/aperture come from [`zemaxsurfToProfileAperture`](@ref)
+(see its docstring for which Zemax `type`s are supported). `TYPE
+TILTSURF` is the one exception to "surface built at `(basept, dir,
+ydir)` as given": its own tilt (`PARM 1`/`PARM 2`, tilt about x/y) is
+applied first via [`zemaxCoordBreakFrame`](@ref), and the surface is
+built at the resulting tilted frame instead.
 
-Returns `(newbasept, rinOut, newsurf)`, where `newbasept = basept +
-s.distance * dir` is the starting point for the next surface, and
-`rinOut` is passed through unchanged so it can be reused as the next
-surface's `rinIn`.
+`s.material == "MIRROR"` (Zemax's reserved name for a reflective
+surface, e.g. `GLAS MIRROR`) builds a `MirrorR` bend instead of the
+usual `DielectricT` -- see [`zemaxsurfsToGeo`](@ref)'s docstring for
+the caller-side half of this (skipping the glass catalog for it, and
+why `rinIn == rinOut` here for a mirror). `s.type == "PARAXIAL"`
+builds a `ParaxialLensT` bend instead (checked before the `MIRROR`
+case), with its focal length from `s.aspherics[1]` (Zemax `PARM 1`;
+`PARM 2`, an "OPD Mode" flag, doesn't affect real ray tracing and is
+left undecoded), and a distinct `:cyan3` display color (instead of the
+usual `:lightgray`) so an ideal lens is visually identifiable in a
+plot -- it has no real curvature to distinguish it otherwise.
+
+Returns `(newbasept, newdir, newydir, rinOut, newsurf)`: `newdir`/
+`newydir` are `dir`/`ydir` unchanged for every type except `TILTSURF`
+(where they carry the tilt forward to whatever comes next);
+`newbasept = basept + s.distance * newdir` is the starting point for
+the next surface; `rinOut` is passed through unchanged so it can be
+reused as the next surface's `rinIn`.
 """
-function zemaxsurfToSurface(num, rinIn::Float64, rinOut::Float64, basept::Point, dir::Vec3,  s::ZemaxSurf)
-    color = :lightgray
+function zemaxsurfToSurface(num, rinIn::Float64, rinOut::Float64, basept::Point, dir::Vec3,
+        ydir::Union{Vec3,Nothing}, s::ZemaxSurf)
+    color = s.type == "PARAXIAL" ? :cyan3 : :lightgray
+    profile, aperture = zemaxsurfToProfileAperture(s)
 
-    if s.type == "STANDARD"
-        ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(basept, dir, nothing)
-        newsurf = OptSurface(s.comm * " $num",
-            SurfBase(basept, dir, ydir),
-            SizeLens(s.radius),
-            SurfProfileConic( s.curvature, conicToϵ(s.conic)),
-            DielectricT(rinIn, rinOut),
-            #AmpParam(coating),
-            getAmpParams(s.coating; attributesSurfaces),
-            toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
-            color
-            )
-    elseif s.type == "EVENASPH"
-        ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
-                updateCoordChange(basept, dir, nothing)
-        newsurf = OptSurface(s.comm * " $num",
-            SurfBase(basept, dir, ydir),
-            SizeLens(s.radius),
-            SurfProfileEvenAsphere( s.curvature, conicToϵ(s.conic), s.aspherics[2:end]),
-            DielectricT(rinIn, rinOut),
-            #AmpParam(coating),
-            getAmpParams(s.coating; attributesSurfaces),
-            toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
-            color
-        )
-    else
-        error("Zemax surface type $(s.type) not implemented yet")
+    if s.type == "TILTSURF"
+        basept, dir, ydir = zemaxCoordBreakFrame(basept, dir, ydir,
+            zero(s.curvature), zero(s.curvature), s.aspherics[1], s.aspherics[2], zero(s.curvature), 0)
     end
-    return basept + s.distance * dir, rinOut, newsurf
+
+    myydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+            updateCoordChange(basept, dir, ydir)
+    bend = if s.type == "PARAXIAL"
+        ParaxialLensT(s.aspherics[1], rinIn, rinOut)
+    elseif s.material == "MIRROR"
+        MirrorR(rinIn, rinOut)
+    else
+        DielectricT(rinIn, rinOut)
+    end
+    newsurf = OptSurface(s.comm * " $num",
+        SurfBase(basept, dir, myydir),
+        aperture,
+        profile,
+        bend,
+        #AmpParam(coating),
+        getAmpParams(s.coating; attributesSurfaces),
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        color
+        )
+    return basept + s.distance * dir, dir, myydir, rinOut, newsurf
 end
 
 """
-    zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64; glassCatalog::Dict{AbstractString, Any} = defaultGlassCatalog)
+    zemaxsurfToProfileAperture(s::ZemaxSurf) -> (profile, aperture)
 
-Convert a vector of [`ZemaxSurf`](@ref) records (as returned by
-[`readZemax`](@ref)) into a traceable geometry at the given wavelength,
-by repeatedly calling [`zemaxsurfToSurface`](@ref) and threading the base
-point and refractive index from one surface to the next.
+Convert one parsed [`ZemaxSurf`](@ref) record's own geometry fields
+(`type`/`curvature`/`conic`/`aspherics`/`radius`) into a
+`(profile::AbstractSurfProfile, aperture::SizeLens)` pair -- the shared
+step factored out of [`zemaxsurfToSurface`](@ref) (which wraps it into a
+refracting `OptSurface`) and [`zemaxObjectToModelSurface`](@ref) (which
+wraps it into a non-refracting `ModelSurface` for the object surface),
+so both stay in sync about which Zemax `type`s are supported.
+
+Supports Zemax `type`s `"STANDARD"` (a `SurfProfileConic`), `"EVENASPH"`
+(a `SurfProfileEvenAsphere`, using `s.aspherics[2:end]`), `"TOROIDAL"`
+(a `SurfProfileToroid` -- `s.curvature`/`s.conic` describe the base y-z
+curve, and `s.aspherics[1]` is Zemax's own `PARM 1` "Radius of
+Rotation" `Rx`, converted to the x-sweep curvature `1/Rx`; `Rx == 0`
+maps to a curvature of `0`, matching Zemax's own convention that a `0`
+radius of rotation means no x sweep at all rather than a literal
+zero-radius one -- confirmed against real `TOROIDAL` samples under the
+local Zemax install's `Samples` directory), `"TILTSURF"` (a
+`SurfProfileConic`, identical to `"STANDARD"` -- Zemax's `TILTSURF` is
+an otherwise-ordinary conic surface, with the tilt itself handled
+separately by [`zemaxsurfToSurface`](@ref) via
+[`zemaxCoordBreakFrame`](@ref)), `"ODDASPHE"` (a `SurfProfileOddAsphere`
+-- Zemax's own `PARM i` multiplies `rⁱ` directly for `i = 1..8`, so
+`a = s.aspherics[1:8]`, confirmed against a real `ODDASPHE` sample: an
+axicon whose only nonzero term, `PARM 1`, produces the linear cone
+profile an axicon is defined by), and `"XPOLYNOM"` (a
+`SurfProfileXYPoly` -- built from `s.extraData` rather than
+`s.aspherics`, since Zemax stores this type's coefficients via `XDAT`
+lines: `s.extraData[1]` is the normalization radius, `s.extraData[2]`
+an unidentified Zemax control flag not interpreted here, and
+`s.extraData[3:end]` the polynomial term coefficients in Zemax's own
+bivariate term order -- see [`xyPolyTermPowers`](@ref)), and
+`"PARAXIAL"` (a `ParaxialProfile` -- an ideal thin lens has no real
+sag; its focal length, from `s.aspherics[1]`, is handled separately by
+[`zemaxsurfToSurface`](@ref), which builds a `ParaxialLensT` bend
+instead of the usual `DielectricT`); any other type throws an error.
+"""
+function zemaxsurfToProfileAperture(s::ZemaxSurf)
+    aperture = SizeLens(s.radius)
+    if s.type == "STANDARD" || s.type == "TILTSURF"
+        return SurfProfileConic(s.curvature, conicToϵ(s.conic)), aperture
+    elseif s.type == "EVENASPH"
+        return SurfProfileEvenAsphere(s.curvature, conicToϵ(s.conic), s.aspherics[2:end]), aperture
+    elseif s.type == "TOROIDAL"
+        rx = s.aspherics[1]
+        curvX = rx == 0 ? zero(rx) : 1 / rx
+        return SurfProfileToroid(s.curvature, conicToϵ(s.conic), curvX), aperture
+    elseif s.type == "ODDASPHE"
+        return SurfProfileOddAsphere(s.curvature, conicToϵ(s.conic), s.aspherics[1:8]), aperture
+    elseif s.type == "XPOLYNOM"
+        normRadius = s.extraData[1]
+        return SurfProfileXYPoly(s.curvature, conicToϵ(s.conic), normRadius, s.extraData[3:end]), aperture
+    elseif s.type == "PARAXIAL"
+        return ParaxialProfile(zero(s.curvature)), aperture
+    else
+        error("Zemax surface type $(s.type) not implemented yet")
+    end
+end
+
+"""
+    zemaxCoordBreakFrame(basept::Point, dir::Vec3, ydir::Union{Vec3,Nothing},
+        dx, dy, tiltXdeg, tiltYdeg, tiltZdeg, orderFlag) -> (newbasept, newdir, newydir)
+
+Apply a Zemax coordinate-break decenter+tilt to the current local frame
+`(basept, dir, ydir)` (`ydir = nothing` resolves to the same default
+guess `updateCoordChange`/`findPerpenMap` use elsewhere), following
+Zemax's own documented `COORDBRK` "Order" convention:
+
+- `orderFlag == 0` (the common case): decenter `dx`/`dy` first, along
+  the *current* (pre-tilt) local x/y axes, then tilt -- intrinsically,
+  about the local axes as they evolve -- in X, then Y, then Z order.
+- `orderFlag != 0`: reversed -- tilt first (intrinsically Z, then Y,
+  then X), then decenter `dx`/`dy` along the *resulting* (post-tilt)
+  local x/y axes. This is Zemax's own documented mechanism for undoing
+  an earlier coordinate break with a second one.
+
+Tilt angles are in degrees (as raw Zemax `PARM` values are); a positive
+angle follows the standard right-hand rule about the corresponding
+(current, evolving) local axis, built via [`rotationX`](@ref)/
+[`rotationY`](@ref)/[`rotationZ`](@ref) -- confirmed empirically against
+the local Zemax install's "Fold Mirror Using Coordinate Breaks.ZMX"
+sample (a 45° `COORDBRK` tilt about local x immediately ahead of a
+mirror correctly folds an on-axis beam by exactly 90°, matching a real
+fold mirror's physical behavior, when traced by hand through this
+formula and `modFunc(::MirrorR)`'s reflection law).
+
+Used by [`zemaxsurfsToGeo`](@ref) for `TYPE COORDBRK` surfaces
+(decenter+tilt only, no surface built) and by
+[`zemaxsurfToSurface`](@ref) for `TYPE TILTSURF` surfaces (tilt only,
+`dx=dy=tiltZdeg=0`, `orderFlag=0`, then a real surface *is* built at the
+resulting frame).
+"""
+function zemaxCoordBreakFrame(basept::Point, dir::Vec3, ydir::Union{Vec3,Nothing},
+        dx::T, dy::T, tiltXdeg::T, tiltYdeg::T, tiltZdeg::T, orderFlag) where T<:Real
+    curydir, toGlobalDir = findPerpenMap(dir, ydir)
+    curxdir = normalize(cross(curydir, dir))
+
+    Rx = rotationX(deg2rad(tiltXdeg))
+    Ry = rotationY(deg2rad(tiltYdeg))
+    Rz = rotationZ(deg2rad(tiltZdeg))
+    Rlocal = orderFlag == 0 ? Rx * Ry * Rz : Rz * Ry * Rx
+
+    Mnew = toGlobalDir.linear * Rlocal
+    newdir = normalize(Vec3(Mnew * ZAXIS))
+    newydir = normalize(Vec3(Mnew * YAXIS))
+
+    if orderFlag == 0
+        newbasept = basept + dx * curxdir + dy * curydir
+    else
+        newxdir = normalize(Vec3(Mnew * XAXIS))
+        newbasept = basept + dx * newxdir + dy * newydir
+    end
+
+    return newbasept, newdir, newydir
+end
+
+"""
+    zemaxObjectToModelSurface(s::ZemaxSurf, basept::Point, dir::Vec3; rin = rInDef(), color = :lightgray)
+
+Convert the object surface (Zemax `SURF 0`, `s`) into a non-refracting
+`ModelSurface` carrying its own profile/aperture, via
+[`zemaxsurfToProfileAperture`](@ref) -- most files' object surface is a
+flat, inert placeholder (`CURV 0`), but Zemax allows real geometry on
+it too (e.g. a curved source, or a reverse-traced eye model's retina),
+so this preserves it rather than discarding `s` entirely the way
+[`readZemaxSystem`](@ref) does for the traceable chain (`geo` never
+includes the object surface).
+
+Position: `basept - s.distance * dir` when `s.distance` is finite
+(undoing the same `+distance*dir` step used to place every other
+surface, since the object sits *upstream* of surface 1 by its own
+distance); when `s.distance` is infinite, positioned at `basept`
+itself, an arbitrary, documented anchor -- no finite global position is
+meaningful for an infinite-conjugate object, only the surface's local
+profile is. If `s.type == "TILTSURF"` (a real, if unusual, Zemax file --
+e.g. a tilted-object test target), that tilt (`PARM 1`/`PARM 2`, no
+decenter) is applied in place at that position, via
+[`zemaxCoordBreakFrame`](@ref), the same way `TILTSURF` is handled for
+every other surface in [`zemaxsurfToSurface`](@ref).
+"""
+function zemaxObjectToModelSurface(s::ZemaxSurf, basept::Point, dir::Vec3; rin = rInDef(), color = :lightgray)
+    profile, aperture = zemaxsurfToProfileAperture(s)
+    position = isinf(s.distance) ? basept : basept - s.distance * dir
+    tiltydir = nothing
+
+    if s.type == "TILTSURF"
+        position, dir, tiltydir = zemaxCoordBreakFrame(position, dir, nothing,
+            zero(s.curvature), zero(s.curvature), s.aspherics[1], s.aspherics[2], zero(s.curvature), 0)
+    end
+
+    ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+            updateCoordChange(position, dir, tiltydir)
+    ModelSurface(isempty(s.comm) ? "Object" : s.comm,
+        SurfBase(position, dir, ydir),
+        aperture,
+        profile,
+        rin,
+        toGlobalCoord,toLocalCoord,toGlobalDir,toLocalDir,
+        color
+        )
+end
+
+"""
+    zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64;
+        ydir::Union{Vec3,Nothing} = nothing, glassCatalog::Dict{AbstractString, Any} = defaultGlassCatalog)
+
+Convert a vector of *real* [`ZemaxSurf`](@ref) records into a traceable
+geometry at the given wavelength, by repeatedly calling
+[`zemaxsurfToSurface`](@ref) and threading the running local frame
+(`base`/`dir`/`ydir`) and refractive index from one surface to the
+next.
+
+`TYPE COORDBRK` surfaces are handled specially: they build no
+`OptSurface` at all, only update the running frame via
+[`zemaxCoordBreakFrame`](@ref) (decenter + tilt, per Zemax's own
+`COORDBRK` "Order" convention) and then advance `base` by their own
+`DISZ` along the *resulting* (post-tilt) `dir` -- matching Zemax's rule
+that a coordinate break's own thickness is always applied last,
+regardless of the order its decenter/tilt were applied in. Every other
+surface goes through `zemaxsurfToSurface` as before (which itself
+handles `TYPE TILTSURF`'s own tilt).
+
+`zemaxsurfs` must **not** include the object surface (`readZemax`'s
+`zsurfs[1]`) -- go through [`readZemaxSystem`](@ref), which handles
+that split, rather than calling this directly on a full `readZemax`
+result. Any `isinf(zsurf.distance)` encountered here is treated as an
+anomaly (a malformed file, or a real surface incorrectly passed as if
+it were the object) and raises a clear error rather than silently
+propagating `Inf`/`NaN` into later surfaces' coordinates -- the object
+surface's own (possibly infinite) distance is meant to be handled
+before this function ever sees `zemaxsurfs`, not by this loop.
 
 `glassCatalog` maps each surface's `material` name to a function of
-wavelength returning its refractive index (see `defaultGlassCatalog`).
+wavelength returning its refractive index (see `defaultGlassCatalog`) --
+never consulted for a `COORDBRK` surface (which has no material), nor
+for a surface whose material is the reserved name `"MIRROR"` (Zemax's
+convention for a reflective surface, e.g. `GLAS MIRROR`; not a real
+glass, so never present in a catalog): reflection doesn't change the
+medium, so such a surface's `rinOut` is just its `rinIn` carried
+through unchanged, and [`zemaxsurfToSurface`](@ref) builds it with a
+`MirrorR` bend instead of the usual `DielectricT`.
+
+Only a mirror bracketed by real `TYPE COORDBRK` tilts (as in every
+known real sample) is handled correctly -- those already physically
+rotate `dir` via rotation matrices, so a coordinate break's own
+(possibly negative) `DISZ` afterward is just ordinary signed 3D
+displacement along the new `dir`, no special-casing needed. A **bare**
+mirror (no coordinate break) relies on a different, implicit Zemax
+convention instead (the local frame doesn't itself rotate; only the
+*sign* of later `DISZ` values encodes the fold) that this function has
+no equivalent for and does not attempt to model. This only matters if
+an OpticTrace-to-Zemax *export* path is ever written -- it would need
+to always emit a mirror bracketed by a matching pair of coordinate
+breaks, never a bare reflective surface.
 
 Returns the resulting `Vector{AbstractSurface}`.
 """
-function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64; glassCatalog::Dict{AbstractString, Any} =defaultGlassCatalog)
+function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64;
+        ydir::Union{Vec3,Nothing} = nothing, glassCatalog::Dict{AbstractString, Any} =defaultGlassCatalog)
     geo = Vector{AbstractSurface}()
     rinIn = rInDef()
     for (i,zsurf) in enumerate(zemaxsurfs)
-        rinOut = glassCatalog[zsurf.material](wavelength)
-        base, rinIn, surf = zemaxsurfToSurface(i,rinIn, rinOut, base, dir, zsurf)
-        push!(geo, surf)
+        isinf(zsurf.distance) && error("zemaxsurfsToGeo: surface $i has an infinite distance; only the " *
+            "object surface (readZemax's zsurfs[1]) may have DISZ INFINITY -- did you pass the full " *
+            "readZemax result instead of using readZemaxSystem?")
+        if zsurf.type == "COORDBRK"
+            base, dir, ydir = zemaxCoordBreakFrame(base, dir, ydir,
+                zsurf.aspherics[1], zsurf.aspherics[2], zsurf.aspherics[3], zsurf.aspherics[4],
+                zsurf.aspherics[5], zsurf.aspherics[6])
+            base = base + zsurf.distance * dir
+        else
+            rinOut = zsurf.material == "MIRROR" ? rinIn : glassCatalog[zsurf.material](wavelength)
+            base, dir, ydir, rinIn, surf = zemaxsurfToSurface(i, rinIn, rinOut, base, dir, ydir, zsurf)
+            push!(geo, surf)
+        end
     end
     return geo
+end
+
+"""
+    readZemaxSystem(filename; basept = ORIGIN, dir = ZAXIS, wavelength = 0.5, glassCatalog = defaultGlassCatalog)
+
+Read a Zemax `.zmx` file into a materialized [`OpticalSystem`](@ref) --
+the canonical entry point for the Zemax-import pipeline, replacing the
+hand-glued `readZemax`+slice+`zemaxsurfsToGeo` sequence
+[`viewZemaxFile`](@ref) used to do inline.
+
+Calls [`readZemax`](@ref), then splits its result: `zsurfs[1]` (the
+object surface) never becomes part of the traceable `geo` -- its own
+geometry is preserved separately as `OpticalSystem.objectSurface` (via
+[`zemaxObjectToModelSurface`](@ref)), and its distance (finite or
+`Inf`) becomes `OpticalSystem.objectDistance`/`objectAtInfinity`. The
+remaining surfaces (`zsurfs[2:end]`) are converted via
+[`zemaxsurfsToGeo`](@ref) at `wavelength`.
+
+Raises an error if the file's `MODE` is `"NSC"` (non-sequential) --
+this package's tracer is sequential-only end-to-end, so a genuinely
+non-sequential file can't be imported meaningfully (see `TODO.md`).
+
+Returns an `OpticalSystem{Float64}`.
+"""
+function readZemaxSystem(filename; basept = ORIGIN, dir = ZAXIS, wavelength = 0.5, glassCatalog = defaultGlassCatalog)
+    zsurfs, header = readZemax(filename)
+    header.mode == "NSC" && error("readZemaxSystem: $filename is a non-sequential-mode (MODE NSC) file; " *
+        "not supported -- this package's tracer is sequential-only, see TODO.md")
+
+    objSurf = zsurfs[1]
+    geo = zemaxsurfsToGeo(zsurfs[2:end], basept, dir, wavelength; glassCatalog)
+    objectSurface = zemaxObjectToModelSurface(objSurf, basept, dir)
+
+    OpticalSystem(geo, objectSurface, header.name, header.units, header.wavelengths,
+        header.primaryWavelengthIndex, objSurf.distance, isinf(objSurf.distance),
+        header.apertureType, header.apertureValue, header.fieldType, header.fields,
+        header.fieldWeight, header.glassCatalogs, header.mode, header.notes)
 end
 
 """
     viewZemaxFile(filename; glassCatalog = defaultGlassCatalog)
 
 Read, convert, print, and plot a Zemax `.zmx` file in one call: reads
-`filename` with [`readZemax`](@ref), prints the parsed surfaces with
-[`printZemaxSurfs`](@ref), builds a geometry with
-[`zemaxsurfsToGeo`](@ref) (skipping the leading object surface,
-`zgeo[2:end]`) at a fixed wavelength of 0.5, displays it with
+`filename` with [`readZemaxSystem`](@ref), prints the parsed surfaces
+with [`printZemaxSurfs`](@ref), displays the resulting geometry with
 `plotGeometry3D`, and prints it with `printGeo`.
 
-Returns the built geometry (`Vector{AbstractSurface}`).
+Returns the built [`OpticalSystem`](@ref).
 """
 function viewZemaxFile(filename; glassCatalog=defaultGlassCatalog)
-    zgeo, name, units, wave = readZemax(filename; basept = ORIGIN, dir = ZAXIS)
-    println("Zemax System Name: $name Units: $units")
+    zgeo, header = readZemax(filename)
+    println("Zemax System Name: $(header.name) Units: $(header.units)")
     printZemaxSurfs(zgeo)
-    geo = zemaxsurfsToGeo(zgeo[2:end], ORIGIN, ZAXIS, 0.5; glassCatalog)
+    sys = readZemaxSystem(filename; basept = ORIGIN, dir = ZAXIS, wavelength = 0.5, glassCatalog)
 
-    fig,a = plotGeometry3D(geo)
+    fig,a = plotGeometry3D(sys.geo)
     display(fig)
-    printGeo(geo)
-    return geo
+    printGeo(sys.geo)
+    return sys
 end
 
 #=

@@ -183,10 +183,22 @@ function reverseProfile!(profile::NoProfile)
 end
 
 """
+    reverseProfile!(profile::ParaxialProfile)
+
+No-op, mirroring `reverseProfile!(profile::NoProfile)` above for the
+same reason: `ParaxialProfile`'s only field (`curv`) is never actually
+used, so there's nothing meaningful to reverse.
+"""
+function reverseProfile!(profile::ParaxialProfile)
+    profile
+end
+
+"""
     reverseProfile!(profile::SurfProfileToroid)
 
-Negate `profile`'s two curvatures in place (matching its sibling
-methods above/below), and return `profile`.
+Negate `profile`'s two curvatures (`curvY`/`curvX`) in place, leaving
+`ϵY` unchanged (matching how `reverseProfile!(::SurfProfileConic)`
+leaves `ϵ` unchanged above), and return `profile`.
 """
 function reverseProfile!(profile::SurfProfileToroid)
     profile.curvX = -profile.curvX

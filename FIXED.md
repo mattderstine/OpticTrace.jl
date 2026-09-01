@@ -236,7 +236,7 @@ list doesn't.
   and returned the result -- it never assigned back into `egeo.geo`.
 
   **Fixed**: `egeo.geo = defaultSetupGeo(...)`
-  (`src/extended_geo.jl:156`). `test/foundations.jl`'s
+  (`src/extended_geo.jl:190`). `test/foundations.jl`'s
   `"defaultSetupGeo / updateEGeo!"` testset's `updateEGeo!` call had to
   move off its original fixture -- that fixture's `funcGeo` (`testfunc`)
   returns a plain `Tuple`, fine for exercising `defaultSetupGeo`
@@ -287,6 +287,30 @@ list doesn't.
   by the same updated `test/plotting.jl` testset as #5 above (no
   separate test needed).
 
+- **13.** `src/zemax.jl` (`readZemax`): a bare `NAME` line (no quoted
+  name following it, just `NAME` plus trailing whitespace and nothing
+  else -- confirmed in several real sample files under the local Zemax
+  install, e.g. `Short course/Archive/sc_wedge.ZMX`,
+  `sc_CB_Return1.zmx`, `sc_CB_Return2.zmx`) threw an uncaught
+  `BoundsError` (`split(curline, " ", limit=2)[2]` on a 1-element
+  result), aborting the whole parse. Found while round-tripping real
+  `TILTSURF` samples for the "Support additional Zemax surface types"
+  Phase 2 work; not fixed there since it's unrelated to coordinate
+  breaks/tilts specifically -- a different real sample
+  (`Sequential/Tilted systems & prisms/Tilted object.zmx`) was used
+  for that verification instead.
+
+  **Fixed**: `readZemax`'s `NAME` branch (`src/zemax.jl`) now checks
+  `length(parts) > 1` on the `split(curline, " ", limit=2)` result
+  before indexing `[2]`, leaving `header.name` as `""` for a bare
+  `NAME` line instead of throwing -- a normal `NAME "..."` line is
+  unaffected. Covered by a new `"bare NAME line (no quoted name)
+  doesn't crash (TODO.md Bug #13)"` sub-testset in `test/zemax.jl`'s
+  `"readZemax"` testset, which derives a temp fixture from
+  `test/fixtures/test_singlet.zmx` with its `NAME "Test Singlet"` line
+  swapped for a bare `NAME`, same pattern already used by that file's
+  `"MODE NSC rejected"` testset.
+
 ## Code issues
 
 - **1.** `src/zemax.jl`: `ZemaxGeometry` struct was defined but never
@@ -299,6 +323,31 @@ list doesn't.
   that referenced constructing one. The stale docstring copy in
   `docs/zemax_reference.md` was removed too. No test changes needed --
   nothing referenced the type.
+
+- **2.** `src/zemax.jl`: `readZemax`'s `basept`/`dir` keyword args are
+  accepted but not actually used during parsing (the
+  `basecurrent`/`dircurrent` variables they seed are only read by
+  commented-out code). Either wire them up (the commented-out
+  `zemaxsurfToSurface!`/`push!` lines suggest the original intent) or
+  drop the unused args.
+
+  **Fixed**: dropped the unused args rather than wiring them up --
+  investigation found the real geometry-building logic already exists
+  and works correctly as a separate pass, `zemaxsurfsToGeo`/
+  `zemaxObjectToModelSurface`, called from `readZemaxSystem` with their
+  own `basept`/`dir` args, entirely independent of anything `readZemax`
+  computes. Wiring up `readZemax`'s copies (per the commented-out
+  `zemaxsurfToSurface!`/`push!` lines) would have duplicated that
+  already-working two-phase design rather than fixed a real gap.
+  `readZemax` no longer takes `basept`/`dir` at all; the dead
+  `basecurrent`/`dircurrent`/`rinCur` scaffolding and the stale
+  commented-out lines referencing them are removed too. The two
+  pass-through call sites (`readZemaxSystem`, `viewZemaxFile`) no longer
+  forward their own `basept`/`dir` to `readZemax` -- they still use
+  those kwargs themselves, for the real `zemaxsurfsToGeo`/
+  `zemaxObjectToModelSurface` calls. `test/zemax.jl`'s
+  `"basept/dir kwargs accepted but not used during parsing"` sub-testset
+  (which tested exactly the removed behavior) was removed.
 
 - **5.** `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar`
   archives (Zemax file bundles) wasn't implemented at all -- only the
@@ -382,6 +431,33 @@ list doesn't.
   `order` value, matching its siblings' tests, instead of asserting the
   old silent-fallback behavior.
 
+- **12.** `src/mesh_primitives.jl`: `GeometryBasics.radius`/`widths`
+  for `OptSurface` dispatch to `gbRadius`/`gbWidths`, which only had a
+  method for the `(SizeLens, SurfProfileConic)` aperture/profile
+  combination. Any `OptSurface` using a non-conic profile (sphere,
+  asphere, even-asphere, cylinder, toroid, off-axis conic) threw a
+  `MethodError` when its mesh bounds were computed (e.g. for 3D
+  plotting) -- silently blocking `plotGeometry3D` for every non-conic
+  profile type.
+
+  **Fixed**: added a generic fallback `gbRadius(aperture::SizeLens{T},
+  profile::AbstractSurfProfile{T})`/`gbWidths(aperture::SizeLens{T},
+  profile::AbstractSurfProfile{T})` pair in `src/mesh_primitives.jl`,
+  right after each's existing `SurfProfileConic`-specific method (Julia
+  picks the more specific method automatically when the profile is a
+  `SurfProfileConic`, so that method's more literal `ϵ`-aware formula is
+  unchanged). The fallback computes the Z extent generically from the
+  profile's own `sag` (`sag(semiDiameter, 0, profile) - sag(0, 0,
+  profile)`) rather than `SurfProfileConic`'s closed-form
+  `curv*semiDiameter^2` approximation, so it works for any profile with
+  a `sag` method -- no per-type plotting work needed as new profile
+  types are added. `test/mesh_primitives.jl` gained a "gbWidths /
+  gbRadius generic fallback (non-conic profiles, TODO.md #12)" testset
+  covering `SurfProfileSphere`/`SurfProfileAsphere`/`SurfProfileCyl`
+  directly, plus a real `OptSurface` built with a `SurfProfileSphere`
+  profile round-tripped through `GeometryBasics.radius`/`widths` (a
+  `MethodError` there would be a regression of this fix).
+
 - **15.** `test/optics.jl`: `sag` tests for `SurfProfileCyl` and
   `SurfProfileToroid` were written but disabled inside a `#= =#` block,
   with the comment "Tests not implemented for SurfProfileCyl &
@@ -402,6 +478,52 @@ list doesn't.
   session; see the "Tests needed" section's own matching
   "✅ Covered (phase 2, extended `test/optics.jl`)" entry for the same
   functions.
+
+- **18.** `src/lens_definitions.jl` (`SurfProfileToroid`): only a `sag`
+  method existed (`src/tracing.jl`), and it was explicitly
+  code-commented as "likely incorrect" -- there was no
+  `deltaToSurf`/`surfNormal` method for this type at all, so toroidal
+  surfaces were defined but not actually traceable.
+
+  **Fixed** (Phase 1 of the "Support additional Zemax surface types"
+  plan): `SurfProfileToroid` gained a third field, `ϵY` (the base y-z
+  curve's own conic parameter -- the old two-field struct implicitly
+  assumed a paraxial/parabolic y curve with no way to say otherwise).
+  `sag(x,y,s::SurfProfileToroid)` is now the sum of two independent,
+  closed-form terms: the base y-z conic curve's own sag (`curvY`/`ϵY`,
+  the same formula as `sag(x,y,::SurfProfileConic)` restricted to y)
+  plus a circular arc's sag along x (`curvX`, always the `ϵ=1` circular
+  formula) -- confirmed against Zemax's own documented `TOROIDAL`
+  surface definition and against real `TOROIDAL` samples under the
+  local Zemax install's `Samples` directory (`Miscellaneous/Toroid.zmx`,
+  `Miscellaneous/Cylinder.zmx`). `curvX == 0` disables the x sweep
+  entirely (pure extrusion along x), matching Zemax's own convention
+  that a `0` "Radius of Rotation" parameter means no sweep rather than
+  a literal zero-radius one. Added `deltaToSurf` (no closed-form root
+  exists for a general toroid, so it follows the same
+  `Roots.find_zero`-based numerical pattern already used for
+  `AbstractAsphericProfile`, seeded from the base y-z conic's own
+  closed-form intersection) and `surfNormal` (the analytic gradient of
+  the additive sag formula, normalized). Wired Zemax `TYPE TOROIDAL`
+  into `zemaxsurfToProfileAperture` (`src/zemax.jl`): `CURV`/`CONI`
+  become `curvY`/`ϵY`, and Zemax's own `PARM 1` ("Radius of Rotation"
+  `Rx`) becomes `curvX = 1/Rx` (`0` when `Rx == 0`). `test/optics.jl`
+  gained real `sag`/`deltaToSurf`/`surfNormal` coverage (cross-checked
+  against `SurfProfileSphere` at the x=0/y=0 cross-sections and against
+  `test/helper.jl`'s `ForwardDiff`-based `normal_from_sag`, replacing
+  the old `@test_broken`); `test/zemax.jl` gained `"TOROIDAL"` /
+  `"TOROIDAL, Rx == 0"` subtests under `zemaxsurfToProfileAperture`;
+  `test/mesh_primitives.jl`'s generic `gbRadius`/`gbWidths` fallback
+  testset (`TODO.md` #12/`FIXED.md` #12 above) now also covers
+  `SurfProfileToroid`; `test/surface_manipulation.jl`'s
+  `reverseProfile!` test updated for the new field (`ϵY` is left
+  unchanged, matching `SurfProfileConic`'s own `ϵ`). Round-tripped both
+  real samples above through `readZemax`/`zemaxsurfToProfileAperture`
+  directly (`readZemaxSystem` on those particular files is separately
+  blocked by unimplemented `COORDBRK` surfaces, Phase 2 of the same
+  plan) and confirmed `deltaToSurf` lands exactly on the surface,
+  `surfNormal` returns a unit vector, and the `Rx=0` sample's sag is
+  independent of x as expected.
 
 - **23.** `src/zemax.jl`: reading `.zmf` lens-catalog files (how
   vendors like Edmund/Thorlabs publish stock lens families) wasn't
@@ -459,3 +581,48 @@ list doesn't.
   model. Covered by `test/filepicker.jl` (the component's own logic and
   Bonito smoke tests) and `test/zemax_browser.jl`'s updated
   `"zemaxBrowserApp"`/`"contentPane .zar"` smoke tests.
+
+- **27.** `src/zemax.jl` (`zemaxsurfToSurface`/`zemaxsurfsToGeo`):
+  a Zemax `GLAS MIRROR` surface (or any other reflective material) is
+  not recognized -- every surface is always built with a `DielectricT`
+  bend (`refIndexIn`/`refIndexOut` from `glassCatalog`), never a
+  `MirrorR`, regardless of `material`. Found while validating Phase 2
+  of the "Support additional Zemax surface types" plan against the
+  local Zemax install's `Physical Optics/Fold Mirror Using Coordinate
+  Breaks.ZMX` sample: the `COORDBRK`/tilt geometry itself round-trips
+  correctly (confirmed by hand: a 45° tilt ahead of the mirror folds
+  the frame by exactly the right angle, matching a real fold mirror),
+  but the mirror surface's own reflective *behavior* would be wrong if
+  actually raytraced, since it's imported as a (fictitious) dielectric
+  boundary instead of a mirror. A real, separate feature gap -- not
+  fixed as part of Phase 2, since it's about surface *bend type*, not
+  surface *shape/coordinate frame*, and also likely intertwined with
+  Zemax's own convention of a negative `DISZ` after a mirror surface
+  (indicating the local z-axis convention flips post-reflection) seen
+  in that same sample, which this codebase's tracer has no equivalent
+  concept for yet either.
+
+  **Fixed**: Zemax's reserved material name `"MIRROR"` (e.g. `GLAS
+  MIRROR`) is now recognized in both `zemaxsurfsToGeo` (skips the
+  glass-catalog lookup entirely for it, since it's not a real glass and
+  never appears in a catalog -- `rinOut` is just `rinIn` carried through
+  unchanged, since reflection doesn't change the medium) and
+  `zemaxsurfToSurface` (builds a `MirrorR` bend instead of the usual
+  `DielectricT` when `s.material == "MIRROR"`). The "negative `DISZ`"
+  half of the original concern turned out to be a non-issue for every
+  real sample: a mirror is always bracketed by real `TYPE COORDBRK`
+  tilts, which already rotate `dir` via real 3D rotation matrices, so a
+  signed `DISZ` afterward is just ordinary displacement along the
+  already-correctly-rotated `dir` -- verified by hand against the same
+  `Fold Mirror Using Coordinate Breaks.ZMX` sample end to end via
+  `readZemaxSystem`: no crash, the mirror surface's `mod` is `MirrorR`,
+  and the resulting geometry folds the beam by exactly 90°, matching
+  the real fold mirror. A **bare** mirror (no coordinate break) relies
+  on a different, implicit Zemax convention this codebase's real-3D-
+  vector frame representation has no equivalent for -- no real sample
+  needs it, so it's left undone, documented with a code comment on
+  `zemaxsurfsToGeo` (relevant only if an OpticTrace-to-Zemax *export*
+  path is ever written) rather than tracked here. Covered by a new
+  `"GLAS MIRROR (TODO.md #27)"` sub-testset in `test/zemax.jl`'s
+  `"zemaxsurfsToGeo"` testset, using the same hand-built-`ZemaxSurf`
+  pattern as the adjacent `"COORDBRK"` sub-testset.

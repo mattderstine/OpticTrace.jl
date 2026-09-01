@@ -1,107 +1,20 @@
 # Zemax import reference
 
-This file collects two things that used to live as comments inside
-`src/zemax.jl`:
-
-1. The docstrings now attached to each type/function in `src/zemax.jl`
-   (reproduced here for a single-page overview of the original,
-   pre-archive-support API -- `readZemax`/`zemaxsurfToSurface`/etc.;
-   the `.zar`/`.zmf` archive-reading functions added later are not
-   reproduced here, see below).
-2. The original reference Python code those docstrings/implementations
-   were informed by, for `readZemax` itself, plus the separate Python
-   references the `.zar`/`.zmf` archive-reading code (now implemented
-   in `src/zemax.jl`, see below) was ported from.
-
-## Docstrings
-
-### `ZemaxSurf{T}`
-
-Mutable intermediate representation of one Zemax `SURF` block, as parsed
-from a `.zmx` file by `readZemax` before being converted into an
-`OptSurface` by `zemaxsurfToSurface`.
-
-Fields:
-- `curvature::T` — surface curvature, from CURV
-- `distance::T` — thickness to the next surface, from DISZ
-- `material::String` — glass/material name, from GLAS (default "DEFAULT")
-- `radius::T` — surface (semi-)diameter, from DIAM
-- `stop::Bool` — whether this surface is the aperture stop, from STOP
-- `conic::T` — conic constant, from CONI
-- `aspherics::Vector{T}` — aspheric coefficients, indexed by Zemax PARM number
-- `coating::String` — coating name, from COAT
-- `type::String` — Zemax surface type, e.g. "STANDARD" or "EVENASPH", from TYPE
-- `comm::String` — surface comment, from COMM
-
-### `ZemaxSurf()`
-
-Construct a `ZemaxSurf{Float64}` with default values: zero curvature,
-distance, and conic; `"DEFAULT"` material; not a stop; `parmlength`
-zeroed aspheric coefficients; empty coating; `"STANDARD"` type; empty
-comment.
-
-### `readZemax(filename::String; basept = ORIGIN, dir = ZAXIS)`
-
-Read a Zemax `.zmx` sequential-lens text file and parse it into a vector
-of `ZemaxSurf` records, one per `SURF` block (plus a leading record for
-the object surface).
-
-Recognized line keywords: `UNIT`, `NAME`, `WAVM`, `CURV`, `DISZ`, `GLAS`,
-`DIAM`, `STOP`, `TYPE`, `CONI`, `PARM`, `COAT`, `COMM`. Any other
-keyword is silently ignored. `basept`/`dir` are accepted but not
-currently used during parsing itself — surface positions are computed
-later, by `zemaxsurfToSurface`/`zemaxsurfsToGeo`.
-
-Returns `(zsurfs, name, units, wavelengths)`:
-- `zsurfs::Vector{ZemaxSurf}` — the parsed surfaces, in file order
-- `name::String` — system name, from the NAME field
-- `units::String` — length units, from the UNIT field
-- `wavelengths::Vector{Float64}` — fixed-length (24-element) array indexed by Zemax wavelength number, from WAVM
-
-### `printZemaxSurfs(zsurfs::Vector{ZemaxSurf})`
-
-Print a one-line summary (curvature, distance, material, radius, stop,
-conic, coating, type) for each surface in `zsurfs` to stdout, followed
-by its aspheric coefficient vector. Useful for inspecting the result of
-`readZemax`.
-
-### `zemaxsurfToSurface(num, rinIn::Float64, rinOut::Float64, basept::Point, dir::Vec3, s::ZemaxSurf)`
-
-Convert one parsed `ZemaxSurf` record into an `OptSurface` located at
-`basept`, oriented along `dir`, with entering/exiting refractive indices
-`rinIn`/`rinOut`. `num` is only used to build the surface's name
-(`s.comm * " $num"`).
-
-Supports Zemax `type`s `"STANDARD"` (built as a `SurfProfileConic`) and
-`"EVENASPH"` (built as a `SurfProfileEvenAsphere`, using
-`s.aspherics[2:end]`); any other type throws an error.
-
-Returns `(newbasept, rinOut, newsurf)`, where `newbasept = basept +
-s.distance * dir` is the starting point for the next surface, and
-`rinOut` is passed through unchanged so it can be reused as the next
-surface's `rinIn`.
-
-### `zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64; glassCatalog::Dict{AbstractString, Any} = defaultGlassCatalog)`
-
-Convert a vector of `ZemaxSurf` records (as returned by `readZemax`)
-into a traceable geometry at the given wavelength, by repeatedly calling
-`zemaxsurfToSurface` and threading the base point and refractive index
-from one surface to the next.
-
-`glassCatalog` maps each surface's `material` name to a function of
-wavelength returning its refractive index (see `defaultGlassCatalog`).
-
-Returns the resulting `Vector{AbstractSurface}`.
-
-### `viewZemaxFile(filename; glassCatalog = defaultGlassCatalog)`
-
-Read, convert, print, and plot a Zemax `.zmx` file in one call: reads
-`filename` with `readZemax`, prints the parsed surfaces with
-`printZemaxSurfs`, builds a geometry with `zemaxsurfsToGeo` (skipping the
-leading object surface, `zgeo[2:end]`) at a fixed wavelength of 0.5,
-displays it with `plotGeometry3D`, and prints it with `printGeo`.
-
-Returns the built geometry (`Vector{AbstractSurface}`).
+This file collects the original reference Python code
+`src/zemax.jl`'s implementation was ported from/informed by: the
+general structure of `readZemax`'s line-by-line `.zmx` parsing, plus
+the separate Python references the `.zar`/`.zmf` archive-reading code
+was ported from. Kept as historical context on the binary format
+layouts (`.zar`/`.zmf`) and the original parsing approach -- not a
+description of `src/zemax.jl`'s current API, which has grown
+substantially since (`ZemaxHeader`, `OpticalSystem`, `readZemaxSystem`,
+support for many more Zemax surface `TYPE`s, ...). For current API
+documentation, see each type/function's own docstring in
+`src/zemax.jl` (via Julia's `@doc` or the source directly) -- this
+file previously also reproduced a snapshot of those docstrings, but
+that snapshot was removed once it had drifted far enough from the
+real API to be actively misleading rather than useful; `CLAUDE.md`'s
+Project Structure section has a brief, current overview instead.
 
 ## Python reference code
 

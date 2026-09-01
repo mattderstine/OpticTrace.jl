@@ -28,9 +28,23 @@
     spsCyl1 = OpticTrace.SurfProfileCyl(curve1, 0.0, Float64[])
     spsCyl2 = OpticTrace.SurfProfileCyl(curve2, 1.0, Float64[])
 
+    # axicon-style: a[1] (r^1 term) dominates, unlike SurfProfileAsphere
+    # whose a[1] is r^3 -- see TODO.md #4 / FIXED.md
+    oddAsphereCoeff1 = 0.01
+    spsOddAsphere = OpticTrace.SurfProfileOddAsphere(0.0, 0.0, [oddAsphereCoeff1, 0.0])
+
+    # reflector5.ZMX-style: x^2/y^2 terms (Zemax term indices 3 and 5)
+    xyPolyCoeffs = zeros(5)
+    xyPolyCoeffs[3] = -0.01 # x^2
+    xyPolyCoeffs[5] = -0.01 # y^2
+    spsXYPoly = OpticTrace.SurfProfileXYPoly(0.0, 0.0, 14.0, xyPolyCoeffs)
+
     curvYToroid = 0.3
     curvXToroid = 0.2
-    spsToroid = OpticTrace.SurfProfileToroid(curvYToroid, curvXToroid)
+    # ϵY=1.0 (true circular y-z cross-section) so the x=0/y=0 cross-section
+    # checks below can compare directly against SurfProfileSphere, which
+    # always uses the ϵ=1 (spherical) formula, not the ϵ=0 paraxial one.
+    spsToroid = OpticTrace.SurfProfileToroid(curvYToroid, 1.0, curvXToroid)
 
     # `simplesystem` is unused elsewhere in this file, but building it
     # calls lens_TLAC254_060, which looks up real glass files from
@@ -90,15 +104,46 @@
         @test sag_value ≈ sag(0.0, 1.0, sps) # reduces to SurfProfileSphere's formula along y
         @test sag(-3.0, 1.0, spsCyl2) == sag_value # x is ignored
 
-        # SurfProfileToroid: author-flagged "likely incorrect" (see TODO.md).
-        # A toroid's x=0 cross-section should reduce to a plain circular sag
-        # along y with curvature curvY, matching SurfProfileSphere -- the
-        # current formula is dimensionally inconsistent with that (it's
-        # missing the division by curvY that every other sag formula in
-        # this codebase has), so this is expected to fail.
+        # SurfProfileToroid (fixed, see TODO.md #18 / FIXED.md): a toroid's
+        # x=0 cross-section is exactly the base y-z curve's own sag, which
+        # for ϵY=0 matches SurfProfileSphere(curvY).
         expectedToroidSag = sag(0.0, 0.5, OpticTrace.SurfProfileSphere(curvYToroid))
         actualToroidSag = sag(0.0, 0.5, spsToroid)
-        @test_broken actualToroidSag ≈ expectedToroidSag
+        @test actualToroidSag ≈ expectedToroidSag
+
+        # y=0 cross-section is purely the x-sweep term, curvature curvX
+        @test sag(0.5, 0.0, spsToroid) ≈ sag(0.5, 0.0, OpticTrace.SurfProfileSphere(curvXToroid))
+
+        # curvX == 0 disables the x sweep entirely (pure extrusion along x)
+        spsToroidNoXSweep = OpticTrace.SurfProfileToroid(curvYToroid, 0.0, 0.0)
+        @test sag(3.0, 0.5, spsToroidNoXSweep) == sag(0.0, 0.5, spsToroidNoXSweep)
+
+        # SurfProfileOddAsphere (TODO.md #4 / FIXED.md): a[1] is r^1, so
+        # sag is exactly linear in r along any ray through the origin --
+        # this is what makes it able to represent an axicon, unlike
+        # SurfProfileAsphere (a[1] is r^3).
+        @test sag(1.0, 0.0, spsOddAsphere) ≈ oddAsphereCoeff1
+        @test sag(2.0, 0.0, spsOddAsphere) ≈ 2 * oddAsphereCoeff1
+        @test sag(0.0, 2.0, spsOddAsphere) ≈ 2 * oddAsphereCoeff1 # radially symmetric
+
+        # SurfProfileXYPoly (TODO.md #4 / FIXED.md): x^2/y^2 terms in
+        # *normalized* (x/normRadius, y/normRadius) coordinates.
+        xyPolyR = 5.0
+        expectedXYPolySag = xyPolyCoeffs[3] * (xyPolyR / spsXYPoly.normRadius)^2
+        @test sag(xyPolyR, 0.0, spsXYPoly) ≈ expectedXYPolySag
+        @test sag(0.0, xyPolyR, spsXYPoly) ≈ expectedXYPolySag # x^2/y^2 coefficients are equal here
+        @test sag(xyPolyR, xyPolyR, spsXYPoly) ≈ 2 * expectedXYPolySag
+
+        @testset "xyPolyTermPowers" begin
+            @test OpticTrace.xyPolyTermPowers(1) == (1, 0) # x
+            @test OpticTrace.xyPolyTermPowers(2) == (0, 1) # y
+            @test OpticTrace.xyPolyTermPowers(3) == (2, 0) # x^2
+            @test OpticTrace.xyPolyTermPowers(4) == (1, 1) # xy
+            @test OpticTrace.xyPolyTermPowers(5) == (0, 2) # y^2
+            @test OpticTrace.xyPolyTermPowers(6) == (3, 0) # x^3
+            @test OpticTrace.xyPolyTermPowers(9) == (0, 3) # y^3
+            @test OpticTrace.xyPolyTermPowers(10) == (4, 0) # x^4
+        end
     end
 
     @testset "surfNormal & deltaToSurf tests" begin
@@ -179,6 +224,80 @@
         @test pointCyl ≈ Point3(0.0, offset, sag_valueCyl)
         normalCyl = OpticTrace.surfNormal(pointCyl, spsCyl2)
         @test normal_from_sag(pointCyl, spsCyl2) ≈ normalize(normalCyl)
+
+        #toroid test (TODO.md #18 / FIXED.md)
+        xT, yT = 0.3, 0.4
+        zT = sag(xT, yT, spsToroid)
+        pointT = Point3(xT, yT, zT)
+        normalT = OpticTrace.surfNormal(pointT, spsToroid)
+        @test normal_from_sag(xT, yT, spsToroid) ≈ normalize(normalT)
+
+        toroidRay = Ray(Point3(0.0, offset, -1.0), Vec3(0.0, 0.0, 1.0))
+        deltaToroid = OpticTrace.deltaToSurf(toroidRay, spsToroid)
+        pointToroid = rprop(toroidRay, deltaToroid)
+        @test pointToroid ≈ Point3(0.0, offset, sag(0.0, offset, spsToroid))
+
+        #odd asphere test (TODO.md #4 / FIXED.md) -- deltaToSurf and
+        #surfNormal both come from AbstractAsphericProfile's generic
+        #fallbacks (numeric root-find, ForwardDiff gradient), not
+        #hand-derived closed forms
+        oddAsphereRay = Ray(Point3(0.0, offset, -1.0), Vec3(0.0, 0.0, 1.0))
+        deltaOddAsphere = OpticTrace.deltaToSurf(oddAsphereRay, spsOddAsphere)
+        pointOddAsphere = rprop(oddAsphereRay, deltaOddAsphere)
+        @test pointOddAsphere ≈ Point3(0.0, offset, sag(0.0, offset, spsOddAsphere))
+        normalOddAsphere = OpticTrace.surfNormal(pointOddAsphere, spsOddAsphere)
+        @test normal_from_sag(0.0, offset, spsOddAsphere) ≈ normalize(normalOddAsphere)
+
+        #xy-polynomial test (TODO.md #4 / FIXED.md) -- same free
+        #deltaToSurf/surfNormal fallbacks as odd asphere above
+        xT2, yT2 = 3.0, 1.5
+        zT2 = sag(xT2, yT2, spsXYPoly)
+        pointXYPoly = Point3(xT2, yT2, zT2)
+        normalXYPoly = OpticTrace.surfNormal(pointXYPoly, spsXYPoly)
+        @test normal_from_sag(xT2, yT2, spsXYPoly) ≈ normalize(normalXYPoly)
+
+        xyPolyRay = Ray(Point3(xT2, yT2, -1.0), Vec3(0.0, 0.0, 1.0))
+        deltaXYPoly = OpticTrace.deltaToSurf(xyPolyRay, spsXYPoly)
+        pointXYPolyRay = rprop(xyPolyRay, deltaXYPoly)
+        @test pointXYPolyRay ≈ pointXYPoly
+    end
+
+    @testset "ParaxialProfile / ParaxialLensT (TODO.md #4 / FIXED.md)" begin
+        pp = OpticTrace.ParaxialProfile(0.0)
+
+        @test sag(3.0, -2.0, pp) == 0.0 # flat, like NoProfile
+
+        paraxialRay = Ray(Point3(0.0, 2.0, -1.0), Vec3(0.0, 0.0, 1.0))
+        paraxialDelta = OpticTrace.deltaToSurf(paraxialRay, pp)
+        @test paraxialDelta ≈ 1.0 # same flat z=0 plane as NoProfile
+
+        # surfNormal is deliberately NOT a true normal here -- it's the
+        # raw local coordinates, unnormalized, fed to modFunc(::ParaxialLensT)
+        @test OpticTrace.surfNormal(Point3(1.5, -0.7, 0.0), pp) == Vec3(1.5, -0.7, 0.0)
+
+        @test OpticTrace.reverseProfile!(pp) === pp # no-op
+
+        f = 50.0
+        bend = OpticTrace.ParaxialLensT(f, 1.0, 1.5)
+
+        @testset "classic thin-lens regression: axis-parallel ray converges to the focal point" begin
+            h = 2.0
+            offsetVec = Vec3(0.0, h, 0.0) # what surfNormal(::ParaxialProfile) would hand modFunc
+            status, newDir, nIn = OpticTrace.modFunc(Ray(Point3(0.0, h, 0.0), ZAXIS), offsetVec, bend)
+            @test status == true
+            @test nIn == bend.refIndexOut
+            # propagate from the lens plane (z=0, height h) to z=f and confirm height -> 0
+            endpoint = Point3(0.0, h, 0.0) + newDir * (f / newDir[3])
+            @test endpoint ≈ Point3(0.0, 0.0, f)
+        end
+
+        @testset "reverseMod! swaps indices, leaves focalLength (via generic AbstractBendType fallback)" begin
+            bendCopy = OpticTrace.ParaxialLensT(f, 1.0, 1.5)
+            OpticTrace.reverseMod!(bendCopy)
+            @test bendCopy.refIndexIn == 1.5
+            @test bendCopy.refIndexOut == 1.0
+            @test bendCopy.focalLength == f
+        end
     end
 
 

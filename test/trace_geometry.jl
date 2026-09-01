@@ -57,6 +57,42 @@
             @test trc1.delta ≈ trc2.delta
             @test trc2 === trcBuf
         end
+
+        @testset "paraxial thin lens, full traceSurf pipeline (TODO.md #4 / FIXED.md)" begin
+            # Integration test for the surfNormal(::ParaxialProfile) ->
+            # s.toGlobalDir -> modFunc(::ParaxialLensT) pipeline: unlike
+            # the unit-level modFunc test in test/optics.jl, this exercises
+            # the real traceSurf coordinate-transform wiring end to end,
+            # including a surface not sitting at the identity transform.
+            focalLength = 50.0
+            profile = OpticTrace.ParaxialProfile(0.0)
+            bend = OpticTrace.ParaxialLensT(focalLength, 1.0, 1.0)
+            basept = Point3(1.0, 2.0, 3.0)
+            dirTilt = normalize(Vec3(0.1, 0.0, 1.0))
+            ydir, toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir =
+                OpticTrace.updateCoordChange(basept, dirTilt, nothing)
+            surf = OptSurface("paraxial", SurfBase(basept, dirTilt, ydir), SizeLens(10.0), profile,
+                bend, OpticTrace.getAmpParams("none"; OpticTrace.attributesSurfaces),
+                toGlobalCoord, toLocalCoord, toGlobalDir, toLocalDir, :cyan3)
+
+            h = 2.0 # local height above the lens's own optical axis
+            localOffset = toGlobalDir(Vec3(0.0, h, 0.0))
+            rayBase = basept + localOffset - 10.0 * dirTilt # well upstream, parallel to the lens axis
+            ray = Ray(rayBase, dirTilt)
+
+            status, trc = OpticTrace.traceSurf(ray, surf)
+            @test status == 0
+
+            # propagate from the lens plane to the back focal plane
+            # (basept + f*dirTilt) and confirm the ray lands back on-axis
+            # -- travel along the OUTGOING ray direction (not dirTilt,
+            # which it's no longer parallel to) far enough that its
+            # projection onto dirTilt reaches the focal plane
+            focalPoint = basept + focalLength * dirTilt
+            t = dot(focalPoint - trc.ray.base, dirTilt) / dot(trc.ray.dir, dirTilt)
+            endpoint = trc.ray.base + trc.ray.dir * t
+            @test endpoint ≈ focalPoint atol=1e-9
+        end
     end
 
     @testset "traceSurf (ModelSurface)" begin

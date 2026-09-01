@@ -16,6 +16,26 @@
             @test OpticTrace.gbWidths(sl, spc) == SVector(10.0, 10.0, spc.curv * 5.0^2)
         end
 
+        @testset "gbWidths / gbRadius generic fallback (non-conic profiles, TODO.md #12)" begin
+            sph = OpticTrace.SurfProfileSphere(0.02)
+            asph = OpticTrace.SurfProfileAsphere(0.02, 1.0, [0.0, 0.0, 0.0])
+            cyl = OpticTrace.SurfProfileCyl(0.02, 1.0, Float64[])
+            toroid = OpticTrace.SurfProfileToroid(0.02, 1.0, 0.01)
+            for p in (sph, asph, cyl, toroid)
+                @test OpticTrace.gbRadius(sl, p) == 5.0
+                @test OpticTrace.gbWidths(sl, p) ==
+                    SVector(10.0, 10.0, sag(5.0, 0.0, p) - sag(0.0, 0.0, p))
+            end
+            # a MethodError here would be a regression of TODO.md #12
+            ydirSph, toGlobalCoordSph, toLocalCoordSph, toGlobalDirSph, toLocalDirSph =
+                OpticTrace.updateCoordChange(ORIGIN, ZAXIS, nothing)
+            surfSph = OptSurface("sphereProfileSurf", SurfBase(ORIGIN, ZAXIS, ydirSph), sl, sph,
+                DielectricT(1.0, 1.5), OpticTrace.getAmpParams("none"; attributesSurfaces),
+                toGlobalCoordSph, toLocalCoordSph, toGlobalDirSph, toLocalDirSph, :aquamarine2)
+            @test GeometryBasics.radius(surfSph) == 5.0
+            @test GeometryBasics.widths(surfSph) == SVector(10.0, 10.0, sag(5.0, 0.0, sph))
+        end
+
         surf = refractSphere("mesh_test", ORIGIN, ZAXIS, 1.0, 1.5, 0.02, 5.0, "none")
 
         @testset "origin / radius / widths" begin
@@ -57,6 +77,24 @@
             ns = collect(GeometryBasics.normals(surf, 4))
             @test length(ns) == 16
             @test all(n -> norm(n) ≈ 1.0, ns)
+        end
+
+        @testset "normals (OptSurface, ParaxialProfile mesh-shading override, TODO.md #4 / FIXED.md)" begin
+            # surfNormal(::ParaxialProfile) deliberately returns raw local
+            # coordinates, not a true normal (needed by
+            # modFunc(::ParaxialLensT)) -- without the dedicated
+            # GeometryBasics.normals override, mesh shading would get
+            # non-unit (and, at the axis, zero-length) vectors instead.
+            ydirPx, toGlobalCoordPx, toLocalCoordPx, toGlobalDirPx, toLocalDirPx =
+                OpticTrace.updateCoordChange(ORIGIN, ZAXIS, nothing)
+            paraxialSurf = OptSurface("paraxialMeshSurf", SurfBase(ORIGIN, ZAXIS, ydirPx), sl,
+                OpticTrace.ParaxialProfile(0.0), OpticTrace.ParaxialLensT(50.0, 1.0, 1.0),
+                OpticTrace.getAmpParams("none"; attributesSurfaces),
+                toGlobalCoordPx, toLocalCoordPx, toGlobalDirPx, toLocalDirPx, :cyan3)
+            ns = collect(GeometryBasics.normals(paraxialSurf, 4))
+            @test length(ns) == 16
+            @test all(n -> norm(n) ≈ 1.0, ns) # would fail (including a zero vector at the axis) without the override
+            @test length(unique(ns)) == 1 # constant across the flat surface, unlike raw coordinates would be
         end
 
         @testset "normals (AbstractSurface, ModelSurface)" begin

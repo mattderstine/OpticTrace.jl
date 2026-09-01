@@ -1,7 +1,18 @@
 VERS 171115
 MODE SEQ
 NAME "Test Singlet"
+NOTE 0 Test fixture for OpticTrace.jl's Zemax import.
+NOTE 4
+NOTE 0 Second line of notes.
+NOTE 4
 UNIT MM X W X CM MR CPMM
+ENPD 8
+GCAT SCHOTT MISC
+PWAV 1
+FTYP 0 0 2 1 0 0 0 1
+XFLN 0 5
+YFLN 0 3
+FWGN 1 0.5
 WAVM 1 0.5875618 1
 SURF 0
   CURV 0.0

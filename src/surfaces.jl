@@ -424,6 +424,19 @@ function sag(x::T, y::T, s::NoProfile) where T<:Real
 end
 
 """
+    sag(x, y, s::ParaxialProfile)
+
+Sag of a flat `ParaxialProfile` plane: always `0.`, regardless of
+`x`/`y` -- identical to `sag(x, y, ::NoProfile)`, since an ideal thin
+lens has no real sag (all its optical effect is in `modFunc`). See
+`sag(x, y, s::SurfProfileConic)`'s docstring (`src/tracing.jl`) for the
+general x/y/s/return contract shared by every `sag` method.
+"""
+function sag(x::T, y::T, s::ParaxialProfile) where T<:Real
+    0.
+end
+
+"""
     gbRadius(aperture::SizeLens{T}, profile::NoProfile) where T<:Real
 
 Bounding radius for a flat (`NoProfile`) surface sized by a `SizeLens`:

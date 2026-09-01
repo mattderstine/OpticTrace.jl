@@ -99,7 +99,7 @@ readTest(filename)
 
 filename = "/Users/matt/Desktop/Zemax lenses/AL5040G-Zemax(ZMX).zmx"
 
-zgeo, name, units, wave = readZemax(filename; basept = ORIGIN, dir = ZAXIS)
+zgeo, header = readZemax(filename)
 
 printZemaxSurfs(zgeo)
 

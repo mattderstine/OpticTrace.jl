@@ -380,5 +380,5 @@ printGeo([rfpp])
 
 ##
 
-
+using OpticTrace # load all the lens design stuff
 zemaxBrowser(".")

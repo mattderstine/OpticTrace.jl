@@ -38,6 +38,27 @@ function gbWidths(a::SizeLens{T}, p::SurfProfileConic{T}) where T<:Real
     SVector(diam, diam, p.curv * a.semiDiameter^2)
 end
 
+"""
+    gbWidths(a::SizeLens{T}, p::AbstractSurfProfile{T}) where T<:Real
+
+Generic fallback `gbWidths` for any `SizeLens`/profile combination that
+doesn't have its own dedicated method (e.g. `SurfProfileSphere`,
+`SurfProfileAsphere`, `SurfProfileCyl`, `SurfProfileOAConic`,
+`SurfProfileToroid`): the Z extent is the actual `sag` at the aperture
+edge relative to the center, rather than `SurfProfileConic`'s
+closed-form `curv * semiDiameter^2` approximation, so it works for any
+profile with a `sag` method. See `gbWidths(a::SizeLens,
+p::SurfProfileConic)`'s docstring above for the general contract shared
+by every `gbWidths` method. Julia dispatches to the more specific
+`SurfProfileConic` method above instead of this one when the profile is
+a `SurfProfileConic`.
+"""
+function gbWidths(a::SizeLens{T}, p::AbstractSurfProfile{T}) where T<:Real
+    diam = 2a.semiDiameter
+    zheight = sag(a.semiDiameter, zero(T), p) - sag(zero(T), zero(T), p)
+    SVector(diam, diam, zheight)
+end
+
 
 """
 gbRadius - provide a radius for GeometryBasics
@@ -46,6 +67,22 @@ gbRadius - provide a radius for GeometryBasics
     returns the radius
 """
 function gbRadius(aperture::SizeLens{T}, profile::SurfProfileConic{T}) where T<:Real
+    aperture.semiDiameter
+end
+
+"""
+    gbRadius(aperture::SizeLens{T}, profile::AbstractSurfProfile{T}) where T<:Real
+
+Generic fallback `gbRadius` for any `SizeLens`/profile combination that
+doesn't have its own dedicated method (e.g. `SurfProfileSphere`,
+`SurfProfileAsphere`, `SurfProfileCyl`, `SurfProfileOAConic`,
+`SurfProfileToroid`) -- see `gbRadius(aperture::SizeLens,
+profile::SurfProfileConic)`'s docstring above for the general contract
+shared by every `gbRadius` method. Julia dispatches to the more
+specific `SurfProfileConic` method above instead of this one when the
+profile is a `SurfProfileConic`.
+"""
+function gbRadius(aperture::SizeLens{T}, profile::AbstractSurfProfile{T}) where T<:Real
     aperture.semiDiameter
 end
 
@@ -123,6 +160,28 @@ function GeometryBasics.normals(s::AbstractSurface, nvertices=60)
     end
     =#
     inner(t) = dir .* s.toGlobalDir(surfNormal(Point3(t[1], t[2] ,sag(t[1], t[2], s.profile)),s.profile))
+    (inner(a) for a in a)
+end
+
+"""
+    GeometryBasics.normals(s::OptSurface{N,T,S,U,V,W}, nvertices=60) where {N,T,S,U,V<:ParaxialProfile{T},W}
+
+Mesh-shading override for `OptSurface`s carrying a [`ParaxialProfile`](@ref):
+`surfNormal(::ParaxialProfile)` deliberately does **not** return a true
+normal (see its own docstring) -- it returns the local intersection
+coordinates, meant for `modFunc(::ParaxialLensT)`, not for mesh
+lighting. Left to the generic `GeometryBasics.normals(s::AbstractSurface,
+...)` method above, that would feed raw (and, at the optical axis,
+zero-length) vectors into the lighting model. This more specific
+method instead returns the real, constant flat-plane normal `(0,0,1)`
+(rotated to global coordinates and orientation-flipped by `inOrOut`,
+exactly like the generic method does with a true normal), so a plotted
+`PARAXIAL` surface still shades correctly.
+"""
+function GeometryBasics.normals(s::OptSurface{N,T,S,U,V,W}, nvertices=60) where {N,T,S,U,V<:ParaxialProfile{T},W}
+    a = samplePoints(s.aperture, nvertices)
+    dir = inOrOut(s)
+    inner(t) = dir .* s.toGlobalDir(Vec3(zero(T), zero(T), one(T)))
     (inner(a) for a in a)
 end
 

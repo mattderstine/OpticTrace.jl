@@ -5,9 +5,14 @@ Guidance for Claude Code when working in this repository.
 ## Project overview
 
 OpticTrace.jl is a Julia package for optical ray tracing of illumination
-systems (as opposed to imaging-only raytracers): sequential/non-sequential
-tracing of rays through lens surfaces, aperture handling, glass/refractive
-index catalogs (Edmund, Thorlabs, Zemax import), mesh-based geometry,
+systems (as opposed to imaging-only raytracers): tracing of rays through
+lens surfaces either via the ordered `traceGeometry` walk over a fixed
+`Vector{AbstractSurface}` or "non-sequentially" via manual, one-surface-
+at-a-time `traceSurf` calls (**not** Zemax's `MODE NSC` sense of
+non-sequential -- see the `zemax.jl` note under Project structure below;
+this package's own tracer is sequential-only end to end), aperture
+handling, glass/refractive index catalogs (Edmund, Thorlabs, Zemax
+import), mesh-based geometry,
 3D visualization via GLMakie, a Bonito.jl-based web UI
 (`src/zemax_browser.jl`) for browsing a directory of `.zmx`/`.zar`/`.zmf`
 Zemax files and extracting archive contents, and a generic, reusable
@@ -18,6 +23,11 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
 - Julia 1.12+, standard `Pkg` workflow (`Project.toml` / `Manifest.toml`).
 - Instantiate deps: `julia --project=. -e 'using Pkg; Pkg.instantiate()'`
 - Run the test suite: `julia --project=. -e 'using Pkg; Pkg.test()'`
+  - `./test.sh` wraps this exact invocation (full output to a temp log,
+    last 150 lines printed, exit code preserved) as a fixed command so it
+    doesn't need a fresh permission prompt each run (see
+    `.claude/settings.json`) -- prefer it over ad hoc `julia -e '...'`
+    invocations when just running the suite.
   - Tests use GLMakie, which needs a display. CI runs headless via
     `xvfb-run` (see `.github/workflows/CI.yml`, which uses
     `xvfb-run -s '-screen 0 1024x768x24'` as the test-run prefix); do the
@@ -50,7 +60,17 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
   - `lens_refractive_index.jl`, `lens_edmund.jl`, `lens_thorlabs.jl` —
     glass/catalog data and refractive index models.
   - `zemax.jl` — Zemax file import (`.zmx` parsing, `.zar`/`.zmf`
-    archive reading and extraction).
+    archive reading and extraction). `readZemaxSystem` (returning an
+    `OpticalSystem`, `lens_definitions.jl`) is the canonical entry
+    point -- it owns the object-surface split and the infinite-object-
+    distance case, rather than callers slicing `readZemax`'s raw
+    `Vector{ZemaxSurf}` themselves. Supported surface `TYPE`s:
+    `STANDARD`, `EVENASPH`, `TOROIDAL`, `COORDBRK`, `TILTSURF`,
+    `ODDASPHE`, `XPOLYNOM`, `PARAXIAL` (see `TODO.md` bug #4 for
+    what's still unsupported, e.g. `GRID_SAG`/`FZERNSAG`). This
+    package's tracer is sequential-only end to end -- a Zemax `MODE
+    NSC` (non-sequential) file is rejected outright by
+    `readZemaxSystem`, not partially supported.
   - `zemax_browser.jl` — Bonito.jl web UI over `zemax.jl`'s functions:
     browsing `.zmx`/`.zar`/`.zmf` files via `UItools/filepicker.jl`'s
     `filePicker` (`:file` mode, filtered to those three extensions),
@@ -254,3 +274,13 @@ already has `using GLMakie`) would break it. `src/zemax_browser.jl` does
 same (`import Bonito` local to that file, not added to
 `test/runtests.jl`'s shared `using` block, for the identical reason).
 Keep this pattern for any future Bonito-dependent code in this package.
+
+**Before writing or reviewing Bonito code, check Bonito.jl's own
+`AGENTS.md`** (`https://github.com/SimonDanisch/Bonito.jl/blob/master/AGENTS.md`,
+fetch the raw file — `.../raw/master/AGENTS.md` — for the full text) for
+architecture guidance: widget/state-ownership patterns, the three-tier
+Julia↔JS communication model, session-scoped `on`/`map` (deregister
+listeners when a session closes, not the bare forms), `Bonito.Styles`/
+`CSS` instead of inline `style="..."` strings, and its anti-pattern
+checklist. `src/zemax_browser.jl` and `src/UItools/filepicker.jl` are
+this repo's only Bonito-dependent code.

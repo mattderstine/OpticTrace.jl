@@ -35,8 +35,9 @@ end
     ZemaxFileSummary
 
 Display-oriented bundle of a `.zmx` file's parsed fields, as returned by
-[`zemaxFileSummary`](@ref). Wraps [`readZemax`](@ref)'s `(zsurfs, name,
-units, wavelengths)` return tuple verbatim -- no new parsing.
+[`zemaxFileSummary`](@ref). Wraps [`readZemax`](@ref)'s `(zsurfs,
+header)` return value's name/units/wavelengths fields verbatim -- no
+new parsing.
 
 Fields:
     name::String                  - system name, from readZemax
@@ -61,8 +62,8 @@ temporary file extracted from inside an archive (see
 [`zemaxEntitySummary`](@ref)).
 """
 function zemaxFileSummary(path::String)::ZemaxFileSummary
-    zsurfs, name, units, wavelengths = readZemax(path)
-    return ZemaxFileSummary(name, units, wavelengths, zsurfs)
+    zsurfs, header = readZemax(path)
+    return ZemaxFileSummary(header.name, header.units, header.wavelengths, zsurfs)
 end
 
 """
@@ -281,8 +282,13 @@ function renderTextPreview(name::String, bytes::AbstractVector{UInt8})
     return Bonito.DOM.div(
         Bonito.DOM.h3(name),
         Bonito.DOM.pre(firstLines;
-            style = "white-space:pre-wrap; word-break:break-word; " *
-                    "max-width:100%; border:1px solid #ccc; padding:6px;"),
+            style = Bonito.Styles(
+                "white-space" => "pre-wrap",
+                "word-break" => "break-word",
+                "max-width" => "100%",
+                "border" => "1px solid var(--optictrace-border, #ccc)",
+                "padding" => "6px",
+            )),
     )
 end
 
@@ -385,7 +391,7 @@ function archiveContentPane(path::String)
         Bonito.DOM.h3("Entities in $(basename(path))"),
         Bonito.DOM.div(entityRows...; style = _SCROLLABLE_LIST_STYLE),
         Bonito.DOM.div("Output path: ", outputField, browseButton, extractAllBtn;
-                        style = "margin-top:16px;"),
+                        style = Bonito.Styles("margin-top" => "16px")),
         browsePane,
         Bonito.DOM.div(status),
     )
@@ -475,16 +481,20 @@ function zemaxBrowserApp(rootDir::String; serverRef = nothing, closeOnDisconnect
             end
         end
         fileColumn = Bonito.DOM.div(Bonito.DOM.h3("File"), picker;
-                                     style = "width:300px; flex:0 0 auto; overflow-y:auto;")
+                                     style = Bonito.Styles("width" => "300px", "flex" => "0 0 auto",
+                                                            "overflow-y" => "auto"))
         detailColumns = Bonito.map!(Bonito.Observable{Any}(Bonito.DOM.div()), selectedPath) do p
             middle, preview = contentPane(p === nothing ? "" : p)
             return Bonito.DOM.div(
-                Bonito.DOM.div(middle; style = "width:360px; flex:0 0 auto; overflow-y:auto; padding:0 12px;"),
-                Bonito.DOM.div(preview; style = "flex:1 1 auto; overflow-y:auto; padding:0 12px;");
-                style = "display:flex; flex:1 1 auto;",
+                Bonito.DOM.div(middle; style = Bonito.Styles("width" => "360px", "flex" => "0 0 auto",
+                                                              "overflow-y" => "auto", "padding" => "0 12px")),
+                Bonito.DOM.div(preview; style = Bonito.Styles("flex" => "1 1 auto", "overflow-y" => "auto",
+                                                               "padding" => "0 12px"));
+                style = Bonito.Styles("display" => "flex", "flex" => "1 1 auto"),
             )
         end
-        return Bonito.DOM.div(fileColumn, detailColumns; style = "display:flex; align-items:flex-start;")
+        return Bonito.DOM.div(_THEME_STYLES, fileColumn, detailColumns;
+                               style = Bonito.Styles("display" => "flex", "align-items" => "flex-start"))
     end
 end
 

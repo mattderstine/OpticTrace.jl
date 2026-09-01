@@ -160,7 +160,8 @@ function breadcrumbBar(pathField::Bonito.TextField)
             return button
         end
         return Bonito.DOM.div(upButton(pathField), crumbButtons...;
-                               style = "display:flex; flex-wrap:wrap; align-items:center;")
+                               style = Bonito.Styles("display" => "flex", "flex-wrap" => "wrap",
+                                                      "align-items" => "center"))
     end
 end
 
@@ -186,7 +187,7 @@ function directoryRow(dir::String, name::String, mode::Symbol,
             pending[] = childPath
         end
     end
-    return Bonito.DOM.div(button; style = "margin:1px 0;")
+    return Bonito.DOM.div(button; style = _ROW_STYLE)
 end
 
 """
@@ -216,15 +217,35 @@ function fileRow(dir::String, name::String, mode::Symbol, pending, selected, act
             current = pending[]
             pending[] = checked ? union(current, [path]) : setdiff(current, [path])
         end
-        return Bonito.DOM.div(checkbox, " ", name; style = "margin:1px 0;")
+        return Bonito.DOM.div(checkbox, " ", name; style = _ROW_STYLE)
     else
         button = Bonito.Button(name; style = nothing, ondblclick = dblAttr)
         Bonito.on(button.value) do _clicked
             pending[] = path
         end
-        return Bonito.DOM.div(button; style = "margin:1px 0;")
+        return Bonito.DOM.div(button; style = _ROW_STYLE)
     end
 end
+
+"""
+    _THEME_STYLES
+
+Shared `:root` CSS custom properties for this package's two Bonito UIs
+(this file's [`filePicker`](@ref) and `zemax_browser.jl`'s
+`zemaxBrowser`) -- namespaced `--optictrace-*` so they can't collide with
+Bonito's own `--bonito-widget-*` vars or a host page's variables.
+`filePicker` itself doesn't inject this (it has no notion of owning a
+page -- see its docstring), so each page-owning entry point
+([`filePickerApp`](@ref) here, `zemaxBrowserApp` there) injects it once
+as a leading child of its root `DOM.div`; injecting it from both is a
+harmless no-op since `global_stylesheets` is a set keyed by the `Styles`
+value itself.
+"""
+const _THEME_STYLES = Bonito.Styles(Bonito.CSS(":root",
+    "--optictrace-border" => "#ccc",
+    "--optictrace-error" => "#b00020",
+    "--optictrace-muted-fg" => "gray",
+))
 
 """
     _SCROLLABLE_LIST_STYLE
@@ -234,7 +255,20 @@ Shared CSS for a bounded-height, scrolling list box -- used by
 archive entity list, so both browsing UIs in this package present long
 lists the same way.
 """
-const _SCROLLABLE_LIST_STYLE = "max-height:400px; overflow-y:auto; border:1px solid #ccc; padding:4px;"
+const _SCROLLABLE_LIST_STYLE = Bonito.Styles(
+    "max-height" => "400px",
+    "overflow-y" => "auto",
+    "border" => "1px solid var(--optictrace-border, #ccc)",
+    "padding" => "4px",
+)
+
+"""
+    _ROW_STYLE
+
+Shared CSS for a single list-row wrapper `div` (directory rows and
+single-select file rows) -- just a small top/bottom margin between rows.
+"""
+const _ROW_STYLE = Bonito.Styles("margin" => "1px 0")
 
 """
     hiddenCheckboxRow(default::Bool) -> (row, showHidden::Bonito.Observable{Bool})
@@ -249,9 +283,9 @@ means dotfiles/dot-directories should be included in the listing, `false`
 function hiddenCheckboxRow(default::Bool)
     checkbox = Bonito.Checkbox(default)
     row = Bonito.DOM.div(
-        Bonito.DOM.span("Hidden"; style = "font-size:0.8em; margin-right:4px;"),
+        Bonito.DOM.span("Hidden"; style = Bonito.Styles("font-size" => "0.8em", "margin-right" => "4px")),
         checkbox;
-        style = "display:flex; align-items:center;",
+        style = Bonito.Styles("display" => "flex", "align-items" => "center"),
     )
     return row, checkbox.value
 end
@@ -302,11 +336,14 @@ function directoryListing(pathField::Bonito.TextField, mode::Symbol, extensions,
         catch e
             e isa Base.IOError || rethrow()
             return Bonito.DOM.div("Cannot read this directory: $(sprint(showerror, e))";
-                                   style = "color:#b00020; padding:8px;")
+                                   style = Bonito.Styles("color" => "var(--optictrace-error, #b00020)",
+                                                          "padding" => "8px"))
         end
         dirRows = [directoryRow(currentPath, name, mode, pathField, pending) for name in dirs]
         fileRows = if mode === :directory
-            [Bonito.DOM.div(name; style = "margin:1px 0; color:gray;") for name in files]
+            [Bonito.DOM.div(name; style = Bonito.Styles("margin" => "1px 0",
+                                                          "color" => "var(--optictrace-muted-fg, gray)"))
+             for name in files]
         else
             [fileRow(currentPath, name, mode, pending, selected, active) for name in files]
         end
@@ -340,7 +377,8 @@ function filePickerControls(mode::Symbol, pathField::Bonito.TextField, pending, 
     return Bonito.DOM.div(
         Bonito.DOM.div(selectButton, cancelButton),
         hiddenRow;
-        style = "display:flex; justify-content:space-between; align-items:center;",
+        style = Bonito.Styles("display" => "flex", "justify-content" => "space-between",
+                               "align-items" => "center"),
     )
 end
 
@@ -411,9 +449,9 @@ function filePicker(rootDir::String; mode::Symbol = :file,
     hiddenRow, showHiddenObs = hiddenCheckboxRow(showHidden)
     sortDropdownWidget, sortLabelObs = sortDropdown(sortBy)
     pathRow = Bonito.DOM.div(
-        Bonito.DOM.div(pathField; style = "flex:1 1 auto;"),
+        Bonito.DOM.div(pathField; style = Bonito.Styles("flex" => "1 1 auto")),
         sortDropdownWidget;
-        style = "display:flex; align-items:center; gap:6px;",
+        style = Bonito.Styles("display" => "flex", "align-items" => "center", "gap" => "6px"),
     )
     listing = directoryListing(pathField, mode, extensions, pending, selected, active,
                                  showHiddenObs, sortLabelObs)
@@ -438,6 +476,6 @@ function filePickerApp(rootDir::String; mode::Symbol = :file,
     return Bonito.App() do session
         component, _selected, _active = filePicker(rootDir; mode = mode, extensions = extensions,
                                                      showHidden = showHidden, sortBy = sortBy)
-        return component
+        return Bonito.DOM.div(_THEME_STYLES, component)
     end
 end

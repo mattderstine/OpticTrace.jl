@@ -1,7 +1,9 @@
 
 
-export Ray, SurfBase, Trace, OptSurface, ModelSurface, ExtendedGeometry, SurfProfileOAConic, SizeLens, RoundAperture, RectAperture
-export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface, AbstractAmplitudeParam, DielectricT,MirrorR,CDiffuser, NoBendIndex
+export Ray, SurfBase, Trace, OptSurface, ModelSurface, ExtendedGeometry
+export OpticalSystem, SurfProfileOAConic, SizeLens, RoundAperture, RectAperture
+export NoProfile, NoBendIndex, NoAmpParam, updateCoordChange, AbstractSurface 
+export AbstractAmplitudeParam, DielectricT,MirrorR,CDiffuser, NoBendIndex
 export AmpData
 
 
@@ -282,7 +284,16 @@ end
 
 Abstract supertype for aspheric surface-profile types that add
 polynomial correction terms to a base conic. Subtypes:
-`SurfProfileAsphere`, `SurfProfileEvenAsphere`.
+`SurfProfileAsphere`, `SurfProfileEvenAsphere`, `SurfProfileOddAsphere`,
+`SurfProfileXYPoly`. Every subtype exposing `curv`/`ϵ` fields (all four
+above do) gets `deltaToSurf` (`src/tracing.jl`) and `reverseProfile!`
+(`src/surface_manipulation.jl`) for free from generic methods dispatched
+on this abstract type; subtypes additionally exposing an `a::Vector{T}`
+polynomial-coefficient field also get `surfNormal` for free (via a
+generic `ForwardDiff`-based fallback, `src/tracing.jl`) unless they
+define a more specific method of their own (`SurfProfileAsphere`/
+`SurfProfileEvenAsphere` do; `SurfProfileOddAsphere`/`SurfProfileXYPoly`
+don't, relying on the fallback).
 """
 abstract type AbstractAsphericProfile{T} <: AbstractSurfProfile{T} end
 
@@ -327,6 +338,60 @@ mutable struct SurfProfileEvenAsphere{T} <: AbstractAsphericProfile{T}
 end
 
 """
+    SurfProfileOddAsphere{T}
+
+An "odd asphere" surface profile (Zemax `TYPE ODDASPHE`): a conic base
+plus polynomial correction terms starting from **1st** order (see the
+`sag` method for this type in `src/tracing.jl`) -- unlike
+`SurfProfileAsphere` (starts at 3rd order) or `SurfProfileEvenAsphere`
+(starts at 4th order, even only), this one can represent a pure linear
+(`r¹`) term, needed e.g. for an axicon's conical profile. Confirmed
+against Zemax's own `ODDASPHE` samples: `Parameter i` multiplies `r^i`
+directly for `i = 1..8`, so no reindexing is needed when importing
+(compare `SurfProfileEvenAsphere`'s Zemax import, which drops
+`Parameter 1`).
+
+Fields:
+- `curv::T` -- curvature, `1/radius`
+- `ϵ::T` -- conic parameter (see [`conicToϵ`](@ref))
+- `a::Vector{T}` -- polynomial coefficients: `a[i]` is the coefficient
+  of `r^i`, starting at `i=1`
+"""
+mutable struct SurfProfileOddAsphere{T} <: AbstractAsphericProfile{T}
+    curv :: T
+    ϵ::T #see Welford for definition of ϵ
+    a::Vector{T} #a[i] is the coefficient of r^i, starting at i=1
+end
+
+"""
+    SurfProfileXYPoly{T}
+
+A general 2D (non-rotationally-symmetric) polynomial surface profile
+(Zemax `TYPE XPOLYNOM`): a conic base plus a sum of `x^m y^n` terms in
+*normalized* coordinates `(x/normRadius, y/normRadius)` (see the `sag`
+method for this type in `src/tracing.jl`, and [`xyPolyTermPowers`](@ref)
+for how a 1-based term index maps to its `(m,n)` exponent pair). Unlike
+every other `AbstractAsphericProfile` subtype, this one is not
+rotationally symmetric about the local z axis.
+
+Fields:
+- `curv::T` -- curvature of the base conic, `1/radius`
+- `ϵ::T` -- conic parameter of the base conic (see [`conicToϵ`](@ref))
+- `normRadius::T` -- normalization radius the polynomial's `x`/`y`
+  arguments are divided by before being raised to a power
+- `a::Vector{T}` -- polynomial term coefficients, in Zemax's own
+  bivariate term ordering (`a[1]` -> `x`, `a[2]` -> `y`, `a[3]` -> `x²`,
+  `a[4]` -> `xy`, `a[5]` -> `y²`, `a[6]` -> `x³`, ... -- see
+  [`xyPolyTermPowers`](@ref))
+"""
+mutable struct SurfProfileXYPoly{T} <: AbstractAsphericProfile{T}
+    curv :: T
+    ϵ::T #see Welford for definition of ϵ
+    normRadius::T
+    a::Vector{T} #Zemax XY-polynomial term coefficients, see xyPolyTermPowers
+end
+
+"""
     SurfProfileCyl{T}
 
 A cylindrical surface profile: a conic cross-section along one axis,
@@ -348,19 +413,26 @@ end
 """
     SurfProfileToroid{T}
 
-A toroidal surface profile, with independent curvatures along the local
-x and y directions. **Currently only partially implemented**: a `sag`
-method exists (`src/tracing.jl`) but is explicitly code-commented as
-"likely incorrect", and no `deltaToSurf`/`surfNormal` method exists at
-all -- toroidal surfaces cannot actually be raytraced yet (see
-`TODO.md`).
+A toroidal surface profile (Zemax `TYPE TOROIDAL`): a conic curve in
+the local y-z plane (`curvY`/`ϵY`), independently swept by a circular
+arc along local x (`curvX`) -- see the `sag` method for this type in
+`src/tracing.jl` for the exact formula. `curvX == 0` means no x sweep
+at all (a pure extrusion of the y-z curve along x, i.e. a cylinder) --
+matches Zemax's own convention where a `TOROIDAL` surface's "Radius of
+Rotation" parameter of `0` means the same thing.
 
 Fields:
-- `curvY::T` -- curvature along the local y direction
-- `curvX::T` -- curvature along the local x direction
+- `curvY::T` -- curvature of the base curve along the local y
+  direction, `1/Ry`
+- `ϵY::T` -- conic parameter of the base y-z curve (see
+  [`conicToϵ`](@ref))
+- `curvX::T` -- curvature of the circular sweep along the local x
+  direction, `1/Rx` (`0` disables the x sweep entirely, rather than
+  meaning a literal zero-radius sweep)
 """
 mutable struct SurfProfileToroid{T} <: AbstractSurfProfile{T}
     curvY :: T
+    ϵY :: T
     curvX :: T
 end
 
@@ -379,6 +451,34 @@ Fields:
   profiles, but never actually used (always constructed as `0.`)
 """
 mutable struct NoProfile{T} <: AbstractSurfProfile{T}
+    curv :: T #but never used
+end
+
+"""
+    ParaxialProfile{T}
+
+Placeholder flat-plane profile for an ideal thin lens (Zemax `TYPE
+PARAXIAL`) -- identical `sag`/`deltaToSurf` to [`NoProfile`](@ref) (a
+paraxial lens has no real sag), but a **deliberately different**
+`surfNormal` (`src/tracing.jl`): it returns the local intersection
+*coordinates* `(x, y, 0)`, not a true unit normal. An ideal thin lens's
+ray-bending depends on where a ray hits it, not on any actual surface
+normal, so `surfNormal` here repurposes the one channel already routed
+from `traceSurf` through to `modFunc` (`s.toGlobalDir` converts
+whatever `surfNormal` returns into global coordinates either way) to
+carry that position instead -- see `modFunc(ray, offset,
+::ParaxialLensT)`, which is the only bend type meant to ever pair with
+this profile. This is the one profile type in the package whose
+`surfNormal` is *not* a true normal; because `GeometryBasics.normals`
+(`src/mesh_primitives.jl`) also calls the generic `surfNormal`, that
+file has a more specific override for this profile so mesh shading
+still gets the real `(0,0,1)` normal instead of the repurposed value.
+
+Fields:
+- `curv::T` -- present for type-parameter uniformity with other
+  profiles, but never actually used (always constructed as `0.`)
+"""
+mutable struct ParaxialProfile{T} <: AbstractSurfProfile{T}
     curv :: T #but never used
 end
 
@@ -486,6 +586,31 @@ Fields:
 mutable struct MirrorR{T} <: AbstractBendMirror{T}
     refIndexIn :: T
     refIndexOut :: T
+end
+
+"""
+    ParaxialLensT{T}
+
+The `mod` ("bend") type for an ideal thin lens (Zemax `TYPE PARAXIAL`):
+bends a ray according to the paraxial thin-lens transfer law, using
+`focalLength` alone, rather than Snell's law at an index boundary.
+Meant to pair exclusively with [`ParaxialProfile`](@ref) -- `modFunc`
+(`src/tracing.jl`) treats its `normal`-slot argument as the ray's
+transverse offset from the optical axis (which is what
+`ParaxialProfile`'s `surfNormal` actually returns), not a true normal,
+so pairing this bend type with any other profile would be a bug.
+
+Fields:
+- `focalLength::T` -- the lens's focal length, from Zemax `PARM 1`
+- `refIndexIn::T`, `refIndexOut::T` -- refractive indices either side
+  (kept for interface consistency with every other `AbstractBendType`;
+  the bending itself doesn't depend on them -- an ideal lens's power is
+  given directly as a focal length, not derived from curvature+index)
+"""
+mutable struct ParaxialLensT{T} <: AbstractBendType{T}
+    focalLength::T
+    refIndexIn::T
+    refIndexOut::T
 end
 
 """
@@ -664,5 +789,60 @@ mutable struct ExtendedGeometry
     surfaceObject::AbstractSurface
     wavelength::Array{Float64}
     parameters::Dict
+end
+
+"""
+    OpticalSystem{T<:Real}
+
+A materialized optical system: the traceable geometry plus the
+system-level metadata that isn't itself a surface. Unlike
+[`ExtendedGeometry`](@ref) (a *parametric*, regenerable system --
+`funcGeo`/`funcSetup` + a parameter dict, used by `plotOPD!`/
+`plotOPD3D!`/`characterization.jl` to rebuild geometry on demand),
+`OpticalSystem` represents an already-materialized result with no
+function pointers or regeneration story -- currently produced by
+[`readZemaxSystem`](@ref) (`src/zemax.jl`), the canonical entry point
+for the Zemax-import pipeline.
+
+Fields:
+    geo::Vector{AbstractSurface}    - real, traceable optical surfaces; never includes the object surface
+    objectSurface::AbstractSurface  - the object surface's own geometry (curvature/aperture, if any),
+                                       kept separate from `geo` since it isn't part of the traceable
+                                       refracting chain -- see `zemaxObjectToModelSurface`
+    name::String                    - system name
+    units::String                   - length units
+    wavelengths::Vector{T}          - system wavelengths
+    primaryWavelengthIndex::Int     - index into `wavelengths` marking the primary/reference wavelength
+    objectDistance::T               - distance from the object to the first real surface; can be `Inf`
+    objectAtInfinity::Bool          - true iff `objectDistance` is infinite -- stored explicitly
+                                       (not just derived via `isinf`) so downstream ray-source code can
+                                       branch on it directly
+    apertureType::String            - which aperture specification is active: `"ENPD"`, `"OBNA"`,
+                                       `"FNUM"`, or `"FLOA"` (float-by-stop, no numeric value)
+    apertureValue::T                - the value for whichever `apertureType` is active (`NaN` for `"FLOA"`)
+    fieldType::Int                  - field-type code (angle / object height / image height / ...)
+    fields::Vector{Point2{T}}       - design field points, one `(x,y)` per field
+    fieldWeight::Vector{T}          - per-field weight, index-aligned with `fields`
+    glassCatalogs::Vector{String}   - glass catalog names materials should resolve against
+    mode::String                    - `"SEQ"` or `"NSC"`
+    notes::String                   - freeform system notes/description
+"""
+mutable struct OpticalSystem{T<:Real}
+    geo::Vector{AbstractSurface}
+    objectSurface::AbstractSurface
+    name::String
+    units::String
+    wavelengths::Vector{T}
+    primaryWavelengthIndex::Int
+    objectDistance::T
+    objectAtInfinity::Bool
+    apertureType::String
+    apertureValue::T
+    fieldType::Int
+    fields::Vector{Point2{T}}
+    fieldWeight::Vector{T}
+    glassCatalogs::Vector{String}
+    mode::String
+    notes::String
 end
 
