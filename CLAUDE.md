@@ -267,13 +267,17 @@ bare `Button` throws `UndefVarError` (Julia leaves a genuinely
 conflicting exported name unresolved rather than picking one) — and
 `src/plotting.jl`'s `multipleFigures` already uses GLMakie's unqualified
 `Button`, so a top-level `using Bonito` in `src/OpticTrace.jl` (which
-already has `using GLMakie`) would break it. `src/zemax_browser.jl` does
-`import Bonito` instead and qualifies every reference (`Bonito.App`,
-`Bonito.DOM`, `Bonito.Button`, `Bonito.TextField`, `Bonito.Server`,
-`Bonito.on`, `Bonito.Observable`, ...); `test/zemax_browser.jl` does the
-same (`import Bonito` local to that file, not added to
-`test/runtests.jl`'s shared `using` block, for the identical reason).
-Keep this pattern for any future Bonito-dependent code in this package.
+already has `using GLMakie`) would break it. `src/OpticTrace.jl` instead
+does `import Bonito` (not `using`) once, module-wide; `src/zemax_browser.jl`
+and `src/UItools/filepicker.jl` rely on that binding (they're `include`'d
+into the same module) rather than importing it themselves, and both
+qualify every reference (`Bonito.App`, `Bonito.DOM`, `Bonito.Button`,
+`Bonito.TextField`, `Bonito.Server`, `Bonito.on`, `Bonito.Observable`,
+...). `test/zemax_browser.jl` and `test/filepicker.jl` are separate
+top-level scripts, not `include`'d into the module, so each does its own
+local, testset-scoped `import Bonito` for the identical reason — not
+added to `test/runtests.jl`'s shared `using` block. Keep this pattern for
+any future Bonito-dependent code in this package.
 
 **Before writing or reviewing Bonito code, check Bonito.jl's own
 `AGENTS.md`** (`https://github.com/SimonDanisch/Bonito.jl/blob/master/AGENTS.md`,

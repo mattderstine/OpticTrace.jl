@@ -15,6 +15,15 @@ using Printf
 using Optim
 using ForwardDiff
 import YAML
+# `import`, not `using`: Bonito and GLMakie (already `using`'d above) export
+# several identical names bound to unrelated types (Button, Slider, Checkbox,
+# Dropdown); `using Bonito` here would make those names ambiguous/undefined
+# module-wide, breaking src/plotting.jl's unqualified use of GLMakie's Button
+# in multipleFigures. src/zemax_browser.jl and src/UItools/filepicker.jl are
+# the files that actually use this binding -- both qualify every reference
+# (Bonito.App, Bonito.DOM, ...) rather than `using` it themselves, relying on
+# this module-level import rather than their own local one.
+import Bonito
 
 
 include("constants.jl")

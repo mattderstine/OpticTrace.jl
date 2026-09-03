@@ -2,17 +2,18 @@
     a Bonito.jl web UI for browsing a directory of .zmx/.zar/.zmf Zemax
     files and viewing/extracting their contents.
 
-    This file `import`s Bonito rather than `using` it, and qualifies every
-    Bonito symbol (Bonito.App, Bonito.DOM, Bonito.Button, ...) throughout.
-    GLMakie and Bonito both export several identical names bound to
-    unrelated types (Button, Slider, Checkbox, Dropdown); since
-    src/OpticTrace.jl already does `using GLMakie`, a plain `using Bonito`
-    anywhere in this module would make those names ambiguous/undefined
-    module-wide, breaking src/plotting.jl's existing (unqualified) use of
-    GLMakie's Button in multipleFigures. Confirmed by testing `using
-    GLMakie, Bonito` together: a bare `Button` throws UndefVarError.
+    This file qualifies every Bonito symbol (Bonito.App, Bonito.DOM,
+    Bonito.Button, ...) throughout rather than `using Bonito`, relying on
+    the `import Bonito` in src/OpticTrace.jl (this file is `include`'d into
+    that module, so the binding is already in scope here). GLMakie and
+    Bonito both export several identical names bound to unrelated types
+    (Button, Slider, Checkbox, Dropdown); since src/OpticTrace.jl already
+    does `using GLMakie`, a plain `using Bonito` anywhere in this module
+    would make those names ambiguous/undefined module-wide, breaking
+    src/plotting.jl's existing (unqualified) use of GLMakie's Button in
+    multipleFigures. Confirmed by testing `using GLMakie, Bonito` together:
+    a bare `Button` throws UndefVarError.
 =#
-import Bonito
 
 export zemaxBrowser
 

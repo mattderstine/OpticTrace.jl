@@ -9,13 +9,14 @@
     double-clicking a directory row navigates into it while
     double-clicking a file row selects-and-confirms in one step.
 
-    Like src/zemax_browser.jl, this file `import`s Bonito rather than
-    `using` it and qualifies every Bonito symbol -- see that file's
-    header comment (and CLAUDE.md's "Bonito/GLMakie name collision"
-    note) for why a bare `using Bonito` anywhere in this module would
-    break src/plotting.jl's unqualified use of GLMakie's `Button`.
+    Like src/zemax_browser.jl, this file qualifies every Bonito symbol
+    rather than `using` it, relying on the `import Bonito` in
+    src/OpticTrace.jl (this file is `include`'d into that module, so the
+    binding is already in scope here) -- see that file's comment (and
+    CLAUDE.md's "Bonito/GLMakie name collision" note) for why a bare
+    `using Bonito` anywhere in this module would break
+    src/plotting.jl's unqualified use of GLMakie's `Button`.
 =#
-import Bonito
 
 export filePicker
 
