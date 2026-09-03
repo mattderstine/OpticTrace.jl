@@ -17,6 +17,72 @@ import Bonito
 export zemaxBrowser
 
 """
+    _TABLE_CSS
+
+Bonito's bundled `table.css` asset (plain `table`/`tr`/`th`/`td` element
+selectors -- zebra striping, header shading, consistent cell padding; no
+class names required), wrapped via `@path` so its bytes are embedded and
+survive bundle relocation, same as Bonito's own internal uses of its
+bundled CSS assets (e.g. `KaTeXCSS`, `ChoicesCSS`). Injected once as a
+root child of [`zemaxBrowserApp`](@ref) so it applies to every `<table>`
+this UI renders -- currently just [`renderZemaxFileSummary`](@ref)'s
+per-surface table, the only `<table>` this package's Bonito UIs build.
+"""
+const _TABLE_CSS = Bonito.Asset(Bonito.@path(Bonito.dependency_path("table.css")))
+
+"""
+    _TABLE_DARK_MODE_CSS
+
+Dark-mode override for [`_TABLE_CSS`](@ref)'s zebra striping. table.css's
+`tr:nth-child(even)`/`tr:hover`/`th` rules (`#f2f2f2`/`#ddd`/`#e2e2e2`
+background, `white` header text -- light grays close to white) have no
+media query of their own, so they stay active in *every* color scheme,
+dark included, unless something more specific overrides them per rule --
+overriding only some of table.css's rules under `@media
+(prefers-color-scheme: dark)` leaves the untouched ones still in force
+(a first pass here left `nth-child(even)` unoverridden on the assumption
+that meant "no styling, falls back to the page background" -- it doesn't;
+it meant "table.css's own unconditional `#f2f2f2` still applies", a near-
+white stripe against a dark page). Every table.css rule that sets a
+color needs an explicit dark-mode counterpart here, not just the ones
+that looked obviously wrong:
+- `nth-child(even)`: `background-color: transparent`, canceling
+  table.css's `#f2f2f2` outright so these rows actually show the page's
+  own dark background (never given its own color here, since it's the
+  browser/OS-dependent ambient one this file has no fixed value for).
+- `nth-child(odd)`: `#4a4a4a`, a clearly-lighter-than-ambient gray so the
+  zebra stripe reads against any reasonably dark ambient background.
+- `tr:hover`: `#606060`, lighter again than `#4a4a4a` so hovering stays
+  visually distinct from the zebra stripe itself (not just from the
+  transparent rows).
+- `th`: background `#1d1d1d` (kept from the first pass) plus `color:
+  #999999` (medium gray, replacing table.css's `white` -- requested
+  directly, distinct from the zebra-contrast fixes above).
+
+`tr:hover`'s background carries `!important`, unlike the other three
+rules here. A `table tbody tr:hover` specificity-bump selector (relying on
+the `<tbody>` browsers implicitly insert around bare `<tr>` children) was
+tried first to outrank `table tr:nth-child(odd)`/`table
+tr:nth-child(even)` without `!important` -- on paper its specificity
+(3 elements, 1 pseudo-class) already beats theirs (2 elements, 1
+pseudo-class) -- but it still didn't visibly win in testing (light-mode
+hover, via table.css's own unconditional `tr:hover`, worked throughout;
+only the dark-mode override silently lost). Rather than keep chasing
+which part of the cascade was actually deciding it, `!important` sidesteps
+the question: it outranks every non-`!important` declaration regardless
+of selector specificity or source order, which is exactly the guarantee
+needed here against a stylesheet (table.css) whose position in the
+cascade this file doesn't control.
+"""
+const _TABLE_DARK_MODE_CSS = Bonito.Styles(Bonito.CSS(
+    "@media (prefers-color-scheme: dark)",
+    Bonito.CSS("table tr:nth-child(even)", "background-color" => "transparent"),
+    Bonito.CSS("table tr:nth-child(odd)", "background-color" => "#4a4a4a"),
+    Bonito.CSS("table tr:hover", "background-color" => "#606060 !important"),
+    Bonito.CSS("table th", "background-color" => "#1d1d1d", "color" => "#999999"),
+))
+
+"""
     zemaxFileKind(path::AbstractString) -> Union{Symbol,Nothing}
 
 Classify `path` by extension (case-insensitive): `:zmx`, `:zar`, `:zmf`,
@@ -493,7 +559,7 @@ function zemaxBrowserApp(rootDir::String; serverRef = nothing, closeOnDisconnect
                 style = Bonito.Styles("display" => "flex", "flex" => "1 1 auto"),
             )
         end
-        return Bonito.DOM.div(_THEME_STYLES, fileColumn, detailColumns;
+        return Bonito.DOM.div(_THEME_STYLES, _TABLE_CSS, _TABLE_DARK_MODE_CSS, fileColumn, detailColumns;
                                style = Bonito.Styles("display" => "flex", "align-items" => "flex-start"))
     end
 end
