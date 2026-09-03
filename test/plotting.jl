@@ -37,14 +37,18 @@
         for ms in (modelRound, modelRoundObsc, modelRect)
             figm, axm = plotGeometry3D([ms])
             @test axm isa LScene
+            saveTestFigure(figm, "plotGeometry3D — " * ms.surfname)
         end
 
         scene = plotGeometry3D!(ax, geo)
         @test scene === ax
+        saveTestFigure(fig, "plotGeometry3D + plotGeometry3D!")
+        saveTestFigure(fig2, "plotGeometry3D (new fig)")
     end
 
     @testset "plotModelSurf!" begin
-        scene = LScene(Figure()[1, 1])
+        fig = Figure()
+        scene = LScene(fig[1, 1])
 
         @testset "RoundAperture" begin
             # no obscuration, finite semiDiameter -> draws the Washer ring,
@@ -76,6 +80,8 @@
             OpticTrace.plotModelSurf!(scene, ms4.aperture, ms4)
             @test true
         end
+
+        saveTestFigure(fig, "plotModelSurf!")
     end
 
     @testset "saveFigure / printFigure" begin
@@ -106,6 +112,9 @@
         figs = multipleFigures(2)
         @test figs isa Vector{Figure}
         @test length(figs) == 2
+        for (i, f) in enumerate(figs)
+            saveTestFigure(f, "multipleFigures[$i]")
+        end
     end
 
     @testset "trace-and-plot family" begin
@@ -151,6 +160,8 @@
 
         sceneReturned = plotTrace!(scene, trc)
         @test sceneReturned === scene
+
+        saveTestFigure(fig, "trace-and-plot family")
     end
 
     @testset "perimeterRays / plotPerimeterRays" begin
@@ -166,11 +177,13 @@
 
         plt = plotPerimeterRays(r, 1.0, 0.01, 8, geo; surfview = "end")
         @test !isnothing(plt)
+        saveTestFigure(plt, "plotPerimeterRays")
 
         fig = Figure()
         scene = Axis3(fig[1, 1])
         @test !isnothing(plotPerimeterRays!(scene, r, 1.0, 0.01, 8, geo; surfview = "end"))
         @test !isnothing(plotPerimeterRays!(r, 1.0, 0.01, 8, geo; surfview = "end"))
+        saveTestFigure(fig, "plotPerimeterRays!")
     end
 
     @testset "rayHeatmap / rayHeatmap!" begin
@@ -179,12 +192,14 @@
         d, fig = rayHeatmap(pts; mcbins = 10, center = (0.0, 0.0), width = 10.0)
         @test d isa StatsBase.Histogram
         @test sum(d.weights) == length(pts)
+        saveTestFigure(fig, "rayHeatmap")
 
         fig2 = Figure()
         ax2 = Axis(fig2[1, 1])
         d2, plt2 = rayHeatmap!(ax2, pts; mcbins = 10, center = (0.0, 0.0), width = 10.0)
         @test d2.weights == d.weights
         @test !isnothing(plt2)
+        saveTestFigure(fig2, "rayHeatmap!")
     end
 
     @testset "computeExitPupilLoc / getrefbase / plotRayFan!" begin
@@ -218,6 +233,7 @@
             plotRayFan!(fig[1, 1], ORIGIN, 0.05, rfGeo; surfview = "end", points = 5)
         end
         @test result ≈ Point3(0.0, 0.0, 0.0)
+        saveTestFigure(fig, "plotRayFan!")
     end
 
     @testset "plotOPD! (geo-based)" begin
@@ -239,6 +255,7 @@
         # symmetric fan angles about a telecentric on-axis reference -> symmetric OPD
         @test opdx[1] ≈ opdx[end] atol = 1e-6
         @test opdy[1] ≈ opdy[end] atol = 1e-6
+        saveTestFigure(fig, "plotOPD! (geo)")
     end
 
     @testset "plotOPD!(egeo) / plotOPD3D!" begin
@@ -260,6 +277,7 @@
         @test length(opdy) == 5
         @test all(!isnan, opdx)
         @test all(!isnan, opdy)
+        saveTestFigure(fig, "plotOPD! (egeo)")
 
         fig2 = Figure()
         ax2 = LScene(fig2[1, 1])
@@ -267,6 +285,7 @@
             plotOPD3D!(ax2, 0.5, egeo; points = 5)
         end
         @test result === ax2
+        saveTestFigure(fig2, "plotOPD3D!")
     end
 
     @testset "plotXSag! / plotYSag!" begin
@@ -283,6 +302,8 @@
         @test !isnothing(pltY)
         expectedZY = [sag(0.0, x, surf.profile) for x in range(-4.0, stop = 4.0, length = 160)]
         @test [p[2] for p in pltY[1][]] ≈ expectedZY
+
+        saveTestFigure(fig, "plotXSag! + plotYSag!")
     end
 
     @testset "plotSpotDiagram" begin
@@ -291,14 +312,17 @@
         fig = Figure()
         result = plotSpotDiagram(fig, spts, Point2(0.0, 0.0), 1.0, 0.01)
         @test result === fig
+        saveTestFigure(fig, "plotSpotDiagram (showRMS=true)")
 
         fig2 = Figure()
-        result2 = plotSpotDiagram(fig, spts, Point2(0.0, 0.0), 1.0, 0.01; showRMS = false)
-        @test result2 === fig
+        result2 = plotSpotDiagram(fig2, spts, Point2(0.0, 0.0), 1.0, 0.01; showRMS = false)
+        @test result2 === fig2
+        saveTestFigure(fig2, "plotSpotDiagram (showRMS=false)")
 
         fig3 = Figure()
         result3 = plotSpotDiagram(fig3, spts)
         @test result3 === fig3
+        saveTestFigure(fig3, "plotSpotDiagram (no RMS args)")
     end
 
 end

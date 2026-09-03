@@ -79,3 +79,37 @@ const HAS_ZAR_SAMPLE = isfile(ZAR_SAMPLE_PATH)
 
 const ZMF_SAMPLE_PATH = "/Users/matt/Development/Software/Zemax/Stockcat/DiverseOptics.ZMF"
 const HAS_ZMF_SAMPLE = isfile(ZMF_SAMPLE_PATH)
+
+"""
+Directory that `test/plotting.jl` saves its generated figures into (via
+[`saveTestFigure`](@ref)), so they can be inspected after a test run.
+Gitignored -- not part of the repo -- so it's created here rather than
+relying on it being checked out.
+"""
+const TEST_PLOTS_DIR = joinpath(@__DIR__, "plots")
+mkpath(TEST_PLOTS_DIR)
+
+"""
+Some plotting functions under test (e.g. `plotPerimeterRays`,
+`rayHeatmap`) return a `Makie.FigureAxisPlot` rather than a bare
+`Figure` when they create their own figure -- normalize to the
+underlying `Figure` so callers like [`saveTestFigure`](@ref) can add a
+title `Label` and save it uniformly.
+"""
+figureOf(fig) = fig
+figureOf(fig::Makie.FigureAxisPlot) = fig.figure
+
+"""
+    saveTestFigure(fig, name)
+
+Adds a title `Label` reading `name` to `fig` (or, if `fig` is a
+`Makie.FigureAxisPlot`, to its underlying figure -- see
+[`figureOf`](@ref)), then saves it into [`TEST_PLOTS_DIR`](@ref) via
+`saveFigure`, so `test/plotting.jl` leaves a titled, identifiable image
+behind for every figure it generates.
+"""
+function saveTestFigure(fig, name)
+    f = figureOf(fig)
+    Label(f[0, :], name, tellwidth = false)
+    saveFigure(name, f; directory = TEST_PLOTS_DIR)
+end
