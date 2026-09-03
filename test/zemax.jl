@@ -294,6 +294,217 @@
         end
     end
 
+    @testset "unit conversion (zemaxUnitToMM/zemaxFieldTypeIsHeight/convertZemaxUnitsToMM!)" begin
+        @testset "zemaxUnitToMM" begin
+            @test OpticTrace.zemaxUnitToMM("MM") == 1.0
+            @test OpticTrace.zemaxUnitToMM("CM") == 10.0
+            @test OpticTrace.zemaxUnitToMM("IN") == 25.4
+            @test OpticTrace.zemaxUnitToMM("M") == 1000.0
+            @test_throws ArgumentError OpticTrace.zemaxUnitToMM("MICRON")
+        end
+
+        @testset "zemaxFieldTypeIsHeight" begin
+            @test OpticTrace.zemaxFieldTypeIsHeight(0) == false  # Angle
+            @test OpticTrace.zemaxFieldTypeIsHeight(1) == true   # Object Height
+            @test OpticTrace.zemaxFieldTypeIsHeight(2) == true   # Paraxial Image Height
+            @test OpticTrace.zemaxFieldTypeIsHeight(3) == true   # Real Image Height
+            @test OpticTrace.zemaxFieldTypeIsHeight(4) == false  # Theodolite Angle
+            @test_throws ArgumentError OpticTrace.zemaxFieldTypeIsHeight(5)
+        end
+
+        @testset "MM is a no-op" begin
+            asph = zeros(Float64, 20)
+            asph[2] = 0.0002
+            s = OpticTrace.ZemaxSurf(0.05, 5.0, "TESTGLASS", 10.0, true, -0.5, asph, "", "EVENASPH", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "MM"
+            header.apertureType = "ENPD"
+            header.apertureValue = 8.0
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.curvature == 0.05
+            @test s.distance == 5.0
+            @test s.radius == 10.0
+            @test s.aspherics[2] == 0.0002
+            @test header.apertureValue == 8.0
+        end
+
+        @testset "STANDARD, CM" begin
+            s = OpticTrace.ZemaxSurf(0.5, 2.0, "DEFAULT", 1.0, false, 0.0, zeros(Float64, 20), "", "STANDARD", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.curvature ≈ 0.05     # 0.5 / 10
+            @test s.distance ≈ 20.0      # 2.0 * 10
+            @test s.radius ≈ 10.0        # 1.0 * 10
+        end
+
+        @testset "EVENASPH, CM -- per-term exponent scaling" begin
+            asph = zeros(Float64, 20)
+            asph[2] = 1.0  # r^4 term
+            asph[3] = 2.0  # r^6 term
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, asph, "", "EVENASPH", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.aspherics[2] ≈ 1.0 * 10.0^(1 - 4)  # 1e-3
+            @test s.aspherics[3] ≈ 2.0 * 10.0^(1 - 6)  # 2e-5
+        end
+
+        @testset "ODDASPHE, IN -- per-term exponent scaling" begin
+            parm = zeros(Float64, 20)
+            parm[1] = 3.0
+            parm[3] = 0.7
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, parm, "", "ODDASPHE", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "IN"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.aspherics[1] ≈ 3.0 * 25.4^(1 - 1)  # unchanged, r^1 term
+            @test s.aspherics[3] ≈ 0.7 * 25.4^(1 - 3)  # r^3 term
+        end
+
+        @testset "TOROIDAL, CM -- Rx (aspherics[1]) scaled" begin
+            parm = zeros(Float64, 20)
+            parm[1] = 5.0
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, parm, "", "TOROIDAL", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.aspherics[1] ≈ 50.0
+        end
+
+        @testset "COORDBRK, CM -- dx/dy scaled, tilt angles/order flag not" begin
+            parm = zeros(Float64, 20)
+            parm[1] = 1.0   # dx
+            parm[2] = 2.0   # dy
+            parm[3] = 45.0  # tiltX (degrees)
+            parm[4] = 30.0  # tiltY (degrees)
+            parm[5] = 10.0  # tiltZ (degrees)
+            parm[6] = 1.0   # order flag
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, parm, "", "COORDBRK", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.aspherics[1] ≈ 10.0
+            @test s.aspherics[2] ≈ 20.0
+            @test s.aspherics[3] == 45.0
+            @test s.aspherics[4] == 30.0
+            @test s.aspherics[5] == 10.0
+            @test s.aspherics[6] == 1.0
+        end
+
+        @testset "TILTSURF, CM -- tilt angles not scaled" begin
+            parm = zeros(Float64, 20)
+            parm[1] = 20.0  # tiltXdeg
+            parm[2] = -15.0 # tiltYdeg
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, parm, "", "TILTSURF", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.aspherics[1] == 20.0
+            @test s.aspherics[2] == -15.0
+        end
+
+        @testset "PARAXIAL, CM -- focal length scaled, OPD-mode flag not" begin
+            parm = zeros(Float64, 20)
+            parm[1] = 5.0  # focal length
+            parm[2] = 1.0  # OPD mode flag
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, parm, "", "PARAXIAL", "")
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.aspherics[1] ≈ 50.0
+            @test s.aspherics[2] == 1.0
+        end
+
+        @testset "XPOLYNOM, IN -- normRadius and all term coefficients scaled uniformly" begin
+            extraData = zeros(Float64, 5)
+            extraData[1] = 5.0    # normRadius
+            extraData[2] = 1.0    # unidentified flag, not scaled
+            extraData[3] = 1.5
+            extraData[4] = 2.5
+            s = OpticTrace.ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, zeros(Float64, 20), "", "XPOLYNOM", "",
+                extraData)
+            header = OpticTrace.ZemaxHeader()
+            header.units = "IN"
+            OpticTrace.convertZemaxUnitsToMM!([s], header)
+            @test s.extraData[1] ≈ 5.0 * 25.4
+            @test s.extraData[2] == 1.0
+            @test s.extraData[3] ≈ 1.5 * 25.4
+            @test s.extraData[4] ≈ 2.5 * 25.4
+        end
+
+        @testset "apertureValue -- ENPD scaled, OBNA/FNUM/FLOA not" begin
+            for (apertureType, value) in (("OBNA", 0.2), ("FNUM", 8.0))
+                header = OpticTrace.ZemaxHeader()
+                header.units = "CM"
+                header.apertureType = apertureType
+                header.apertureValue = value
+                OpticTrace.convertZemaxUnitsToMM!(OpticTrace.ZemaxSurf[], header)
+                @test header.apertureValue == value
+            end
+
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            header.apertureType = "ENPD"
+            header.apertureValue = 5.0
+            OpticTrace.convertZemaxUnitsToMM!(OpticTrace.ZemaxSurf[], header)
+            @test header.apertureValue ≈ 50.0
+
+            header = OpticTrace.ZemaxHeader()
+            header.units = "CM"
+            header.apertureType = "FLOA"
+            header.apertureValue = NaN
+            OpticTrace.convertZemaxUnitsToMM!(OpticTrace.ZemaxSurf[], header)
+            @test isnan(header.apertureValue)
+        end
+
+        @testset "wavelengths never scaled" begin
+            header = OpticTrace.ZemaxHeader()
+            header.units = "IN"
+            header.wavelengths[1] = 0.5875618
+            OpticTrace.convertZemaxUnitsToMM!(OpticTrace.ZemaxSurf[], header)
+            @test header.wavelengths[1] == 0.5875618
+        end
+
+        @testset "fields scaled only when fieldType is a height" begin
+            # fieldType 0 == Angle -- not scaled
+            header = OpticTrace.ZemaxHeader()
+            header.units = "IN"
+            header.fieldType = 0
+            header.fields = [Point2(0.0, 0.0), Point2(5.0, 3.0)]
+            OpticTrace.convertZemaxUnitsToMM!(OpticTrace.ZemaxSurf[], header)
+            @test header.fields == [Point2(0.0, 0.0), Point2(5.0, 3.0)]
+
+            # fieldType 1 == Object Height -- scaled
+            header2 = OpticTrace.ZemaxHeader()
+            header2.units = "IN"
+            header2.fieldType = 1
+            header2.fields = [Point2(0.0, 0.0), Point2(5.0, 3.0)]
+            OpticTrace.convertZemaxUnitsToMM!(OpticTrace.ZemaxSurf[], header2)
+            @test header2.fields ≈ [Point2(0.0, 0.0), Point2(5.0 * 25.4, 3.0 * 25.4)]
+        end
+
+        @testset "readZemaxSystem end to end: same lens in MM vs IN matches" begin
+            # test_singlet_in.zmx is test_singlet.zmx's same physical lens,
+            # re-expressed in inches (UNIT IN, CURV/DISZ/DIAM/PARM/ENPD
+            # converted by hand) -- after import, both should agree in mm.
+            inFixture = joinpath(@__DIR__, "fixtures", "test_singlet_in.zmx")
+            testCatalog = Dict{AbstractString, Any}("TESTGLASS" => (λ -> 1.6), "DEFAULT" => OpticTrace.rInDef)
+            mmSys = readZemaxSystem(fixture; glassCatalog = testCatalog)
+            inSys = readZemaxSystem(inFixture; glassCatalog = testCatalog)
+
+            @test inSys.units == "IN"
+            @test mmSys.apertureValue ≈ inSys.apertureValue
+            for (sm, si) in zip(mmSys.geo, inSys.geo)
+                @test sm.profile.curv ≈ si.profile.curv
+                if hasproperty(sm.profile, :a)
+                    @test sm.profile.a ≈ si.profile.a
+                end
+                @test sm.aperture.semiDiameter ≈ si.aperture.semiDiameter
+            end
+        end
+    end
+
     @testset "zemaxObjectToModelSurface" begin
         @testset "finite object distance" begin
             s = OpticTrace.ZemaxSurf(0.01, 12.0, "DEFAULT", 3.0, false, 0.0, zeros(Float64, 20), "", "STANDARD", "Obj")

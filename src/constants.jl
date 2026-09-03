@@ -1,5 +1,6 @@
 
 export ∞, ORIGIN, ZAXIS, YAXIS, XAXIS, refIndexDefault, rInDef, setRInDef
+export LENGTH_UNIT, WAVELENGTH_UNIT, LENGTH_TO_WAVELENGTH
 
 """
     ORIGIN
@@ -83,6 +84,59 @@ default.
 """
 global defaultGlassCatalog = Dict{AbstractString, Any}()
 defaultGlassCatalog["DEFAULT"]= rInDef #default refractive index function
+
+"""
+    LENGTH_UNIT
+
+The canonical physical-length unit this package's geometry is always
+expressed in: `"mm"`. Ray positions, surface curvature/radius/thickness,
+aperture sizes, aspheric/polynomial coefficients, and the built-in
+Edmund/Thorlabs catalog lenses (`src/lens_edmund.jl`/
+`src/lens_thorlabs.jl`) all assume this. `src/zemax.jl`'s Zemax import
+pipeline (`readZemax`, via `convertZemaxUnitsToMM!`) converts every
+length-dimensioned field from the source `.zmx` file's own `UNIT` to
+this unit at parse time, so nothing downstream (tracing, OPD,
+characterization, plotting) needs to consult a per-system unit tag --
+this constant documents that invariant; nothing in this package branches
+on its value today.
+"""
+const LENGTH_UNIT = "mm"
+
+"""
+    WAVELENGTH_UNIT
+
+The canonical wavelength unit: `"μm"` (micrometers) -- Zemax's own
+native `WAVM` wavelength unit (independent of a `.zmx` file's `UNIT`
+keyword, which governs physical lens dimensions only, never
+wavelengths), and this package's convention throughout
+(`ExtendedGeometry.wavelength`, `OpticalSystem.wavelengths`, the glass
+refractive-index formulas in `src/lens_refractive_index.jl`). Like
+[`LENGTH_UNIT`](@ref), this documents an invariant rather than a
+switchable setting.
+"""
+const WAVELENGTH_UNIT = "μm"
+
+"""
+    LENGTH_TO_WAVELENGTH
+
+Conversion factor between [`LENGTH_UNIT`](@ref) (mm) and
+[`WAVELENGTH_UNIT`](@ref) (μm): `0.001`, i.e. 1 `WAVELENGTH_UNIT` = `0.001`
+`LENGTH_UNIT` (1 μm = 0.001 mm). The single source of truth for any
+calculation that combines a physical length with a wavelength -- e.g.
+converting an optical path difference into a number of waves -- used by
+`opdRel`'s callers in `src/plotting.jl` instead of a hardcoded
+`1000.0`/`1e-3` literal. Both directions of use:
+- multiply a `WAVELENGTH_UNIT`-valued number by this to convert it to
+  `LENGTH_UNIT` (μm → mm);
+- divide a `LENGTH_UNIT`-valued number by this to convert it to
+  `WAVELENGTH_UNIT` (mm → μm).
+
+Name and value are deliberately decoupled from "mm"/"μm" specifically --
+if [`LENGTH_UNIT`](@ref)/[`WAVELENGTH_UNIT`](@ref) ever changed, only
+this factor's value would need updating, not every call site
+referencing it.
+"""
+const LENGTH_TO_WAVELENGTH = 0.001
 
 """
     identityPol

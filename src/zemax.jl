@@ -81,14 +81,28 @@ vector. Absorbed into an [`OpticalSystem`](@ref) by
 
 Fields:
     name::String                   - system name, from NAME
-    units::String                  - length units, from UNIT
-    wavelengths::Vector{T}         - fixed-length (24-element) array indexed by Zemax wavelength number, from WAVM
+    units::String                  - the *source* file's own length unit, from UNIT, kept verbatim as
+                                       provenance -- by the time `readZemax` returns, every length-dimensioned
+                                       field on this header/its accompanying `ZemaxSurf`s (`apertureValue`
+                                       when ENPD, `fields` when height-typed, etc.) has already been converted
+                                       to `LENGTH_UNIT` (mm) by `convertZemaxUnitsToMM!`, regardless of what
+                                       this field says
+    wavelengths::Vector{T}         - fixed-length (24-element) array indexed by Zemax wavelength number, from
+                                       WAVM -- always in `WAVELENGTH_UNIT` (μm); unlike every other numeric
+                                       field here, never affected by `units`/`UNIT`, since Zemax's own WAVM
+                                       convention is unit-independent
     primaryWavelengthIndex::Int    - index into `wavelengths`, from PWAV (defaults to 1 if PWAV is absent)
     apertureType::String           - which aperture spec is active: "ENPD", "OBNA", "FNUM", or "FLOA" (no value)
-    apertureValue::T                - the value for whichever `apertureType` is active (`NaN` for "FLOA")
-    fieldType::Int                  - field-type code, from FTYP's first field (angle/object height/image height/...)
-    fields::Vector{Point2{T}}      - design field points, XFLN/YFLN zipped pairwise into (x,y)
-    fieldWeight::Vector{T}          - per-field weight, from FWGN, index-aligned with `fields`
+    apertureValue::T                - the value for whichever `apertureType` is active (`NaN` for "FLOA");
+                                       in `LENGTH_UNIT` (mm) when `apertureType == "ENPD"`, a dimensionless
+                                       ratio for "OBNA"/"FNUM"
+    fieldType::Int                  - field-type code, from FTYP's first field (angle/object height/image
+                                       height/...) -- see `zemaxFieldTypeIsHeight`
+    fields::Vector{Point2{T}}      - design field points, XFLN/YFLN zipped pairwise into (x,y); in
+                                       `LENGTH_UNIT` (mm) when `zemaxFieldTypeIsHeight(fieldType)`, degrees
+                                       otherwise
+    fieldWeight::Vector{T}          - per-field weight, from FWGN, index-aligned with `fields` -- always
+                                       dimensionless, never unit-converted
     glassCatalogs::Vector{String}  - glass catalog names, from GCAT
     mode::String                   - "SEQ" or "NSC", from MODE
     notes::String                  - freeform system notes, reconstructed from NOTE lines
@@ -134,9 +148,17 @@ keywords: `UNIT`, `NAME`, `WAVM`, `PWAV`, `ENPD`/`OBNA`/`FNUM`/`FLOA`,
 is silently ignored. Surface positions/orientations are computed later,
 by [`zemaxsurfToSurface`](@ref)/[`zemaxsurfsToGeo`](@ref).
 
+Before returning, every length-dimensioned field of `zsurfs`/`header` is
+converted from the file's own `UNIT` to [`LENGTH_UNIT`](@ref) (mm) via
+[`convertZemaxUnitsToMM!`](@ref) -- see its docstring for exactly which
+fields that covers. `header.units` itself keeps recording the file's
+original, pre-conversion unit as provenance.
+
 Returns `(zsurfs, header)`:
-    zsurfs::Vector{ZemaxSurf}   - the parsed surfaces, in file order (zsurfs[1] is the object surface)
-    header::ZemaxHeader          - system-level metadata
+    zsurfs::Vector{ZemaxSurf}   - the parsed surfaces, in file order (zsurfs[1] is the object surface);
+                                   length-dimensioned fields already converted to `LENGTH_UNIT` (mm)
+    header::ZemaxHeader          - system-level metadata; length-dimensioned fields already converted to
+                                   `LENGTH_UNIT` (mm), see `units`'s own field doc
 """
 function readZemax(filename::String)
 
@@ -290,7 +312,141 @@ function readZemax(filename::String)
     end
     push!(zsurfs, zsurf)
     header.fields = Point2.(xfln, yfln)
+    convertZemaxUnitsToMM!(zsurfs, header)
     return zsurfs, header
+end
+
+"""
+    zemaxUnitToMM(units::String) -> Float64
+
+Millimeters per one `units` (a Zemax `UNIT` token: `"MM"`, `"CM"`,
+`"IN"`, or `"M"`). Throws an `ArgumentError` for anything else, rather
+than silently treating an unrecognized token as millimeters (Zemax's own
+supported `UNIT` values).
+"""
+function zemaxUnitToMM(units::String)::Float64
+    units == "MM" && return 1.0
+    units == "CM" && return 10.0
+    units == "IN" && return 25.4
+    units == "M" && return 1000.0
+    throw(ArgumentError("zemaxUnitToMM: unrecognized Zemax UNIT \"$units\" " *
+        "(expected one of \"MM\", \"CM\", \"IN\", \"M\")"))
+end
+
+"""
+    zemaxFieldTypeIsHeight(fieldType::Int) -> Bool
+
+Whether Zemax `FTYP` field-type code `fieldType` represents a
+length-dimensioned field position (object height, paraxial image
+height, or real image height -- codes `1`, `2`, `3`) rather than an
+angle in degrees (codes `0` "Angle" and `4` "Theodolite Angle"). Used by
+[`convertZemaxUnitsToMM!`](@ref) to decide whether `header.fields`
+(`XFLN`/`YFLN`) needs unit conversion. Throws an `ArgumentError` for any
+other code.
+"""
+function zemaxFieldTypeIsHeight(fieldType::Int)::Bool
+    fieldType in (1, 2, 3) && return true
+    fieldType in (0, 4) && return false
+    throw(ArgumentError("zemaxFieldTypeIsHeight: unrecognized Zemax FTYP field-type code " *
+        "$fieldType (expected 0-4)"))
+end
+
+"""
+    convertZemaxUnitsToMM!(zsurfs, header::ZemaxHeader)
+
+Convert every length-dimensioned field of `zsurfs`/`header` in place
+from the source file's own unit (`header.units`, a Zemax `UNIT` token)
+to [`LENGTH_UNIT`](@ref) (mm), via [`zemaxUnitToMM`](@ref). Called once
+by [`readZemax`](@ref), right before it returns, so every consumer of
+`readZemax`'s result -- directly, or through [`readZemaxSystem`](@ref) --
+gets already-mm-canonical geometry, rather than relying on each caller
+to remember a separate conversion step. A no-op when `header.units` is
+already `"MM"`.
+
+`header.units` itself is left unchanged: it keeps recording the
+*source* file's original unit as provenance (see [`OpticalSystem`](@ref)'s
+`units` field docs), even though every numeric field it's attached to is
+now in mm regardless of what `header.units` says.
+
+Which fields get scaled, and by what power of the mm-per-unit factor,
+depends on `s.type` for the per-surface `aspherics`/`extraData` fields
+-- Zemax reuses those arrays for different physical quantities
+(different length dimensions, or no length dimension at all, e.g. a
+tilt angle or a dimensionless flag) depending on surface type, mirroring
+[`zemaxsurfToProfileAperture`](@ref)'s own per-type dispatch. Confirmed
+against each type's `sag` method in `src/tracing.jl`:
+
+- every type: `curvature` (÷ factor, it's `1/length`), `distance`,
+  `radius` (× factor).
+- `"EVENASPH"`: `aspherics[i]` for `i = 2:end` multiplies `r^(2i)` (see
+  `sag(x, y, ::SurfProfileEvenAsphere)`), so each scales by
+  `factor^(1-2i)`.
+- `"ODDASPHE"`: `aspherics[i]` for `i = 1:8` multiplies `r^i` (see
+  `sag(x, y, ::SurfProfileOddAsphere)`), so each scales by
+  `factor^(1-i)`.
+- `"TOROIDAL"`: `aspherics[1]` is `Rx`, a radius (× factor).
+- `"COORDBRK"`: `aspherics[1]`/`aspherics[2]` are `dx`/`dy` decenters (×
+  factor each); `aspherics[3:5]` are tilt angles in degrees and
+  `aspherics[6]` is the order flag -- neither scaled.
+- `"TILTSURF"`: `aspherics[1]`/`aspherics[2]` are tilt angles in
+  degrees -- not scaled.
+- `"PARAXIAL"`: `aspherics[1]` is a focal length (× factor);
+  `aspherics[2]` (an OPD-mode flag) is not scaled.
+- `"XPOLYNOM"`: `extraData[1]` is the normalization radius (× factor);
+  `extraData[3:end]` are polynomial term coefficients that multiply an
+  already-normalized, dimensionless `(x/normRadius)^m (y/normRadius)^n`
+  (see `sag(x, y, ::SurfProfileXYPoly)`), so -- unlike `EVENASPH`/
+  `ODDASPHE` -- they scale uniformly by the factor regardless of term;
+  `extraData[2]` (an unidentified control flag) is not scaled.
+- `"STANDARD"`: no extra length-dimensioned fields.
+
+Also converts `header.apertureValue` (× factor), but only when
+`header.apertureType == "ENPD"` (entrance pupil diameter, a length) --
+`"OBNA"`/`"FNUM"` are dimensionless ratios and `"FLOA"` has no value, so
+neither is scaled. `header.fields` (`XFLN`/`YFLN`) is converted (× factor)
+only when [`zemaxFieldTypeIsHeight`](@ref)`(header.fieldType)`;
+`header.fieldWeight` is never scaled (always dimensionless).
+`header.wavelengths` is never scaled -- Zemax's `WAVM` values are always
+in [`WAVELENGTH_UNIT`](@ref) regardless of `header.units`.
+"""
+function convertZemaxUnitsToMM!(zsurfs, header::ZemaxHeader)
+    factor = zemaxUnitToMM(header.units)
+    factor == 1.0 && return nothing
+
+    for s in zsurfs
+        s.curvature /= factor
+        s.distance *= factor
+        s.radius *= factor
+        if s.type == "EVENASPH"
+            for i in 2:length(s.aspherics)
+                s.aspherics[i] *= factor^(1 - 2i)
+            end
+        elseif s.type == "ODDASPHE"
+            for i in 1:min(8, length(s.aspherics))
+                s.aspherics[i] *= factor^(1 - i)
+            end
+        elseif s.type == "TOROIDAL"
+            length(s.aspherics) >= 1 && (s.aspherics[1] *= factor)
+        elseif s.type == "COORDBRK"
+            length(s.aspherics) >= 1 && (s.aspherics[1] *= factor)
+            length(s.aspherics) >= 2 && (s.aspherics[2] *= factor)
+        elseif s.type == "PARAXIAL"
+            length(s.aspherics) >= 1 && (s.aspherics[1] *= factor)
+        elseif s.type == "XPOLYNOM"
+            length(s.extraData) >= 1 && (s.extraData[1] *= factor)
+            for i in 3:length(s.extraData)
+                s.extraData[i] *= factor
+            end
+        end
+        # "STANDARD"/"TILTSURF": no length-dimensioned aspherics/extraData fields.
+    end
+
+    header.apertureType == "ENPD" && (header.apertureValue *= factor)
+    if !isempty(header.fields) && zemaxFieldTypeIsHeight(header.fieldType)
+        header.fields = factor .* header.fields
+    end
+
+    return nothing
 end
 
 """

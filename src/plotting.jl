@@ -855,8 +855,8 @@ function plotOPD!(scene, r::Point3, θmax::Float64, geo; surfview = "end", color
 
     for (i,θ) in enumerate(θr)
         #println("dir = $([0.,sin(θ), cos(θ)])")
-        opdy[i] = opdRel(Ray(r, Vec3(0.,sin(θ), cos(θ))), refTrace,testgeo)*1000.0/λ
-        opdx[i] = opdRel(Ray(r, Vec3(sin(θ), 0., cos(θ))), refTrace,testgeo)*1000.0/λ
+        opdy[i] = opdRel(Ray(r, Vec3(0.,sin(θ), cos(θ))), refTrace,testgeo)/LENGTH_TO_WAVELENGTH/λ
+        opdx[i] = opdRel(Ray(r, Vec3(sin(θ), 0., cos(θ))), refTrace,testgeo)/LENGTH_TO_WAVELENGTH/λ
     end
     ax = Axis(scene[1,1]; title=label)
     Makie.lines!(ax, θr, opdx, color=color, linestyle = :dash)
@@ -949,7 +949,7 @@ function plotOPD!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop", 
 
     x =  LinRange(-sizeP, sizeP, points)
     z = usedgeo[1].base.base[3]
-    wl = egeo.wavelength[1] * 1e-3
+    wl = egeo.wavelength[1] * LENGTH_TO_WAVELENGTH
 
     for (i,t) in enumerate(x)
         #print("t = $t, i = $i  ")
@@ -1045,7 +1045,7 @@ function plotOPD3D!(scene, h::Float64, egeo::ExtendedGeometry; surfstop = "stop"
     y =  LinRange(-sizeP, sizeP, points)
     z = finalgeo[1].base.base[3]
 
-    wl = egeo.wavelength[1] * 1e-3
+    wl = egeo.wavelength[1] * LENGTH_TO_WAVELENGTH
     opdfunc(xi, yi) = opdRel(Ray(Point3(xi, yi, 0.), normalize(Vec3(xi, yi, z).-r)), refTrace, finalgeo)/wl
     opd = [opdfunc(xi, yi) for xi in x, yi in y]
 

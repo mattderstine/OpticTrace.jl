@@ -70,7 +70,20 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
     what's still unsupported, e.g. `GRID_SAG`/`FZERNSAG`). This
     package's tracer is sequential-only end to end -- a Zemax `MODE
     NSC` (non-sequential) file is rejected outright by
-    `readZemaxSystem`, not partially supported.
+    `readZemaxSystem`, not partially supported. A Zemax file's own
+    length unit (`UNIT` -- `MM`/`CM`/`IN`/`M`) is converted to this
+    package's canonical `LENGTH_UNIT` (mm, `constants.jl`) once, inside
+    `readZemax` (via `convertZemaxUnitsToMM!`/`zemaxUnitToMM`), before
+    any `ZemaxSurf`/`ZemaxHeader` value is used elsewhere -- so
+    `OpticalSystem.geo`/`objectDistance`/`apertureValue` (when `ENPD`)/
+    `fields` (when `zemaxFieldTypeIsHeight`) are always mm regardless of
+    the source file's `UNIT`; `OpticalSystem.units`/`ZemaxHeader.units`
+    itself is left as the *source* file's original unit string, kept as
+    provenance only. Wavelengths (`WAVM`) are never unit-converted --
+    always `WAVELENGTH_UNIT` (μm, `constants.jl`), independent of
+    `UNIT` -- and any calculation combining a length with a wavelength
+    (e.g. OPD-to-waves in `plotting.jl`) goes through the
+    `LENGTH_TO_WAVELENGTH` constant rather than a hardcoded literal.
   - `zemax_browser.jl` — Bonito.jl web UI over `zemax.jl`'s functions:
     browsing `.zmx`/`.zar`/`.zmf` files via `UItools/filepicker.jl`'s
     `filePicker` (`:file` mode, filtered to those three extensions),

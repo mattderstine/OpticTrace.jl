@@ -810,19 +810,29 @@ Fields:
                                        kept separate from `geo` since it isn't part of the traceable
                                        refracting chain -- see `zemaxObjectToModelSurface`
     name::String                    - system name
-    units::String                   - length units
-    wavelengths::Vector{T}          - system wavelengths
+    units::String                   - the *source* Zemax file's own length unit (from `UNIT`), kept as
+                                       provenance only -- every length-dimensioned field in this struct
+                                       (`geo`, `objectDistance`, `apertureValue` when `"ENPD"`, `fields`
+                                       when height-typed, ...) is already in `LENGTH_UNIT` (mm) regardless
+                                       of what this string says, converted at import by
+                                       `convertZemaxUnitsToMM!` (`src/zemax.jl`)
+    wavelengths::Vector{T}          - system wavelengths, always in `WAVELENGTH_UNIT` (μm) -- unaffected by
+                                       `units`, since Zemax's own wavelength convention is unit-independent
     primaryWavelengthIndex::Int     - index into `wavelengths` marking the primary/reference wavelength
-    objectDistance::T               - distance from the object to the first real surface; can be `Inf`
+    objectDistance::T               - distance from the object to the first real surface, in `LENGTH_UNIT`
+                                       (mm); can be `Inf`
     objectAtInfinity::Bool          - true iff `objectDistance` is infinite -- stored explicitly
                                        (not just derived via `isinf`) so downstream ray-source code can
                                        branch on it directly
     apertureType::String            - which aperture specification is active: `"ENPD"`, `"OBNA"`,
                                        `"FNUM"`, or `"FLOA"` (float-by-stop, no numeric value)
-    apertureValue::T                - the value for whichever `apertureType` is active (`NaN` for `"FLOA"`)
-    fieldType::Int                  - field-type code (angle / object height / image height / ...)
-    fields::Vector{Point2{T}}       - design field points, one `(x,y)` per field
-    fieldWeight::Vector{T}          - per-field weight, index-aligned with `fields`
+    apertureValue::T                - the value for whichever `apertureType` is active (`NaN` for `"FLOA"`);
+                                       in `LENGTH_UNIT` (mm) for `"ENPD"`, a dimensionless ratio otherwise
+    fieldType::Int                  - field-type code (angle / object height / image height / ...) -- see
+                                       `zemaxFieldTypeIsHeight` (`src/zemax.jl`)
+    fields::Vector{Point2{T}}       - design field points, one `(x,y)` per field; in `LENGTH_UNIT` (mm)
+                                       when `zemaxFieldTypeIsHeight(fieldType)`, degrees otherwise
+    fieldWeight::Vector{T}          - per-field weight, index-aligned with `fields` -- always dimensionless
     glassCatalogs::Vector{String}   - glass catalog names materials should resolve against
     mode::String                    - `"SEQ"` or `"NSC"`
     notes::String                   - freeform system notes/description
