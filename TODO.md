@@ -24,6 +24,18 @@ does the wrong thing. See "Code issues" below for missing features,
 cleanup candidates, and open design questions that aren't bugs. See
 `FIXED.md` for bugs already resolved.
 
+- **14.** `src/zemax.jl`, `zemaxUnitToMM(units::String)`: only accepts
+  the abbreviated Zemax `UNIT` tokens `"MM"`/`"CM"`/`"IN"`/`"M"` --
+  `readZemax` (via `convertZemaxUnitsToMM!`) throws an `ArgumentError`
+  on any `.zmx` file whose `UNIT` line spells the unit out as `"METER"`
+  instead of `"M"`. Confirmed against real sample files: at least three
+  files under the local Zemax install's `Samples/` tree (`Non-
+  sequential/Miscellaneous/Multiple mirror telescope.zmx`, `Sequential/
+  Image Simulation/Example 4, a diffraction limited system.ZMX`,
+  `Sequential/Telescopes/Hubble.zmx`) use `UNIT METER` and fail to
+  parse with the current code. Fix: add a `units == "METER" && return
+  1000.0` branch (same factor as `"M"`).
+
 ## Code issues
 
 Missing features, cleanup candidates, and open design questions -- not
