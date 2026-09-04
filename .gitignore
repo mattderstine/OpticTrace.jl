@@ -1,3 +1,5 @@
 /Manifest.toml
 .DS_Store
 /test/plots/
+/docs/build/
+/docs/Manifest.toml
