@@ -384,4 +384,10 @@ printGeo([rfpp])
 ##
 
 using OpticTrace # load all the lens design stuff
+loadRICatalog!( "glass/schott")
+loadRICatalog!("glass/hikari")
+loadRICatalog!("glass/hoya")
+loadRICatalog!("glass/ohara")
+path = filePickerDialog("." ,mode = :directory)
+loadAGFCatalog!("/Users/matt/Development/Software/Zemax/Glasscat")
 zemaxBrowser(".")

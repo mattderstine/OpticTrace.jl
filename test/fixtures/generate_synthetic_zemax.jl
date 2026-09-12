@@ -6,7 +6,7 @@
     Binary archive formats aren't hand-editable the way test_singlet.zmx
     is, so this readable/diffable generator is the auditable source of
     truth for those fixtures -- run it manually if the .zar/.zmf format
-    understanding in docs/zemax_reference.md / src/zemax.jl ever changes:
+    understanding in src/zemax.jl ever changes:
 
         julia --project=. test/fixtures/generate_synthetic_zemax.jl
 

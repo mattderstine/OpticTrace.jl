@@ -111,26 +111,54 @@ Fields:
     units::String                  - length units, from readZemax
     wavelengths::Vector{Float64}   - fixed 24-element wavelength array, from readZemax
     zsurfs::Vector{ZemaxSurf}      - parsed surfaces, from readZemax
+    geo::Union{Vector{AbstractSurface},Nothing}  - built geometry from
+        readZemaxSystem, for the geometry preview plot; nothing if it
+        couldn't be built (see geoError)
+    geoError::Union{String,Nothing}  - error message when geo is
+        nothing (e.g. an unsupported Zemax surface type or a MODE NSC
+        file, see readZemaxSystem); nothing when geo was built
+        successfully. Exactly one of geo/geoError is nothing.
 """
 struct ZemaxFileSummary
     name::String
     units::String
     wavelengths::Vector{Float64}
     zsurfs::Vector{ZemaxSurf}
+    geo::Union{Vector{AbstractSurface},Nothing}
+    geoError::Union{String,Nothing}
 end
 
 """
-    zemaxFileSummary(path::String) -> ZemaxFileSummary
+    zemaxFileSummary(path::String; glassCatalog = defaultGlassCatalog) -> ZemaxFileSummary
 
 Read and summarize a `.zmx` file at `path` via [`readZemax`](@ref). This is
 the single code path the browser UI uses to render a `.zmx` file's fields,
 whether `path` is a file found directly in the directory tree or a
 temporary file extracted from inside an archive (see
-[`zemaxEntitySummary`](@ref)).
+[`zemaxEntitySummary`](@ref)). Also builds the geometry (via
+[`readZemaxSystem`](@ref), mirroring [`viewZemaxFile`](@ref)'s own
+"parse, then build geometry" sequence -- `glassCatalog` is forwarded to
+it unchanged, same keyword/default as `readZemaxSystem` itself) for the
+geometry preview plot; a file using a still-unsupported Zemax surface
+type, a material missing from `glassCatalog`, or a `MODE NSC` file
+fails only at that stage (`readZemax` itself never throws on those), so
+the failure is caught and stored in the returned
+[`ZemaxFileSummary`](@ref)'s `geoError` rather than propagated -- the
+surface table must still render even when the plot can't be built. The
+browser UI itself always uses the default `glassCatalog` (no catalog
+picker); the keyword exists so tests can exercise the geometry-building
+success path against fixtures with fictional material names not in the
+real, machine-local catalog (see `test/zemax.jl`'s own `testCatalog`
+pattern).
 """
-function zemaxFileSummary(path::String)::ZemaxFileSummary
+function zemaxFileSummary(path::String; glassCatalog = defaultGlassCatalog)::ZemaxFileSummary
     zsurfs, header = readZemax(path)
-    return ZemaxFileSummary(header.name, header.units, header.wavelengths, zsurfs)
+    geo, geoError = try
+        readZemaxSystem(path; glassCatalog).geo, nothing
+    catch e
+        nothing, sprint(showerror, e)
+    end
+    return ZemaxFileSummary(header.name, header.units, header.wavelengths, zsurfs, geo, geoError)
 end
 
 """
@@ -291,14 +319,63 @@ end
 =#
 
 """
+    renderGeometryPreview(summary::ZemaxFileSummary)
+
+Render a live, interactive 3D preview of `summary.geo` via
+[`plotGeometry3D`](@ref), sized to fill its container -- see
+[`renderZemaxFileSummary`](@ref)'s docstring for the flex-column
+ancestor chain (all the way up to [`zemaxBrowserApp`](@ref)'s
+`height: 100vh` root) that gives this container a real, non-shrink-
+wrapped height for it to fill. The `Figure` is wrapped in
+`WGLMakie.WithConfig(fig; resize_to = :parent)` rather than placed bare
+-- `WGLMakie` (imported, not `using`'d, in `src/OpticTrace.jl`, for the
+same collision-avoidance reason as `Bonito`) defines
+`Bonito.jsrender(session, ::Makie.FigureLike)` (and, for `WithConfig`,
+an analogous method), so Bonito's own rendering pipeline dispatches to
+it automatically, and `resize_to = :parent` makes the rendered WebGL
+canvas track this returned `div`'s actual on-screen size (via a JS
+`ResizeObserver` on the canvas's grandparent -- confirmed by reading
+WGLMakie's `get_resize_element` in its bundled JS -- which is exactly
+this `div`) rather than staying at `plotGeometry3D`'s nominal pixel
+`size`, so the plot ends up matching the preview column's width and
+the remaining vertical space, and keeps tracking it if the window is
+resized. This still gives a mouse-manipulable (rotate/pan/zoom, via
+`plotGeometry3D`'s `cam3d_cad!` camera) view over the live session, not
+a static snapshot. When `summary.geo` is `nothing` (geometry
+construction failed -- see [`ZemaxFileSummary`](@ref)'s `geoError`
+field), renders that error message instead, with matching `flex`
+sizing so the layout doesn't jump between the two cases.
+"""
+function renderGeometryPreview(summary::ZemaxFileSummary)
+    fillStyle = Bonito.Styles("flex" => "1 1 auto", "min-height" => "0", "width" => "100%")
+    summary.geo === nothing &&
+        return Bonito.DOM.div("Geometry preview unavailable: ", summary.geoError; style = fillStyle)
+    fig, _ax = plotGeometry3D(summary.geo; size = (800, 600))
+    return Bonito.DOM.div(WGLMakie.WithConfig(fig; resize_to = :parent); style = fillStyle)
+end
+
+"""
     renderZemaxFileSummary(summary::ZemaxFileSummary)
 
 Render a [`ZemaxFileSummary`](@ref) as a Bonito DOM node: name, units, the
-populated (nonzero) wavelengths, and a table with one row per surface
+populated (nonzero) wavelengths, a table with one row per surface
 showing the same fields [`printZemaxSurfs`](@ref) already treats as the
 interesting ones (type, curvature, distance, material, radius, stop,
-conic, coating, comm). Used both for a `.zmx` file found directly in the
-tree and for a previewable `.zmx` entity found inside an archive.
+conic, coating, comm), and a geometry preview plot below the table (see
+[`renderGeometryPreview`](@ref)). Used both for a `.zmx` file found
+directly in the tree and for a previewable `.zmx` entity found inside
+an archive.
+
+The returned `div` is itself a `flex-direction: column` flex container
+with `flex: 1 1 auto`, so it stretches to fill the preview column's
+full height (that column, in turn, is a flex column too -- see
+[`zemaxBrowserApp`](@ref)/[`archiveContentPane`](@ref)) and lets the
+geometry preview -- the one child with its own `flex: 1 1 auto` (see
+[`renderGeometryPreview`](@ref)) -- grow to consume whatever's left
+below `header`/the surface table, which stay their natural content
+size. `min-height: 0` overrides flex's default `min-height: auto`,
+which would otherwise stop this `div` (and in turn the plot) from
+shrinking below its content's intrinsic height when space is tight.
 """
 function renderZemaxFileSummary(summary::ZemaxFileSummary)
     usedWavelengths = filter(!=(0.0), summary.wavelengths)
@@ -309,7 +386,7 @@ function renderZemaxFileSummary(summary::ZemaxFileSummary)
     )
     headerRow = Bonito.DOM.tr(
         Bonito.DOM.th("#"), Bonito.DOM.th("type"), Bonito.DOM.th("curvature"),
-        Bonito.DOM.th("distance"), Bonito.DOM.th("material"), Bonito.DOM.th("radius"),
+        Bonito.DOM.th("distance"), Bonito.DOM.th("material"), Bonito.DOM.th("semiDiam"),
         Bonito.DOM.th("stop"), Bonito.DOM.th("conic"), Bonito.DOM.th("coating"), Bonito.DOM.th("comm"),
     )
     rows = [Bonito.DOM.tr(
@@ -318,7 +395,9 @@ function renderZemaxFileSummary(summary::ZemaxFileSummary)
                 Bonito.DOM.td(string(s.stop)), Bonito.DOM.td(string(s.conic)), Bonito.DOM.td(s.coating),
                 Bonito.DOM.td(s.comm),
             ) for (i, s) in enumerate(summary.zsurfs)]
-    return Bonito.DOM.div(header, Bonito.DOM.table(headerRow, rows...))
+    return Bonito.DOM.div(header, Bonito.DOM.table(headerRow, rows...), renderGeometryPreview(summary);
+                           style = Bonito.Styles("display" => "flex", "flex-direction" => "column",
+                                                  "flex" => "1 1 auto", "min-height" => "0"))
 end
 
 """
@@ -556,28 +635,20 @@ function zemaxBrowserApp(rootDir::String; serverRef = nothing, closeOnDisconnect
                 Bonito.DOM.div(middle; style = Bonito.Styles("width" => "360px", "flex" => "0 0 auto",
                                                               "overflow-y" => "auto", "padding" => "0 12px")),
                 Bonito.DOM.div(preview; style = Bonito.Styles("flex" => "1 1 auto", "overflow-y" => "auto",
-                                                               "padding" => "0 12px"));
+                                                               "padding" => "0 12px", "display" => "flex",
+                                                               "flex-direction" => "column"));
                 style = Bonito.Styles("display" => "flex", "flex" => "1 1 auto"),
             )
         end
+        # height:100vh (rather than the previous shrink-to-content sizing,
+        # with align-items:flex-start) gives every column a definite height
+        # to stretch to -- needed so the preview column's geometry plot (see
+        # renderGeometryPreview) can flex-grow to fill the space below its
+        # table down to the bottom of the window, rather than just being as
+        # tall as its own content.
         return Bonito.DOM.div(_THEME_STYLES, _TABLE_CSS, _TABLE_DARK_MODE_CSS, fileColumn, detailColumns;
-                               style = Bonito.Styles("display" => "flex", "align-items" => "flex-start"))
+                               style = Bonito.Styles("display" => "flex", "height" => "100vh"))
     end
-end
-
-function openInBrowser(url::String)
-    try
-        if Sys.isapple()
-            run(`open $url`)
-        elseif Sys.iswindows()
-            run(`cmd /c start $url`)
-        else
-            run(`xdg-open $url`)
-        end
-    catch e
-        @warn "Could not automatically open a browser tab; visit $url manually" exception = e
-    end
-    return nothing
 end
 
 """
@@ -586,8 +657,10 @@ end
 
 Launch a standalone Zemax file browser: starts a `Bonito.Server` on
 `127.0.0.1:port` serving [`zemaxBrowserApp`](@ref)`(rootDir)`, optionally
-opens a browser tab pointing at it (`openBrowser`), and returns the live
-`Server` immediately without blocking. By default (`closeOnDisconnect=true`,
+opens a browser tab pointing at it (`openBrowser`, via `openInBrowser`
+-- defined in `UItools/filepicker.jl` and shared with that file's
+[`filePickerDialog`](@ref)), and returns the live `Server` immediately
+without blocking. By default (`closeOnDisconnect=true`,
 since this opens exactly one tab and is meant to live only as long as
 that tab does) the server closes itself once its tab/window closes --
 after a short grace period (see [`_SERVER_CLOSE_GRACE_PERIOD`](@ref)) so

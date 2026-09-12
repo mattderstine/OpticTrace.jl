@@ -837,8 +837,8 @@ end
 #=
     .zar archive reading -- a .zar bundles a .zmx file with its
     supporting data (e.g. a glass catalog) using a small custom binary
-    framing (not a zip container, despite appearances). Ported from the
-    Python reference kept in docs/zemax_reference.md.
+    framing (not a zip container, despite appearances). Ported from a
+    Python reference implementation.
 =#
 
 """
@@ -886,8 +886,7 @@ growing by 1 bit each time the dictionary size crosses a power of two,
 and the classic LZW "KwKwK" fallback when a codeword isn't yet in the
 dictionary.
 
-Ported from the Python reference kept in `docs/zemax_reference.md`
-(itself adapted from
+Ported from a Python reference implementation (itself adapted from
 https://gist.github.com/BertrandBordage/611a915e034c47aa5d38911fc0bc7df9),
 reading bits directly from `compressed` via [`readBits`](@ref) rather
 than materializing a giant binary string.
@@ -956,7 +955,7 @@ An unrecognized version byte throws an error rather than guessing.
 Numeric fields are read assuming a little-endian host, as is standard
 on essentially all current hardware.
 
-Ported from the Python reference kept in `docs/zemax_reference.md`.
+Ported from a Python reference implementation.
 """
 function readZemaxArchive(filename::String)::Vector{ZarEntry}
     entries = ZarEntry[]
@@ -1076,7 +1075,7 @@ end
     rayopt's zemax.py (https://github.com/quartiq/rayopt/blob/master/rayopt/zemax.py),
     which is itself the same convention several independent tools rely
     on. Empirically validated in development against real vendor
-    catalogs (see docs/zemax_reference.md).
+    catalogs.
 =#
 
 """

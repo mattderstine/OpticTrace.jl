@@ -96,6 +96,16 @@
         @test_throws ErrorException OpticTrace.filePicker(joinpath(tmp, "a.txt"))
     end
 
+    @testset "filePickerDialog argument errors" begin
+        # All of these are checked before any Bonito.Server is started, so
+        # none of these calls open a port or a browser tab.
+        tmp = makeFixtureTree()
+        @test_throws ArgumentError OpticTrace.filePickerDialog(tmp; mode = :multipleFiles)
+        @test_throws ArgumentError OpticTrace.filePickerDialog(tmp; mode = :bogus)
+        @test_throws ArgumentError OpticTrace.filePickerDialog(tmp; sortBy = :bogus)
+        @test_throws ErrorException OpticTrace.filePickerDialog(joinpath(tmp, "a.txt"))
+    end
+
     @testset "Bonito UI smoke tests" begin
         import Bonito
 

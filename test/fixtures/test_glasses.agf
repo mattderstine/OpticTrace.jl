@@ -1,0 +1,14 @@
+CC 2024-01-01
+NM BAF11TEST 1 588.0 1.66672 47.0 0 0 0
+GC synthetic Schott-formula test glass (coefficients from Hoya BAF11)
+ED 0.0 0.0 0.0 0.0
+CD 2.7272955 -0.013470236 0.014809271 0.0019615335 -0.00019787663 1.0851117e-05 0 0 0 0
+LD 0.365 2.325
+NM NBK7TEST 2 587.0 1.5168 64.17 0 0 0
+GC synthetic Sellmeier1-formula test glass (coefficients from N-BK7)
+CD 1.03961212 0.00600069867 0.231792344 0.0200179144 1.01046945 103.560653 0 0 0 0
+LD 0.3 2.5
+NM HERZTEST 3 0.0 0.0 0.0 0.0 0.0 0.0
+GC synthetic Herzberger-formula glass, unsupported dispform -- should be skipped
+CD 1.0 2.0 3.0 4.0 5.0 6.0 0 0 0 0
+LD 0.4 1.0

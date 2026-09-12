@@ -59,6 +59,15 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
   - `mesh_primitives.jl` — `GeometryBasics`/`MeshIO` mesh construction.
   - `lens_refractive_index.jl`, `lens_edmund.jl`, `lens_thorlabs.jl` —
     glass/catalog data and refractive index models.
+  - `agf.jl` — loads glasses from Zemax `.agf` glass-catalog text files
+    (`loadAGFCatalog!`/`loadAGFCatalog`, paralleling
+    `lens_refractive_index.jl`'s `loadRICatalog!`/`loadRICatalog`, and
+    populating the same `defaultGlassCatalog` dict) by reusing the
+    already-implemented `riFormula1`/`riFormula3` dispersion math rather
+    than new formula code -- only AGF dispersion-formula codes 1
+    (Schott) and 2 (Sellmeier1) are supported, since those are the only
+    ones that are exact special cases of `riFormula3`/`riFormula1`
+    respectively; other codes are skipped (see `TODO.md` #37).
   - `zemax.jl` — Zemax file import (`.zmx` parsing, `.zar`/`.zmf`
     archive reading and extraction). `readZemaxSystem` (returning an
     `OpticalSystem`, `lens_definitions.jl`) is the canonical entry
@@ -102,8 +111,12 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
   - `plotting.jl` — GLMakie-based visualization.
   - `printing.jl` — `Base.show`/pretty-printing for core types.
 - `test/runtests.jl` includes `test/allocations.jl` plus one file per
-  phase of a now-complete, phased test-writing effort (see `TODO.md`'s
-  "Test-writing plan" section — all 12 phases are done): `foundations.jl`,
+  phase of a now-complete, phased test-writing effort (originally
+  planned as a "Test-writing plan" section in `TODO.md`, removed once
+  all 12 phases were done -- see `git log -p -- TODO.md` if the
+  original plan's wording is ever needed; `FIXED.md` entries mention
+  individual phases in passing, e.g. "phase 8", "phase 12"):
+  `foundations.jl`,
   `optics.jl`, `surface_builders.jl`, `mesh_primitives.jl`,
   `trace_geometry.jl`, `surface_manipulation.jl`, `characterization.jl`,
   `refractive_index.jl`, `lens_catalogs.jl`, `zemax.jl`,
@@ -143,17 +156,20 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
   Zemax) would fix that but hasn't been done yet.
 - No top-level `scripts/` directory exists in this repo (the closest
   thing, `test/fixtures/generate_synthetic_zemax.jl`, is a test-fixture
-  maintenance script, not a general scripts area). A `docs/` directory
-  does exist, but only holds `docs/zemax_reference.md` — **note this
-  file's own purpose has changed since it was created**: it was
-  originally kept as a Python reference for a *future* `.zar`-archive-
-  reading feature, but that feature (plus `.zmf` catalog reading) is now
-  fully implemented in `src/zemax.jl` (see `FIXED.md` #5/#23) and
-  `src/zemax_browser.jl` builds a UI on top of it — the file is now kept
-  as historical reference for the binary format layouts the Julia code
-  was ported from, not a pointer to unstarted work. There's still no
-  generated/Documenter.jl-style documentation site (unlike what
-  `.github/instructions/copilot-instructions.md` implies).
+  maintenance script, not a general scripts area). `docs/` holds a
+  minimal Documenter.jl site (`docs/make.jl`, `docs/src/index.md`,
+  `docs/src/api.md`, plus `docs/Project.toml`; `docs/build/` and
+  `docs/Manifest.toml` are gitignored local build output), which
+  auto-generates its API reference page from `src/`'s own docstrings via
+  `@autodocs` rather than listing functions by hand -- so it needs no
+  maintenance as functions are added/removed. Build it locally with
+  `julia docs/make.jl` (`Pkg.instantiate()`s the `docs/` environment
+  itself); it's not wired into CI or published anywhere yet. (There used
+  to also be a `docs/references/zemax_reference.md` -- a ported Python
+  reference for `.zar`/`.zmf` binary-format parsing, from back before
+  that parsing was implemented in `src/zemax.jl`, see `FIXED.md` #5/#23
+  -- removed as no longer needed now that `src/zemax.jl` is the working
+  implementation.)
 
 ## Code conventions actually used in this codebase
 
@@ -225,8 +241,10 @@ but note where it diverges from the code as it exists today:
   header for why, and `FIXED.md`, which archives resolved entries under
   their original number rather than deleting them) — don't renumber
   surrounding items when removing or adding one.
-- The phased test-writing effort that built out `test/` (see `TODO.md`'s
-  "Test-writing plan") is complete: every real, reachable function in
+- The phased test-writing effort that built out `test/` (see the note
+  under "Project structure" above -- its planning section has since
+  been removed from `TODO.md`) is complete: every real, reachable
+  function in
   `src/` has functional coverage, or an explicit, documented reason it's
   excluded (unused *and* unexported, or entirely non-functional).
   Memory-allocation/type-stability testing is explicitly out of scope

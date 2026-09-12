@@ -14,6 +14,13 @@
         @test OpticTrace.zemaxFileKind("foo") === nothing
     end
 
+    # test_singlet.zmx uses the fictional material "TESTGLASS" (see
+    # test/zemax.jl's own testCatalog), which is never in the real,
+    # machine-local defaultGlassCatalog -- so building geometry against
+    # it needs this same substitute catalog, passed via
+    # zemaxFileSummary's glassCatalog keyword.
+    testCatalog = Dict{AbstractString, Any}("TESTGLASS" => (λ -> 1.6), "DEFAULT" => OpticTrace.rInDef)
+
     @testset "zemaxFileSummary" begin
         summary = OpticTrace.zemaxFileSummary(zmxPath)
         @test summary isa OpticTrace.ZemaxFileSummary
@@ -21,6 +28,27 @@
         @test summary.units == "MM"
         @test length(summary.wavelengths) == 24
         @test length(summary.zsurfs) == 4
+
+        @testset "geo: default glassCatalog can't resolve TESTGLASS" begin
+            @test summary.geo === nothing
+            @test occursin("TESTGLASS", summary.geoError)
+        end
+
+        @testset "geo: built successfully with a matching glassCatalog" begin
+            summaryWithGeo = OpticTrace.zemaxFileSummary(zmxPath; glassCatalog = testCatalog)
+            @test summaryWithGeo.geo isa Vector{OpticTrace.AbstractSurface}
+            @test summaryWithGeo.geoError === nothing
+            @test length(summaryWithGeo.geo) == length(summary.zsurfs) - 1  # excludes the object surface
+        end
+
+        @testset "geo: MODE NSC rejected" begin
+            nscFixture = tempname() * ".zmx"
+            write(nscFixture, replace(read(zmxPath, String), "MODE SEQ" => "MODE NSC"))
+            nscSummary = OpticTrace.zemaxFileSummary(nscFixture; glassCatalog = testCatalog)
+            @test nscSummary.geo === nothing
+            @test occursin("MODE NSC", nscSummary.geoError)
+            rm(nscFixture)
+        end
     end
 
     @testset "listZemaxArchiveEntities" begin
@@ -149,6 +177,12 @@
             @test occursin("Test Singlet", html)
             @test occursin("EVENASPH", html)
             @test occursin("TESTGLASS", html)
+            # contentPane always uses the default glassCatalog, which can't
+            # resolve this fixture's fictional "TESTGLASS" material -- so
+            # the geometry preview falls back to its error message here
+            # (see the "renderGeometryPreview" smoke tests below for the
+            # successful-build/live-plot case, using a matching catalog).
+            @test occursin("Geometry preview unavailable", html)
         end
 
         @testset "contentPane .zar" begin
@@ -178,6 +212,27 @@
             html = renderToString(() -> OpticTrace.renderTextPreview("SYNTH.AGF", bytes))
             @test occursin("SYNTH.AGF", html)
             @test occursin("synthetic glass catalog stub", html)
+        end
+
+        @testset "renderGeometryPreview" begin
+            @testset "geo unavailable" begin
+                summary = OpticTrace.zemaxFileSummary(zmxPath)  # default catalog: geo === nothing
+                html = renderToString(() -> OpticTrace.renderGeometryPreview(summary))
+                @test occursin("Geometry preview unavailable", html)
+                @test occursin("TESTGLASS", html)
+            end
+
+            @testset "live WGLMakie plot embedded" begin
+                summary = OpticTrace.zemaxFileSummary(zmxPath; glassCatalog = testCatalog)
+                html = renderToString(() -> OpticTrace.renderGeometryPreview(summary))
+                # A rendered WebGL canvas is the concrete signal that
+                # WGLMakie's Bonito.jsrender actually picked up the Figure
+                # and embedded an interactive plot, not just placeholder
+                # text.
+                @test occursin("<canvas", html)
+                @test occursin(r"wglmakie"i, html)
+                @test !occursin("Geometry preview unavailable", html)
+            end
         end
     end
 

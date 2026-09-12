@@ -21,6 +21,7 @@ Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
 YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [compat]
@@ -28,6 +29,7 @@ Bonito = "5.2.0"
 ForwardDiff = "1.3.2"
 MeshIO = "0.5.3"
 Optim = "2.0.0"
+WGLMakie = "0.13.13"
 julia = "1.12"
 
 [extras]

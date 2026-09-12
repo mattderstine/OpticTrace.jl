@@ -320,9 +320,8 @@ list doesn't.
 
   **Fixed**: removed the unused `ZemaxGeometry` struct and its
   docstring, and the two stale commented-out lines inside `readZemax`
-  that referenced constructing one. The stale docstring copy in
-  `docs/zemax_reference.md` was removed too. No test changes needed --
-  nothing referenced the type.
+  that referenced constructing one. No test changes needed -- nothing
+  referenced the type.
 
 - **2.** `src/zemax.jl`: `readZemax`'s `basept`/`dir` keyword args are
   accepted but not actually used during parsing (the
@@ -349,11 +348,10 @@ list doesn't.
   `"basept/dir kwargs accepted but not used during parsing"` sub-testset
   (which tested exactly the removed behavior) was removed.
 
-- **5.** `src/zemax.jl` / `docs/zemax_reference.md`: reading `.zar`
-  archives (Zemax file bundles) wasn't implemented at all -- only the
-  Python reference implementation existed, kept in
-  `docs/zemax_reference.md` as a starting point for a future
-  `readZemaxArchive`-style function.
+- **5.** `src/zemax.jl`: reading `.zar` archives (Zemax file bundles)
+  wasn't implemented at all -- only a ported Python reference
+  implementation existed (later removed once no longer needed) as a
+  starting point for a future `readZemaxArchive`-style function.
 
   **Fixed**: ported the reference implementation to `src/zemax.jl` as
   `ZarEntry`, `lzwDecompress`, `readZemaxArchive`, `listZemaxArchive`,
@@ -529,10 +527,9 @@ list doesn't.
   vendors like Edmund/Thorlabs publish stock lens families) wasn't
   implemented, and wasn't previously tracked anywhere in this repo --
   found and fixed in the same pass as #5 above. The format is
-  undocumented by Ansys/Zemax; `docs/zemax_reference.md` now keeps the
-  community reverse-engineering reference this was ported from
-  (`rayopt`'s `zemax.py`), including the record layout and the
-  obfuscation formula.
+  undocumented by Ansys/Zemax; this was ported from the community
+  reverse-engineering reference `rayopt`'s `zemax.py`, including the
+  record layout and the obfuscation formula.
 
   **Fixed**: added `ZmfEntry`, `zmfDeobfuscate`, `readZmfCatalog`,
   `listZmfCatalog`, and `extractZmfCatalog` (selected-lenses and

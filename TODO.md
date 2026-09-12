@@ -282,3 +282,71 @@ already resolved.
   that test the actual ray tracing at the system level. This should
   be done by first checking the operation on the sample files and then 
   writing new .zmx files with surface tests.
+- **37.** `src/agf.jl`: `getAGFRefractiveIndexFunc` only supports AGF
+  dispersion-formula codes 1 (Schott) and 2 (Sellmeier1) -- the two
+  that happen to be exact special cases of the already-implemented
+  `riFormula3`/`riFormula1` (see the function's docstring for the
+  coefficient-vector mapping), covering the large majority of glasses
+  in real SCHOTT/OHARA/HOYA/CDGM `.agf` catalogs. Other AGF formula
+  codes (Sellmeier2/3/4/5, Herzberger, Conrady, Handbook of Optics 1/2,
+  Extended1/2/3) aren't implemented -- glasses using them are skipped
+  (same pattern as unsupported Zemax surface `TYPE`s, bug #4) rather
+  than erroring. Adding real support means new dispersion-formula math,
+  deliberately deferred rather than done as part of the initial `.agf`
+  loader.
+- **38.** `src/lens_refractive_index.jl`/`src/agf.jl`: glass import and
+  index-lookup only handle glasses defined by a dispersion *formula* --
+  `getRefractiveIndexFunc` (`lens_refractive_index.jl`) returns
+  `nothing` and is skipped by `loadRICatalog!` whenever a
+  RefractiveIndex.info YAML record has no `"coefficients"` entry (e.g.
+  `"tabulated n"`/`"tabulated nk"` records, which list discrete
+  `wavelength, n[, k]` rows instead), and `getAGFRefractiveIndexFunc`
+  (`agf.jl`) likewise only covers formula-based `dispform` codes (see
+  #37). Every `defaultGlassCatalog` entry today is a closed-form
+  `wavelength -> index` function; there's no representation for a
+  glass whose index only exists as a tabulated data set, and no
+  interpolation path (`DataInterpolations`, already a dependency, would
+  be the natural fit, as used elsewhere in this package) to turn one
+  into a `wavelength -> index` function of the same shape. Until this
+  is done, any real-world glass that's tabulated-only is silently
+  unavailable via either loader.
+
+  ## New Features
+
+  ### More General 'OptcialSystem'
+
+  The structure needs to be updated to enable the creation of the geometry
+  by a function or the updating of the geometry by a function.  This function
+  could either create the surfaces using the data structure of the package
+  potentially calculating key parameters as the data structure is generated.
+  Examples of this might be the functions for catalog lenses or functions written
+  using these catalog lens functions. It might also be a function that
+  computes the parameters for an existing structure and updates these. Examples
+  might be pickups and solves. Finally, this might be nothing more than
+  selecting a different wavelength and propagating the refractive index down the chain.
+  - intial idea is to incorporate extendedGeometry as part of this and extend the
+  implemetation to include modification of existing geometries.
+  - 
+
+  ### Improve handing of multiple wavelengths
+
+  The first thought would be to change the refractive indexs of the system to be an array 
+  that corresponds to refractive index at the system wavelengths. Alternatively, this might
+  be a "pointer" to this array that is managed at the OpticalSystem level.
+  - how do we retain compatibility with older code?
+  - look to the Zemax model to have a primary wavelength
+
+  ### Save and retrieve designs
+
+  It would be nice to have a way to save and restore lens geometries and OpticalSystems that is
+  insensitive to the current data structure specifics.
+  - functional modifier code would be a bigger problem especially if pickups and solves are
+  programatic rather than data structures
+
+  ### Update the format of the docstrings
+
+  Make them less verbose, make them more uniform, use markdown formating
+
+  ### add a preview plot of the Zemax file being shown in zemaxBrowser
+
+  Add a plot in the 3rd column below the table. Load the file, and plot the geometry when a zemax file is selected

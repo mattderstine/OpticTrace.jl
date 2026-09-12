@@ -18,7 +18,7 @@
     src/plotting.jl's unqualified use of GLMakie's `Button`.
 =#
 
-export filePicker
+export filePicker, filePickerDialog
 
 """
     FILE_PICKER_MODES
@@ -234,19 +234,26 @@ end
 Shared `:root` CSS custom properties for this package's two Bonito UIs
 (this file's [`filePicker`](@ref) and `zemax_browser.jl`'s
 `zemaxBrowser`) -- namespaced `--optictrace-*` so they can't collide with
-Bonito's own `--bonito-widget-*` vars or a host page's variables.
-`filePicker` itself doesn't inject this (it has no notion of owning a
-page -- see its docstring), so each page-owning entry point
+Bonito's own `--bonito-widget-*` vars or a host page's variables. Also
+zeroes the default (browser UA stylesheet) `body` margin -- needed so
+`zemaxBrowserApp`'s root `div`, sized to exactly `height: 100vh` for its
+columns to stretch into (see `zemaxBrowserApp`/`renderGeometryPreview`),
+doesn't overflow the viewport by that margin and add a spurious
+scrollbar. `filePicker` itself doesn't inject this (it has no notion of
+owning a page -- see its docstring), so each page-owning entry point
 ([`filePickerApp`](@ref) here, `zemaxBrowserApp` there) injects it once
 as a leading child of its root `DOM.div`; injecting it from both is a
 harmless no-op since `global_stylesheets` is a set keyed by the `Styles`
 value itself.
 """
-const _THEME_STYLES = Bonito.Styles(Bonito.CSS(":root",
-    "--optictrace-border" => "#ccc",
-    "--optictrace-error" => "#b00020",
-    "--optictrace-muted-fg" => "gray",
-))
+const _THEME_STYLES = Bonito.Styles(
+    Bonito.CSS(":root",
+        "--optictrace-border" => "#ccc",
+        "--optictrace-error" => "#b00020",
+        "--optictrace-muted-fg" => "gray",
+    ),
+    Bonito.CSS("body", "margin" => "0"),
+)
 
 """
     _SCROLLABLE_LIST_STYLE
@@ -478,5 +485,122 @@ function filePickerApp(rootDir::String; mode::Symbol = :file,
         component, _selected, _active = filePicker(rootDir; mode = mode, extensions = extensions,
                                                      showHidden = showHidden, sortBy = sortBy)
         return Bonito.DOM.div(_THEME_STYLES, component)
+    end
+end
+
+"""
+    openInBrowser(url::String)
+
+Open `url` in the system's default web browser: `open` on macOS,
+`cmd /c start` on Windows, `xdg-open` elsewhere. Used by
+[`filePickerDialog`](@ref) here and by `zemax_browser.jl`'s
+`zemaxBrowser` to launch their respective standalone browser UIs.
+Any failure (e.g. no such command on an unusual platform) is caught
+and logged as a `@warn` with `url` included, rather than propagating,
+so the caller's own server still starts up fine even if the tab can't
+be opened automatically -- the user can always visit `url` by hand.
+"""
+function openInBrowser(url::String)
+    try
+        if Sys.isapple()
+            run(`open $url`)
+        elseif Sys.iswindows()
+            run(`cmd /c start $url`)
+        else
+            run(`xdg-open $url`)
+        end
+    catch e
+        @warn "Could not automatically open a browser tab; visit $url manually" exception = e
+    end
+    return nothing
+end
+
+"""
+    filePickerDialog(rootDir::String; mode::Symbol=:file, extensions=nothing,
+                     showHidden::Bool=false, sortBy::Symbol=:name,
+                     port::Integer=8082, openBrowser::Bool=true) -> String
+
+Blocking, browser-based file/directory dialog: launches a
+`Bonito.Server` on `127.0.0.1:port` serving a single [`filePicker`](@ref)
+(`rootDir`, `mode`, `extensions`, `showHidden`, `sortBy` are passed
+straight through -- see that function's docstring for their meaning),
+opens a browser tab pointing at it via [`openInBrowser`](@ref) (unless
+`openBrowser=false`), **blocks the calling task** until the user
+either commits a selection (Select, or double-clicking a file/directory
+row), clicks Cancel, or closes the browser tab/window outright, then
+closes the server and returns.
+
+`mode` must be `:file` or `:directory` -- `:multipleFiles` is rejected
+with an `ArgumentError` before anything is opened, since this function
+always returns a single `String`, never a vector. (Use [`filePicker`](@ref)
+directly, embedded in your own Bonito app, if you need multi-file
+selection.)
+
+Returns the selected path as a `String`. If the user clicks Cancel or
+closes the browser tab/window without selecting anything, returns
+`""` (an empty string) -- this is a plain return value, not an
+exception, so callers must check for it explicitly to detect "nothing
+was chosen".
+
+After a selection or Cancel, this makes a best-effort attempt to close
+the browser tab itself (via a `window.close()` call sent to the page).
+Whether that actually closes the tab depends on the browser: most
+browsers only allow a script to close a tab/window it opened itself
+via JavaScript, and this tab was instead opened by the OS-level `open`/
+`start`/`xdg-open` commands inside [`openInBrowser`](@ref) -- so on many
+browsers the tab will simply go inert (showing its last state,
+disconnected) rather than actually closing, and the user may need to
+close it by hand. Either way, the local server itself is always shut
+down before this function returns.
+
+Throws an `ArgumentError` for `mode === :multipleFiles` or an
+unrecognized `mode`/`sortBy`, or an `ErrorException` if `rootDir` isn't
+a directory -- all checked before the server is started.
+"""
+function filePickerDialog(rootDir::String; mode::Symbol = :file,
+                           extensions::Union{Nothing,AbstractVector{<:AbstractString}} = nothing,
+                           showHidden::Bool = false, sortBy::Symbol = :name,
+                           port::Integer = 8082, openBrowser::Bool = true)
+    mode === :multipleFiles &&
+        throw(ArgumentError("filePickerDialog: mode :multipleFiles is not supported -- " *
+                             "this function always returns a single path"))
+    checkFilePickerMode(mode)
+    checkFilePickerSortMode(sortBy)
+    isdir(rootDir) || error("filePickerDialog: not a directory: $rootDir")
+
+    resultChannel = Channel{String}(1)
+    resolved = Ref(false)
+    resolve!(value::String) = begin
+        resolved[] && return nothing
+        resolved[] = true
+        put!(resultChannel, value)
+        return nothing
+    end
+
+    app = Bonito.App() do session
+        component, selected, active = filePicker(rootDir; mode = mode, extensions = extensions,
+                                                   showHidden = showHidden, sortBy = sortBy)
+        Bonito.on(active) do stillActive
+            stillActive && return
+            try
+                Bonito.evaljs(session, Bonito.js"window.close();")
+            catch e
+                @warn "Could not close the picker's browser tab automatically" exception = e
+            end
+            sleep(0.2)
+            resolve!(something(selected[], ""))
+        end
+        Bonito.on(session.on_close) do _closed
+            resolve!("")
+        end
+        return Bonito.DOM.div(_THEME_STYLES, component)
+    end
+
+    server = Bonito.Server(app, "127.0.0.1", Int(port))
+    try
+        openBrowser && openInBrowser(Bonito.online_url(server, "/"))
+        return take!(resultChannel)
+    finally
+        close(server)
     end
 end
