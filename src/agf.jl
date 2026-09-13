@@ -20,6 +20,15 @@ tag (`GC`, `ED`, `TD`, `OD`, `LD`, `IT`, `MW`, ...) is present in real
 `.agf` files but ignored here without error, since none of it is needed
 to evaluate the dispersion formulas this package supports.
 
+A record whose `NM` line's `dispform` field or `CD` line's coefficients
+can't be parsed as the expected type (seen in the wild: some vendor
+catalogs write the `dispform` field as a float, e.g. `1.00000000E+00`
+instead of `1`) is skipped with a printed message naming the source
+file, line number, and offending line -- consistent with how
+[`loadAGFCatalog!`](@ref) skips glasses with an unsupported dispersion
+formula code -- rather than throwing and aborting the whole catalog
+load.
+
 Returns a `Vector` of `(name::String, dispform::Int,
 coefficients::Vector{Float64})` named tuples, in file order.
 """
@@ -29,25 +38,39 @@ function readAGFRecords(path::AbstractString)
     dispform = 0
     coefficients = Float64[]
     havePendingRecord = false
+    skipPendingRecord = false
 
     function flush!()
-        if havePendingRecord
+        if havePendingRecord && !skipPendingRecord
             push!(records, (name = name, dispform = dispform, coefficients = coefficients))
         end
     end
 
-    for line in eachline(path)
+    for (lineNumber, line) in enumerate(eachline(path))
         tokens = split(strip(line))
         isempty(tokens) && continue
         tag = tokens[1]
         if tag == "NM"
             flush!()
             name = tokens[2]
-            dispform = parse(Int, tokens[3])
             coefficients = Float64[]
             havePendingRecord = true
-        elseif tag == "CD" && havePendingRecord
-            coefficients = map(x -> parse(Float64, x), tokens[2:end])
+            skipPendingRecord = false
+            try
+                dispform = parse(Int, tokens[3])
+            catch e
+                e isa ArgumentError || rethrow()
+                println("Skipping $name in $path (line $lineNumber): cannot parse dispersion-formula code as Int: $line")
+                skipPendingRecord = true
+            end
+        elseif tag == "CD" && havePendingRecord && !skipPendingRecord
+            try
+                coefficients = map(x -> parse(Float64, x), tokens[2:end])
+            catch e
+                e isa ArgumentError || rethrow()
+                println("Skipping $name in $path (line $lineNumber): cannot parse dispersion coefficients as Float64: $line")
+                skipPendingRecord = true
+            end
         end
     end
     flush!()
