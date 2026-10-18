@@ -1,7 +1,10 @@
 # Plan: wavefront error analysis (`wavefrontMap` and friends)
 
-Status: Step 0 in progress. Supersedes the quick `opdRel`-based path in
-`src/plotting.jl` (which stays as a legacy path).
+Status: Step 0 done (Zemax sign convention still open); Steps 1-4 done. The
+"Step N status" sections at the end record what was actually built and where it
+differs from the design text above; where they disagree, the status sections
+win. Supersedes the quick `opdRel`-based path in `src/plotting.jl` (which
+stays as a legacy path).
 
 ## Goal
 
@@ -28,42 +31,42 @@ wavefront-limited spot size and shape (PSF).
 | Legacy cross-check | Separate function `rmsWavefrontLegacy(...)` using `opdRel` over area-uniform ring samples, piston mean removed. Test oracle only; valid only inside the legacy envelope (on-axis, finite object, air image space). |
 | Extra phase | OPL = `Σ nᵢ·δᵢ + Σ surfacePhase(...)`; `surfacePhase` is a dispatch hook returning an OPL-equivalent length, default 0. Applied in the accumulation function, not inside `traceSurf` (leaves `Trace` and the hot path alone). |
 | Result type | New `WavefrontResult{T}` struct from a new `wavefrontMap`; `opdRel` and the three `plotOPD!` methods stay. Stats and plots take the struct. |
-| Reference | Real-ray exit pupil (chief + 4 offset rays, least-squares point, 3D, local frame); sphere centred on the chief image point; closed-form signed ray-sphere intersection in image space using the actual image-space index; plane reference when the pupil is at infinity. |
+| Reference | Real-ray exit pupil (4 probe rays from the pupil center tilted about the chief direction, least-squares point on the chief ray, 3D, global frame); sphere centred on the chief image point; closed-form signed ray-sphere intersection in image space using the actual image-space index; plane reference when the pupil is at infinity. |
 | Wavelength | `geo` already has its indices instantiated at one wavelength. `λ` is used for the phase hooks, the waves conversion, and PSF scaling, not for refractive index. |
 
 ## Data structures
 
-- `FieldPoint{T}` — object position (finite) or direction (collimated), mirroring `OpticalSystem.fieldType`.
-- `AbstractRayAimer` — chief-ray-aiming hook. `aimRay(aimer, system, field, λ, u, v) -> (status, Ray)`. Default `StopCenterAim` reproduces today's behavior; a later `IterativeAim` solves for launch direction. The same aimer launches the chief ray and every grid ray.
+- `ObjectPoint{T}` (finite point source) and `CollimatedField{T}` (object at infinity), subtypes of `AbstractFieldPoint{T}`.
+- `AbstractRayAimer` — chief-ray-aiming hook. `aimRay(aimer, geo, field, u, v) -> (status, Ray)`. Default `StopCenterAim` reproduces today's behavior; a later `IterativeAim` solves for launch direction. The same aimer launches the chief ray and every grid ray.
 - `AbstractPupilAmplitude` — apodization / input-beam hook: `UniformPupil`, `GaussianPupil`, `FunctionPupil(f(u,v))`, plus an angle-dependent variant. Final weight = apodization × product of surface `AmpData.trans`.
 - `WavefrontResult{T}` — grid `(u,v)`, mask, OPD in waves, weights, physical exit-pupil coordinates per ray, chief-ray data, reference-sphere data (centre, radius, image index), `λ`, `geoWavelength`, field.
 
-Entry points:
-- `wavefrontMap(system, field, λ; N=65, aimer, apodization, geoWavelength, ...) -> WavefrontResult`
-- `wavefrontMap(system, fields, λs) -> Matrix{WavefrontResult}`
+Entry points (as implemented):
+- `wavefrontMap(geo, field, λ; N=65, aimer, apodization, imageSurface, geoWavelength, ...) -> WavefrontResult` (or `nothing` after a warning)
+- Not implemented: methods taking an `OpticalSystem`/`ExtendedGeometry`, and `wavefrontMap(system, fields, λs) -> Matrix{WavefrontResult}` (see Deferred and `TODO.md`).
 
-Files: `src/wavefront.jl` (analysis, no Makie), included after `characterization.jl`; plot functions in `plotting.jl` or a new `wavefront_plots.jl` after it.
+Files: `src/wavefront.jl` (analysis, no Makie), included after `characterization.jl`; plot functions in `src/wavefront_plots.jl`, included after it.
 
 ## Core algorithm
 
 1. Chief ray via the aimer at `(u,v) = (0,0)`.
 2. Source wavefront: finite objects start in phase at the point source; collimated fields start in phase on a plane normal to the chief direction at the entrance pupil.
 3. Per-ray `OPL = Σ nᵢ·δᵢ + Σ surfacePhase(...)`.
-4. Exit pupil: chief ray plus four offset rays (±x, ±y); least-squares point on the chief ray's image-space line. If beyond a threshold or the rays are nearly parallel, switch to a plane reference.
+4. Exit pupil: four probe rays launched **from the pupil center**, tilted ±ε about the chief ray's launch direction in two perpendicular planes (not rays from the object point toward other pupil points, which converge at the image point, not the pupil); least-squares point on the chief ray's image-space line nearest the probes' image-space lines = image of the stop center. If the probes emerge parallel to the chief ray (RMS sine of the angle < `pupilInfinityRatio·ε`), the pupil is at infinity and the reference is a plane.
 5. Reference sphere centred on the chief image point, radius = path distance to the exit pupil point; closed-form signed intersection of each ray's last segment, in the actual image-space index.
 6. Subtract the chief ray's OPL (zero OPD at pupil centre). Mean-piston removal for statistics is separate; both are stored.
 
 ## Statistics, best focus, Strehl, spot
 
 - RMS: weighted, mean-removed. PV: max − min over unmasked samples, optional weight threshold.
-- Best focus: 1D minimization (`Optim`) of weighted variance over a shift δ of the sphere centre along the chief direction, re-evaluated analytically from stored last-ray data (no re-trace). Optional lateral shift (tilt removal).
-- Strehl: Maréchal `exp(-(2πσ)²)` and the FFT value (PSF peak / diffraction-limited peak).
-- Spot / PSF: pupil function `A·exp(i2πW)`, zero-padded (default 4×), FFT; image pitch `(λ/n)·R/(M·Δp)`; encircled-energy radii, x/y FWHM, second-moment ellipse. Plane reference: angle only.
-- Sampling sufficiency: `N = :auto` starts at 33 and doubles until RMS changes < 0.1% and the largest neighbour step < ~0.25 wave; warns at a cap.
+- Best focus: 1D minimization (`Optim`) of weighted variance over a shift δ of the sphere centre along the chief direction, re-evaluated analytically from stored last-ray data (no re-trace). Lateral shift (tilt removal) is not optimized.
+- Strehl: Maréchal `exp(-(2πσ)²)`; the reference-point value `|Σ w e^{i2πW}|²/(Σ w)²`; and the PSF peak (`PSFResult.strehl`).
+- Spot / PSF: a direct scalar-Debye ray sum (two matrix products, no FFT, no extra dependency) with the output pitch and window chosen freely; encircled-energy radii, x/y FWHM, second-moment ellipse; works unchanged for a plane reference. See the Step 3 status.
+- Sampling sufficiency: `N = :auto` (start at 33, double until RMS changes < 0.1% and the largest neighbour step < ~0.25 wave) is **not implemented**; `N` is a plain keyword (default 65).
 
 ## Plots
 
-`plotWavefront3D!`, `plotWavefrontHeatmap!`, `plotWavefrontCuts!`, and a combined `wavefrontFigure`; all take a `WavefrontResult`. Masked points are NaN. Display option `remove = :none | :piston | :pistonTilt`.
+`plotWavefront3D!`, `plotWavefrontHeatmap!`, `plotWavefrontCuts!`, and a combined `wavefrontFigure`; all take a `WavefrontResult`. Masked points are NaN. Display option `remove = :none | :piston | :pistonTilt | :pistonTiltFocus`.
 
 ## Wavelength handling
 
@@ -95,7 +98,8 @@ Files: `src/wavefront.jl` (analysis, no Makie), included after `characterization
 ## Deferred
 
 - Iterative ray aiming (hook exists).
-- Polychromatic / multi-field aggregation: needs a fixed image-plane pitch across wavelengths (resampling or chirp-z DFT), a reference-wavelength choice for lateral colour, and the wavelength re-instantiation task below.
+- Polychromatic / multi-field aggregation: needs a reference-wavelength choice for lateral colour and the wavelength re-instantiation task below. (The fixed-image-pitch concern is gone: `wavefrontPSF` takes any output pitch.)
+- `N = :auto` sampling sufficiency; `wavefrontMap` for `OpticalSystem`/`ExtendedGeometry`; a pupil surface other than `geo[1]`.
 - Radiometric (Jacobian) amplitude weighting.
 - Resampling to a uniform exit-pupil grid.
 - **Re-instantiating `geo` at a different wavelength.** Indices are baked into surfaces as numbers. Zemax import and catalogs hold `wavelength -> index` functions but nothing connects them to built surfaces. Needs a design (e.g. `geoAtWavelength(system, λ)`, or surfaces that keep an index function), preserving type parameters for `ForwardDiff` and the `traceGeometry!` allocation behavior.
@@ -187,3 +191,160 @@ running a scratch trace (plane-parallel plate, tilted ray, sphere, mirror).
   `step0.jl` in the session scratchpad (not in the repo). A regression test
   for the plate OPL (45.0) and the negative-delta case should be added to
   `test/wavefront.jl` as the first tests.
+
+
+## Step 1 status (implemented)
+
+Files: `src/wavefront.jl`, `test/wavefront.jl` (51 tests, wired into
+`runtests.jl`). Implemented: `ObjectPoint`/`CollimatedField`,
+`StopCenterAim` (the `AbstractRayAimer` hook), pupil amplitude types
+(`UniformPupil`, `GaussianPupil`, `FunctionPupil`, `AnglePupil`),
+`bendPhase`/`surfacePhase`/`pathLength`, real-ray exit pupil
+(`findExitPupil`), closed-form reference sphere (`oplToReference`,
+`referencePoint`), `WavefrontResult`, `wavefrontMap`, the `CDiffuser`
+warn-and-exit, the `ParaxialLensT` warning, and the `geoWavelength` check.
+`WAVEFRONT_OPD_SIGN` is the single sign constant.
+
+Not yet done (later steps): RMS/PV/best-focus/Strehl, PSF, plots, the
+`opdRel`-based cross-check function, Zernike, an `ExtendedGeometry`/
+`OpticalSystem` method of `wavefrontMap`, a `Base.show` for
+`WavefrontResult`, surface-transmission (`AmpData.trans`) in `weight`.
+
+Verified by tests: zero OPD for a perfect paraboloid (collimated) and a
+sphere with the point source at its center of curvature; defocus RMS =
+peak/(2√3) within 3% and the OPD flips sign with the shift; OPD scales by n
+in a medium of index n (image-space index is used); identical results after
+a rigid rotation + translation of the whole system; plane reference
+(exit pupil at infinity) and its large-sphere limit; user phase hook adds
+exactly `κ·x`; apodization weights; the warn/exit paths.
+
+Findings and decisions made while implementing:
+- **A plane reference is a limit of the sphere, not a "plane at the
+  chief point".** For an exit pupil at infinity the reference sphere is
+  centred on the image point with `R → ∞`; the constant `−σ·R` cancels and
+  the OPD is the path to the plane through the image point normal to each
+  ray (`q = 0`). `oplToReference` computes this stably for any `R` as
+  `τ + σ·q`, `q = h²/(R + √(R²−h²))`, so large finite and infinite `R`
+  agree. (The earlier idea of a plane normal to the chief ray was wrong:
+  it makes a converging beam look like huge defocus.)
+- A collimated beam through a bare plane to an image plane gives a large
+  OPD against a finite-radius sphere. That is physically right (a flat
+  wave against a converging reference), not a bug.
+- `OptSurface` does not clip rays at its aperture (only `ModelSurface`
+  does), so the mask only reflects misses, TIR and `ModelSurface`
+  clipping. Real vignetting by lens edges is not modelled yet.
+- The pupil surface must be `geo[1]` (probe rays start at its center).
+  Generalising this needs aiming through any surfaces in front of it.
+- The chief ray's last-segment index (`nIn` of the image-surface hit) is
+  the image-space index; for an asymmetric image surface its
+  `refIndexIn`/`refIndexOut` must be oriented to match the ray direction.
+- Numerics: pure-Float64 arrays inside a `T` parameter; `ForwardDiff`
+  compatibility of `wavefrontMap` is untested.
+
+
+## Step 2 status (implemented)
+
+In `src/wavefront.jl`, tests in `test/wavefront.jl` ("wavefront statistics").
+`wavefrontRMS`, `wavefrontPV`, `strehlMarechal`, `strehlRatio`,
+`wavefrontStats` (all weighted by `weight`, mean-removed, optional `opd`
+keyword to evaluate another OPD matrix); `refocusOPD(r, δ)` re-evaluates the
+stored last segments for a reference point shifted `δ` mm along the chief
+ray's image-space direction (no re-tracing; `δ = 0` reproduces `r.opd`);
+`bestFocus(r)` minimizes the weighted RMS over `δ` with Brent (`Optim`) and
+returns `(δ, rms, opd)`; `rmsWavefrontLegacy` is the `opdRel`-based
+cross-check.
+
+Verified: perfect systems give RMS 0 and Strehl 1; a known 0.5 mm image-plane
+shift is recovered as `bestFocus` `δ = +0.5` (the reference point moves
+along the propagation direction toward the focus), RMS 0 there; spherical
+aberration (sphere mirror): best-focus RMS is 1/4 of the paraxial-focus
+RMS and the best-focus shift matches the `W040` relation within 15%;
+Maréchal and reference-point Strehl agree within 3% for RMS ~ 0.06 waves;
+PV of a pure defocus matches `2√3·RMS`; `rmsWavefrontLegacy` agrees with
+`wavefrontMap` within 5% for an on-axis finite-object lens inside the
+legacy envelope.
+
+Findings:
+- **The legacy fan sampling was biased, not the new code.** Hexapolar rings
+  with an outer ring at the edge radius and equal weight per ray overweight
+  the edge; RMS of the same lens read 4.96 / 4.61 / 4.42 for 6 / 12 / 24
+  rings against a converged 4.205 from `wavefrontMap` (N = 129). The legacy
+  exit pupil (z = 1.4035) matched the new real-ray one exactly. The
+  cross-check function therefore uses equal-area ring midpoints.
+- The "FFT" Strehl is still deferred to Step 3 (PSF); `strehlRatio` is the
+  value at the reference point, which equals the PSF peak only if the peak
+  is there (no tilt).
+- `bestFocus` only optimizes the longitudinal shift inside a bracket (default
+  half the pupil-to-image distance); tilt (lateral shift) is not optimized.
+
+
+## Step 3 status (implemented)
+
+`wavefrontPSF`, `PSFResult`, `spotMetrics`, `geometricSpot` in
+`src/wavefront.jl`; tests in `test/wavefront.jl` ("wavefront PSF and spot").
+
+Method: scalar Debye sum over the traced rays,
+`U(x) = Σ w e^{i2πW} e^{i2π s·x/λ'}` with `s` the ray's image-space
+direction cosines along the PSF axes and `λ' = λ/nImage`. Chosen over an FFT
+because (a) it needs no new dependency, (b) it uses each ray's actual
+direction cosines, so it is correct for a pupil that maps non-uniformly onto
+the exit pupil and for a plane reference (exit pupil at infinity) with no
+special case, and (c) because the sum separates in `x` and `y` it is two
+matrix products, so the output grid (pitch, size, window) is independent of
+the pupil grid -- which also removes the "fixed image-plane pitch across
+wavelengths" obstacle listed under Deferred for polychromatic PSFs. The
+physical sign of the OPD is used (`WAVEFRONT_OPD_SIGN` is undone), so the
+PSF orientation does not depend on the reporting convention.
+
+Normalization: intensity is relative to the aberration-free peak of the same
+pupil, so `maximum(intensity)` is the peak Strehl; `totalEnergy` is the
+whole-plane integral from Parseval, so encircled energy does not depend on
+the window. The pupil sampling makes the PSF periodic with
+`period = λ'/sqrt(area per ray in direction-cosine space)`; the window must
+stay inside half of it (a warning is issued).
+
+Verified: the perfect parabola gives an Airy pattern (FWHM = 1.029 λ'/(2NA)
+within 3%; 83.8% energy inside 0.61 λ'/NA within 4%; Strehl 1); a 0.5 mm
+defocus gives Strehl < 0.1, a PSF RMS radius within 15% of the geometric
+ray-spot RMS, and refocusing restores Strehl 1; a wavefront tilt (phase hook)
+gives reference-point Strehl < 0.1 but a PSF peak > 0.95 displaced by
+focal length × tilt; the on-axis PSF value equals `strehlRatio`.
+
+Limits and notes:
+- Equal quadrature weight per ray (no Jacobian of the pupil mapping, no
+  obliquity factor). `pupilDistortion`/`pupilAnisotropy` quantify how far the
+  pupil grid is from a uniform map; a warning is issued above 5% distortion.
+- PSF axes default to the global x axis projected normal to the chief ray and
+  its cross product with the chief direction; override with `axes`.
+- Spot moments (`rmsRadius`, ellipse) come from the window and are
+  tail-sensitive; the encircled-energy radii are window-independent.
+- `localRaysHexapolar` (used by `spotDiagramHex`) still has the legacy
+  edge-weighted ring pattern; left unchanged.
+
+
+## Step 4 status (implemented)
+
+`src/wavefront_plots.jl` (included after `wavefront.jl`; every function takes
+an analysis result, nothing is re-traced) and `wavefrontRemove` in
+`src/wavefront.jl`; tests in `test/wavefront.jl` ("wavefrontRemove",
+"wavefront plots"). Rendered images of the figures are written to the
+gitignored `test/plots/` by `saveTestFigure` for visual inspection.
+
+- `wavefrontRemove(r; remove = :none | :piston | :pistonTilt | :pistonTiltFocus)`
+  -- weighted least-squares removal of low-order terms in `(u, v)`; used by
+  every wavefront plot for its `remove` keyword and available for
+  statistics (RMS/PV/Strehl accept the result through their `opd` keyword).
+- `plotWavefrontHeatmap!`, `plotWavefront3D!`, `plotWavefrontCuts!` (Axis /
+  Axis3-level, return the plots), `wavefrontFigure` (heatmap + colorbar, 3D
+  surface, x/y cuts, a title line with RMS/PV/Strehl of what is shown).
+  Color range is symmetric about zero with a floor of
+  `MIN_WAVEFRONT_COLOR_RANGE` (0.001 wave) so rounding noise is not stretched
+  to fill the range.
+- `plotPSFHeatmap!`, `plotPSFCuts!`, `psfFigure` (linear or `log10` scale
+  with a 1e-5 floor; positions in μm; title line with Strehl, FWHM, 80% EE
+  radius).
+
+Not done: the surface plot leaves a ragged edge where the circular mask meets
+the square grid (Makie drops NaN cells); a PSF-vs-focus (through-focus) plot;
+a polychromatic/multi-field figure (needs the deferred wavelength
+re-instantiation work).

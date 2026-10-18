@@ -124,6 +124,23 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
     used by `zemax_browser.jl` (see above; this is `TODO.md`/`FIXED.md`
     item #24). Same "qualify every Bonito symbol" rule applies here too.
   - `characterization.jl` — spot diagrams, system characterization.
+  - `wavefront.jl` — wavefront-error (OPD) analysis, built per
+    `plans/wavefront_analysis.md` (read it before extending this file;
+    it records the design decisions, Step 0 findings, what's still
+    deferred, and the open OPD-sign question): `wavefrontMap` traces an
+    `N x N` pupil grid from an `ObjectPoint`/`CollimatedField`, sums
+    `nIn*delta` plus a per-surface `surfacePhase` hook, and measures OPD
+    in waves against an analytic reference sphere (centered on the
+    chief ray's image point, through the real-ray exit pupil, in the
+    actual image-space index) relative to the chief ray, returning a
+    `WavefrontResult`; `wavefrontRMS`/`wavefrontPV`/`bestFocus`/`strehlRatio`
+    and `wavefrontPSF`/`spotMetrics` (a ray-sum PSF, no FFT dependency)
+    take that result, and `wavefront_plots.jl` plots it
+    (`wavefrontFigure`, `psfFigure`, ...). Refractive indices in `geo` are fixed numbers set
+    when `geo` was built, so the `λ` argument only scales to waves and
+    feeds the phase hooks. `opdRel`/`plotOPD!` in `plotting.jl` stay as
+    the legacy path. `plans/` holds design plans for larger pieces of
+    work.
   - `plotting.jl` — GLMakie-based visualization.
   - `printing.jl` — `Base.show`/pretty-printing for core types.
 - `test/runtests.jl` includes `test/allocations.jl` plus one file per
@@ -137,7 +154,7 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
   `trace_geometry.jl`, `surface_manipulation.jl`, `characterization.jl`,
   `refractive_index.jl`, `lens_catalogs.jl`, `zemax.jl`,
   `zemax_browser.jl`, `filepicker.jl`, `printing.jl`, `plotting.jl`
-  (`zemax_browser.jl` and `filepicker.jl` were added after the phased
+  (plus `wavefront.jl`, added with the wavefront analysis; `zemax_browser.jl` and `filepicker.jl` were added after the phased
   plan completed, not part of it, but follow the same "every reachable
   function gets coverage" bar). Every real,
   reachable function in `src/` has functional
@@ -170,17 +187,29 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
   gets **zero coverage** of catalog-dependent code paths — vendoring the
   glass database (or at least a subset, as `test/fixtures/` does for
   Zemax) would fix that but hasn't been done yet.
-- No top-level `scripts/` directory exists in this repo (the closest
-  thing, `test/fixtures/generate_synthetic_zemax.jl`, is a test-fixture
-  maintenance script, not a general scripts area). `docs/` holds a
+- `scripts/` holds one standalone launcher, `scripts/zemaxbrowser.jl`
+  (loads the glass catalogs from machine-local paths, then starts
+  `zemaxBrowser`); it is not a general scripts area, not run by the test
+  suite, and hardcodes the original author's paths (a second maintenance
+  script, `test/fixtures/generate_synthetic_zemax.jl`, lives under
+  `test/`). `plans/` holds design plans for larger pieces of work (e.g.
+  `plans/wavefront_analysis.md`). `docs/` holds a
   minimal Documenter.jl site (`docs/make.jl`, `docs/src/index.md`,
-  `docs/src/api.md`, plus `docs/Project.toml`; `docs/build/` and
+  `docs/src/api.md`, `docs/src/wavefront.md` -- a hand-written guide to the
+  wavefront analysis, the only page not auto-generated -- plus
+  `docs/Project.toml`; `docs/build/` and
   `docs/Manifest.toml` are gitignored local build output), which
   auto-generates its API reference page from `src/`'s own docstrings via
   `@autodocs` rather than listing functions by hand -- so it needs no
-  maintenance as functions are added/removed. Build it locally with
-  `julia docs/make.jl` (`Pkg.instantiate()`s the `docs/` environment
-  itself); it's not wired into CI or published anywhere yet. (There used
+  maintenance as functions are added/removed (a `[`name`](@ref)` link to
+  an unexported function needs the `OpticTrace.` prefix or the build
+  fails). Build it locally with
+  `julia --project=docs docs/make.jl` -- **always with `--project=docs`**:
+  `make.jl` runs `Pkg.develop` on the *active* environment, so without it
+  OpticTrace gets dev-installed into the global Julia environment. Even
+  with it, `Pkg.develop` writes a machine-specific `[sources]` entry into
+  `docs/Project.toml`; `git checkout docs/Project.toml` before committing.
+  It's not wired into CI or published anywhere yet. (There used
   to also be a `docs/references/zemax_reference.md` -- a ported Python
   reference for `.zar`/`.zmf` binary-format parsing, from back before
   that parsing was implemented in `src/zemax.jl`, see `FIXED.md` #5/#23

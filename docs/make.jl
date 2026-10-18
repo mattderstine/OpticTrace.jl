@@ -12,6 +12,7 @@ makedocs(;
     format=Documenter.HTML(; prettyurls=false, size_threshold_ignore=["api.md"]),
     pages=[
         "Home" => "index.md",
+        "Wavefront Analysis" => "wavefront.md",
         "API Reference" => "api.md",
     ],
 )

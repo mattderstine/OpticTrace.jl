@@ -378,6 +378,54 @@ already resolved.
   an ideal lens focuses a collimated beam with zero OPD at the paraxial
   focus.
 
+- **42.** `src/tracing.jl`, `traceSurf(::OptSurface)`: does not clip rays at
+  the surface's `aperture` (only `ModelSurface`'s `traceSurf` does, giving
+  status 3), so lens-edge vignetting is not modelled when tracing
+  `OptSurface`s. `wavefrontMap`'s pupil mask therefore reflects only misses,
+  total internal reflection and `ModelSurface` clipping. Needs a design
+  decision (clip by default? only when the aperture `isAperture`?) and
+  regression tests; check `plotOPD!`, `spotDiagramHex` and the ray-fan
+  plotters for assumptions that all rays pass.
+- **43.** `src/zemax.jl`, `readZemaxSystem(...; wavelength = 0.5)`: the
+  wavelength the geometry's refractive indices were instantiated at is not
+  stored anywhere (`OpticalSystem.wavelengths`/`primaryWavelengthIndex` are
+  the file's design wavelengths, a different thing), so
+  `wavefrontMap` cannot check `λ` against it for an `OpticalSystem` and
+  only warns when `geoWavelength` is not given. Add an
+  `instantiatedWavelength` field to `OpticalSystem` (and a way to rebuild
+  `geo` at another wavelength -- see "Improve handing of multiple
+  wavelengths" under New Features).
+- **44.** `src/wavefront.jl`, `wavefrontMap`: only takes a bare
+  `Vector{AbstractSurface}` (no `OpticalSystem`/`ExtendedGeometry` method),
+  requires the pupil surface to be `geo[1]`, has no `N = :auto`
+  sampling-sufficiency option, no multi-field/multi-wavelength aggregator,
+  does not apply surface transmission (`AmpData.trans`) to the ray
+  weights, and has no through-focus plot. See the Deferred section of
+  `plans/wavefront_analysis.md`.
+- **45.** `src/wavefront.jl`, `WAVEFRONT_OPD_SIGN`: the OPD sign convention
+  (`OPL_ray - OPL_chief`, positive = ray lags the chief ray) has not been
+  checked against Zemax's; there is no Zemax license to compare. Flip the
+  constant if it turns out opposite. The PSF orientation does not depend on
+  it (it uses the physical sign).
+- **46.** `src/characterization.jl`, `localRaysHexapolar`/`spotDiagramHex`:
+  the rings put the outermost ring at the pupil edge and weight every ray
+  equally, which over-weights the edge, so the RMS radius reads high and
+  converges slowly with the ring count (measured for the analogous
+  `opdRel` sampling: 4.96/4.61/4.42 waves for 6/12/24 rings against a
+  converged 4.2). `rmsWavefrontLegacy` uses equal-area ring midpoints
+  instead; this function could too.
+- **47.** `src/plotting.jl`, `opdRel`/`plotOPD!`/`plotOPD3D!`: the legacy OPD
+  path has known defects (no chief-ray/mean-piston removal; reference sphere
+  vertex forced onto the axis; paraxial exit pupil estimate; sphere index
+  `refIndexDefault`; finite-object and `geo[1]` conventions) -- listed in
+  `plans/wavefront_analysis.md`. Kept as the legacy path; `wavefrontMap`
+  supersedes it. Decide whether to deprecate or reimplement it on the new
+  core.
+- **48.** `src/wavefront.jl`: Zernike decomposition of `WavefrontResult` is
+  not implemented. Requirements (convention choice, unit-disk definition,
+  weighted least squares, vignetted-pupil policy) are in
+  `plans/wavefront_analysis.md`.
+
   ## New Features
 
   ### More General 'OptcialSystem'
@@ -402,6 +450,9 @@ already resolved.
   be a "pointer" to this array that is managed at the OpticalSystem level.
   - how do we retain compatibility with older code?
   - look to the Zemax model to have a primary wavelength
+  - `wavefrontMap` (`plans/wavefront_analysis.md`) uses the indices already in
+    `geo` and only needs `λ` for phase/waves; polychromatic wavefront and PSF
+    evaluation is blocked on this (and on Code issues #43)
 
   ### Save and retrieve designs
 

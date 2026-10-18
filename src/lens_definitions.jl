@@ -534,10 +534,14 @@ end
 """
     Trace(ray, nIn, delta, pmatrix)
     Element of a raytrace.
-        ray     location of interesection with surface and exiting direction
-        nIn     refractive index leaving surface
-        delta   length of ray leaving surface
+        ray     location of intersection with the surface and the exiting direction
+        nIn     refractive index of the medium the ray travelled in to reach this
+                surface (the index before the surface)
+        delta   signed distance travelled from the previous point to this surface
+                (negative if the surface is behind the ray's start)
         pmatrix polarization p & o matrices
+    `nIn * delta` summed over a trace is the optical path length (see `pathLength`).
+    The first element of a trace is the start ray, with `delta = 0` and a placeholder `nIn = 1`.
 """
 mutable struct Trace{T <:Real, S <:AbstractAmpData{T}}
     ray::Ray{3, T}
