@@ -1,0 +1,69 @@
+VERS 171115
+MODE SEQ
+NAME "Test Model Glass"
+NOTE 0 Hand-written test fixture for OpticTrace.jl's GLAS model glass / pickup parsing.
+NOTE 4
+UNIT MM X W X CM MR CPMM
+ENPD 8
+GCAT SCHOTT MISC
+PWAV 1
+FTYP 0 0 1 1 0 0 0 1
+XFLN 0
+YFLN 0
+FWGN 1
+WAVM 1 0.5875618 1
+SURF 0
+  CURV 0.0
+  DISZ INFINITY
+SURF 1
+  STOP
+  TYPE STANDARD
+  CURV 0.02
+  DISZ 4.0
+  GLAS TESTGLASS 0 0 1.5 40 0 0 0 0 0 0
+  DIAM 10.0
+  COMM Catalog glass with 1.5 40 filler
+SURF 2
+  TYPE STANDARD
+  CURV -0.02
+  DISZ 2.0
+  GLAS ___BLANK 1 0 1.6 40 0.001 0 0 0 0 0
+  DIAM 10.0
+  COMM Model glass
+SURF 3
+  TYPE STANDARD
+  CURV 0.0
+  DISZ 5.0
+  DIAM 10.0
+  COMM Air, no GLAS line
+SURF 4
+  TYPE STANDARD
+  CURV 0.01
+  DISZ 3.0
+  GLAS ___BLANK 2 2 1.6 40 0.001 0 0 0 0 0
+  DIAM 10.0
+  COMM Pickup of model glass
+SURF 5
+  TYPE STANDARD
+  CURV 0.0
+  DISZ 10.0
+  GLAS ___BLANK 2 3 1.5 40 0 0 0 0 0 0
+  DIAM 10.0
+  COMM Pickup of air with 1.5 40 filler
+SURF 6
+  TYPE STANDARD
+  CURV 0.0
+  DISZ 2.0
+  GLAS TESTGLASS 2 1 1.5168 64.17 0 0 0 0 0 0
+  DIAM 10.0
+  COMM Pickup of catalog glass
+SURF 7
+  TYPE STANDARD
+  CURV 0.0
+  DISZ 1.0
+  GLAS ___BLANK 2 4 1.5 40 0 0 0 0 0 0
+  DIAM 10.0
+  COMM Chained pickup 7 to 4 to 2
+SURF 8
+  CURV 0.0
+  DISZ 0

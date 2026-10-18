@@ -40,6 +40,59 @@
             cEFD10 = [2.881518, -0.013228312, 2.0, 0.03145559, -2.0, 0.0026851666, -4.0, -0.00022577544, -6.0, 2.4693268e-05, -8.0]
             @test OpticTrace.riFormula3(0.5875618, cEFD10) ≈ 1.72825 atol = 1e-4
         end
+
+        @testset "riFormula5 (Cauchy form, invented coefficients)" begin
+            # n = c1 + c2*λ^c3 + c4*λ^c5, written out directly
+            c = [1.45, 0.0125, -1.0, 7.0e-5, -3.5]
+            for λ in (0.4, 0.5875618, 1.2)
+                @test riFormula5(λ, c) ≈ 1.45 + 0.0125 / λ + 7.0e-5 / λ^3.5 atol = 1e-12
+            end
+            @test riFormula5(0.5, [1.3]) == 1.3 # constant term only
+            # λ and c needn't share an element type (unlike riFormula1/2/3)
+            @test riFormula5(0.5, [1, 2, -1]) ≈ 5.0
+            @test ForwardDiff.derivative(λ -> riFormula5(λ, c), 0.6) ≈ -0.0125 / 0.36 - 3.5 * 7.0e-5 / 0.6^4.5 atol = 1e-10
+        end
+
+        @testset "ModelGlass" begin
+            g = ModelGlass(1.5168, 64.17, 0.0)
+
+            # OpticSim.jl's own documented value for its modelglass
+            @test g(0.5875618) ≈ 1.5168003970108495 atol = 1e-12
+
+            # the fit reproduces nd, and approximately vd, for glasses
+            # across the glass map (vd from the F/C lines)
+            for (nd, vd, dPgF) in ((1.5168, 64.17, 0.0), (1.5598, 42.33, 0.0), (1.7847, 26.10, 0.014), (1.62, 56.9, -0.0003))
+                mg = ModelGlass(nd, vd, dPgF)
+                @test mg(0.5875618) ≈ nd atol = 1e-4
+                @test (nd - 1) / (mg(0.4861327) - mg(0.6562725)) ≈ vd rtol = 5e-3
+            end
+
+            # normal dispersion: index falls with wavelength
+            @test g(0.45) > g(0.55) > g(0.65)
+
+            @test g.nd == 1.5168 && g.vd == 64.17 && g.dPgF == 0.0
+            @test ModelGlass(1.5168, 64.17) == g # dPgF defaults to 0
+            @test ModelGlass(1.5f0, 60, 0.0) isa ModelGlass{Float64} # promoted
+
+            @testset "autodiff" begin
+                @test ForwardDiff.derivative(g, 0.55) < 0
+                # dual nd with Float64 λ -- needs riFormula5's independent type parameters
+                dndnd = ForwardDiff.derivative(nd -> ModelGlass(nd, 64.17, 0.0)(0.5875618), 1.5168)
+                @test dndnd ≈ 1.0 atol = 1e-2
+            end
+
+            @testset "input range checks" begin
+                @test_throws ArgumentError ModelGlass(0.9, 50.0, 0.0)
+                @test_throws ArgumentError ModelGlass(2.6, 50.0, 0.0)
+                @test_throws ArgumentError ModelGlass(1.5, 5.0, 0.0)
+                @test_throws ArgumentError ModelGlass(1.5, 120.0, 0.0)
+            end
+
+            @testset "warns outside the 0.36-0.75 μm fit range" begin
+                @test_logs (:warn, r"fit range") ModelGlass(1.5, 60.0)(1.0)
+                @test_logs ModelGlass(1.5, 60.0)(0.5) # no warning inside the range
+            end
+        end
     end
 
     if !HAS_GLASS_CATALOG
@@ -54,6 +107,14 @@
 
             f2 = getRefractiveIndexFunc("glass/hoya/BAF11.yml") # basepath defaults to dirBaseRefractiveIndex
             @test f2(0.5875618) ≈ 1.66672 atol = 1e-4
+        end
+
+        @testset "getRefractiveIndexFunc, \"formula 5\" (Cauchy) record" begin
+            # glass/misc/soda-lime/Rubin-lowiron.yml: "formula 5" with
+            # coefficients 1.5130 -0.003169 2 0.003962 -2, written out here
+            f = getRefractiveIndexFunc(OpticTrace.dirBaseRefractiveIndex, "glass/misc/soda-lime/Rubin-lowiron.yml")
+            λ = 0.5875618
+            @test f(λ) ≈ 1.5130 - 0.003169 * λ^2 + 0.003962 / λ^2 atol = 1e-12
         end
 
         @testset "loadRICatalog! (into a caller-supplied dict)" begin

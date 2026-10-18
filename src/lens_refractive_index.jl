@@ -6,7 +6,7 @@ Functions to get refractive index from the RefractiveIndex.info website
 
 
 export getRefractiveIndexFunc, setDirectoryBaseRefractiveIndex, loadRICatalog, getDirectoryBaseRI
-export loadRICatalog!
+export loadRICatalog!, riFormula5, ModelGlass
 
 """
     dirBaseRefractiveIndex
@@ -169,6 +169,122 @@ function riFormula3(λ::T, c::S) where {T<:Real, S<:AbstractVector{T}}
     sqrt(sum)
 end
 
+"""
+    riFormula5(λ::Real, c::AbstractVector{<:Real})
+
+Dispersion formula: `n = c[1] + Σ c[i]*λ^c[i+1]` summed over
+`i = 2, 4, 6, ...`, with `λ` in microns -- the same power-law sum as
+[`riFormula3`](@ref), except it gives `n` directly rather than `n²` (no
+`sqrt`). Corresponds to the `"formula 5"` (Cauchy) dispersion type in a
+RefractiveIndex.info-style glass YAML record; selected by
+[`getRefractiveIndexFunc`](@ref) via that string.
+
+Also the shared math behind two Zemax dispersion models that are exact
+special cases of this form: AGF dispersion-formula code 5 (Conrady,
+`n = n0 + A/λ + B/λ^3.5`, see [`getAGFRefractiveIndexFunc`](@ref)) and
+Zemax's Model Glass (a cubic in `1/λ`, see [`ModelGlass`](@ref)).
+
+Unlike [`riFormula1`](@ref)/[`riFormula2`](@ref)/[`riFormula3`](@ref),
+`λ` and `c` aren't required to share an element type, so either one can
+carry `ForwardDiff` dual numbers independently of the other (e.g.
+differentiating a `ModelGlass` index with respect to its `nd`, whose
+coefficients are then duals while `λ` stays a `Float64`).
+
+Arguments:
+- `λ` -- wavelength, in microns
+- `c` -- dispersion coefficients: `c[1]` is the constant term, followed
+  by `(coefficient, exponent)` pairs
+"""
+function riFormula5(λ::Real, c::AbstractVector{<:Real})
+    sum = c[1]
+    for i in 2:2:length(c)
+        sum += c[i] * λ ^ c[i+1]
+    end
+    sum
+end
+
+"""
+    ModelGlass{T<:Real}
+
+Zemax "Model Glass": an idealized glass defined only by its refractive
+index at the d-line (587.5618 nm) `nd`, its Abbe number `vd`, and its
+partial-dispersion deviation from the normal line `dPgF` -- the material
+behind a Zemax `.zmx` surface whose `GLAS` line has solve type 1 (see
+[`zemaxGlassIndexFunc`](@ref)). A `ModelGlass` is callable,
+`(g::ModelGlass)(λ)`, so it can be used anywhere a glass catalog's
+`wavelength -> index` function is expected.
+
+The dispersion model follows OpticSim.jl's `modelglass` (MIT license):
+the normal line from Schott's "TIE-29: Refractive Index and Dispersion"
+gives the partial dispersion `a = dPgF + 0.6438 - 0.001682*vd`, and GNU
+GOptical's `Material::Abbe` fit gives `C1..C4` linear in `a`, with
+
+    n(λ) = nd + (nd - 1)/vd * (C1 + C2/λ + C3/λ² + C4/λ³)
+
+evaluated via [`riFormula5`](@ref) with precomputed coefficients. The
+fit is only meant for visible wavelengths, 0.36-0.75 μm; evaluating
+outside that range warns once per session but still returns a value.
+This approximates OpticStudio's own model glass and hasn't been checked
+against it (see `TODO.md` #39).
+
+Fields:
+    nd::T                     - refractive index at 587.5618 nm
+    vd::T                     - Abbe number at the d-line
+    dPgF::T                   - deviation of partial dispersion P_g,F from the normal line
+    coefficients::SVector{7,T} - precomputed `riFormula5` coefficients
+"""
+struct ModelGlass{T<:Real}
+    nd::T
+    vd::T
+    dPgF::T
+    coefficients::SVector{7,T}
+
+    function ModelGlass{T}(nd, vd, dPgF) where {T<:Real}
+        1.0 <= nd <= 2.5 || throw(ArgumentError("ModelGlass: nd = $nd is outside the plausible range [1.0, 2.5]"))
+        10.0 <= vd <= 100.0 || throw(ArgumentError("ModelGlass: vd = $vd is outside the plausible range [10, 100]"))
+        a = dPgF + 0.6438 - 0.001682 * vd
+        c1 = a * -6.11873891971188577088 + 1.17752614766485175224
+        c2 = a * 18.27315722388047447566 + -8.93204522498095698779
+        c3 = a * -14.55275321129051135927 + 7.91015964461522003148
+        c4 = a * 3.48385106908642905310 + -1.80321117937358499361
+        k = (nd - 1) / vd
+        coefficients = SVector{7,T}(nd + k * c1, k * c2, -1, k * c3, -2, k * c4, -3)
+        new{T}(nd, vd, dPgF, coefficients)
+    end
+end
+
+"""
+    ModelGlass(nd::Real, vd::Real, dPgF::Real = 0.0)
+
+Construct a [`ModelGlass`](@ref), promoting `nd`/`vd`/`dPgF` to a common
+element type (so a `ForwardDiff` dual in any one of them carries
+through). Throws an `ArgumentError` if `nd` is outside `[1.0, 2.5]` or
+`vd` is outside `[10, 100]` -- values that far out are almost certainly
+a parse error, not a real glass.
+
+Arguments:
+- `nd` -- refractive index at 587.5618 nm
+- `vd` -- Abbe number at the d-line
+- `dPgF` -- deviation of partial dispersion from the normal line
+  (defaults to 0, i.e. a glass on the normal line)
+"""
+ModelGlass(nd::Real, vd::Real, dPgF::Real = 0.0) =
+    ModelGlass{promote_type(typeof(nd), typeof(vd), typeof(dPgF))}(nd, vd, dPgF)
+
+"""
+    (g::ModelGlass)(λ::Real)
+
+Refractive index of model glass `g` at wavelength `λ` (microns), via
+[`riFormula5`](@ref). Logs a warning (once per session) if `λ` is
+outside the model's 0.36-0.75 μm fit range, but still returns the
+extrapolated value.
+"""
+function (g::ModelGlass)(λ::Real)
+    (λ < 0.36 || λ > 0.75) &&
+        @warn "ModelGlass evaluated at λ = $λ μm, outside its 0.36-0.75 μm fit range; index is extrapolated" maxlog = 1
+    riFormula5(λ, g.coefficients)
+end
+
 #=
 riN_LAK22(l) = riFormula2(l,
         map(x->parse(Float64,x),
@@ -187,8 +303,9 @@ riN_LAK22(0.5)
 Build a `wavelength -> refractive index` function for one glass, by
 reading its RefractiveIndex.info-style YAML record at
 `joinpath(basepath, path)`, dispatching on its `DATA[1]["type"]` field
-to [`riFormula1`](@ref)/[`riFormula2`](@ref)/[`riFormula3`](@ref), and
-parsing its `"coefficients"` field.
+to [`riFormula1`](@ref)/[`riFormula2`](@ref)/[`riFormula3`](@ref)/
+[`riFormula5`](@ref) (`"formula 1"`/`"formula 2"`/`"formula 3"`/
+`"formula 5"`), and parsing its `"coefficients"` field.
 
 Returns `nothing` if the record has no `"coefficients"` entry (e.g. a
 tabulated-data-only record with no dispersion formula); otherwise
@@ -200,7 +317,7 @@ Arguments:
 - `path` -- glass YAML file path, relative to `basepath`
 """
 function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
-    funcs = Dict("formula 2"=>riFormula2, "formula 1"=> riFormula1, "formula 3"=>riFormula3)
+    funcs = Dict("formula 2"=>riFormula2, "formula 1"=> riFormula1, "formula 3"=>riFormula3, "formula 5"=>riFormula5)
     pth = joinpath(basepath,path)
     record = YAML.load_file(pth)
     data = record["DATA"][1]

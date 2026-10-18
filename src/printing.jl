@@ -19,6 +19,17 @@ tracenumFromName(surfview, geo) = numsurfFromName(surfview, geo)+1
 
 
 """
+    Base.show(io::IO, g::ModelGlass)
+
+Print a [`ModelGlass`](@ref) by its defining parameters only (not its
+precomputed dispersion coefficients), e.g.
+`ModelGlass(nd=1.5598, vd=42.33, dPgF=0.0)`.
+"""
+function Base.show(io::IO, g::ModelGlass)
+    print(io, "ModelGlass(nd=", g.nd, ", vd=", g.vd, ", dPgF=", g.dPgF, ")")
+end
+
+"""
     numsurfFromName(surfview, geo)
 
         surfview -string with user defined name of the surface

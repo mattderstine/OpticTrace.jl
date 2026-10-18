@@ -81,6 +81,23 @@ const ZMF_SAMPLE_PATH = "/Users/matt/Development/Software/Zemax/Stockcat/Diverse
 const HAS_ZMF_SAMPLE = isfile(ZMF_SAMPLE_PATH)
 
 """
+Machine-local directory of real OpticStudio sample `.zmx` files, used in
+place (never copied into the repo) by `test/zemax.jl`'s model glass /
+material pickup tests on real files -- same skip-when-absent pattern as
+[`HAS_ZAR_SAMPLE`](@ref).
+"""
+const ZEMAX_SAMPLES_DIR = "/Users/matt/Development/Software/Zemax/Samples/Short course"
+const HAS_ZEMAX_SAMPLES = isdir(ZEMAX_SAMPLES_DIR)
+
+"""
+Machine-local Zemax `.agf` glass catalog directory, used in place (never
+copied into the repo) by `test/agf.jl`'s real-catalog cross-checks --
+same skip-when-absent pattern as [`HAS_ZAR_SAMPLE`](@ref).
+"""
+const ZEMAX_GLASSCAT_DIR = "/Users/matt/Development/Software/Zemax/Glasscat"
+const HAS_ZEMAX_GLASSCAT = isdir(ZEMAX_GLASSCAT_DIR)
+
+"""
 Directory that `test/plotting.jl` saves its generated figures into (via
 [`saveTestFigure`](@ref)), so they can be inspected after a test run.
 Gitignored -- not part of the repo -- so it's created here rather than

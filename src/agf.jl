@@ -83,7 +83,7 @@ end
 Build a `wavelength -> refractive index` function from one `.agf`
 glass record's dispersion-formula code (`dispform`, from its `NM` line)
 and coefficients (from its `CD` line), reusing this package's existing
-[`riFormula1`](@ref)/[`riFormula3`](@ref) dispersion math rather than
+[`riFormula1`](@ref)/[`riFormula3`](@ref)/[`riFormula5`](@ref) dispersion math rather than
 implementing AGF's formulas from scratch:
 
 - `dispform == 1` (Schott: `n² = a0 + a1λ² + a2λ⁻² + a3λ⁻⁴ + a4λ⁻⁶ +
@@ -97,9 +97,13 @@ implementing AGF's formulas from scratch:
   `c[i+1] = sqrt(L_i)`, via `c = [0.0, K1,sqrt(L1), K2,sqrt(L2),
   K3,sqrt(L3)]`. This assumes each `L_i` is non-negative, true for
   ordinary Sellmeier1 glasses.
+- `dispform == 5` (Conrady: `n = n0 + A/λ + B/λ^3.5`) is the exact
+  special case of [`riFormula5`](@ref)'s `n = c[1] + Σ c[i]·λ^c[i+1]`
+  (the Cauchy form, which gives `n` directly rather than `n²`), via
+  `c = [n0, A,-1.0, B,-3.5]`.
 
-Any other `dispform` code (Sellmeier2/3/4/5, Herzberger, Conrady,
-Handbook of Optics 1/2, Extended1/2/3 -- see `TODO.md` #37) is not
+Any other `dispform` code (Sellmeier2/3/4/5, Herzberger, Handbook of
+Optics 1/2, Extended1/2/3 -- see `TODO.md` #37) is not
 supported and returns `nothing`, mirroring
 [`getRefractiveIndexFunc`](@ref)'s "`nothing` means skip" contract.
 """
@@ -112,6 +116,10 @@ function getAGFRefractiveIndexFunc(dispform::Integer, coefficients::AbstractVect
         K1, L1, K2, L2, K3, L3 = coefficients[1:6]
         c = [0.0, K1, sqrt(L1), K2, sqrt(L2), K3, sqrt(L3)]
         return λ -> riFormula1(λ, c)
+    elseif dispform == 5
+        n0, A, B = coefficients[1:3]
+        c = [n0, A, -1.0, B, -3.5]
+        return λ -> riFormula5(λ, c)
     else
         return nothing
     end

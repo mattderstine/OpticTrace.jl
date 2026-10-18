@@ -3,10 +3,99 @@
 =#
 export readZemax, printZemaxSurfs, zemaxsurfsToGeo, viewZemaxFile
 export ZemaxHeader, readZemaxSystem
+export ZemaxGlassSolve, resolveZemaxGlassPickups!, zemaxGlassIndexFunc
 export ZarEntry, lzwDecompress, readZemaxArchive, listZemaxArchive, extractZemaxArchive
 export ZmfEntry, zmfDeobfuscate, readZmfCatalog, listZmfCatalog, extractZmfCatalog
 
 const     parmlength = 20
+
+"""
+    ZEMAX_GLAS_TOKENS
+
+1-based token positions within a whitespace-split `.zmx` `GLAS` line
+(token 1 is the `GLAS` keyword itself), e.g.
+
+    GLAS ___BLANK 2 7 1.5597575044300001 42.326198317699998 0 0 0 0 0 0
+
+The `.zmx` text format is undocumented, so this layout is inferred, not
+specified: it was confirmed consistent across every one of the 861
+`GLAS` lines in a local corpus of 469 real OpticStudio sample files
+(file `VERS` dates 2011-2019), where each line had exactly 13 tokens.
+Tokens 8-13 (apparently per-parameter vary flags and more) aren't
+decoded. A short line (e.g. a hand-written `GLAS N-BK7`) just leaves the
+missing fields at their [`ZemaxGlassSolve`](@ref) defaults.
+
+- `name` -- glass/material name (`___BLANK` for a model glass or a
+  pickup of an unnamed material)
+- `solveType` -- material solve code, see [`ZemaxGlassSolve`](@ref)
+- `pickupSurface` -- source Zemax surface number for a pickup (solve 2)
+- `nd`, `vd`, `dPgF` -- model glass parameters (only meaningful for
+  solve 1; often `1.5 40` filler or Zemax's cached catalog values
+  otherwise)
+"""
+const ZEMAX_GLAS_TOKENS = (name = 2, solveType = 3, pickupSurface = 4, nd = 5, vd = 6, dPgF = 7)
+
+"""
+    ZemaxGlassSolve{T}
+
+The material-solve part of a Zemax `.zmx` `GLAS` line (see
+[`ZEMAX_GLAS_TOKENS`](@ref) for where each field comes from), stored on
+[`ZemaxSurf`](@ref) alongside the plain `material` name.
+
+`solveType` codes, as observed in real files:
+- `0` -- fixed: `material` is a catalog glass name
+- `1` -- model glass: `nd`/`vd`/`dPgF` define the material (see
+  [`ModelGlass`](@ref)); `material` is a placeholder, usually `___BLANK`
+- `2` -- pickup: copy the material of Zemax surface `pickupSurface`
+- `3` -- substitute: a catalog glass the optimizer may swap (treated
+  like `0`)
+
+After [`readZemax`](@ref) returns, no surface has `solveType == 2` any
+more: [`resolveZemaxGlassPickups!`](@ref) replaces each pickup's
+`solveType`/`nd`/`vd`/`dPgF` (and its surface's `material`) with those of
+the surface it ultimately picks up from, and sets `pickedUp = true` to
+record that it was one. `pickupSurface` always keeps the value read
+from the file.
+
+Fields:
+    solveType::Int      - material solve code (see above)
+    pickupSurface::Int  - Zemax surface number a pickup copies from (Zemax numbering, object = 0)
+    nd::T               - model glass index at 587.5618 nm
+    vd::T               - model glass Abbe number
+    dPgF::T             - model glass partial-dispersion deviation
+    pickedUp::Bool      - whether this was a pickup, resolved by `resolveZemaxGlassPickups!`
+"""
+struct ZemaxGlassSolve{T}
+    solveType::Int
+    pickupSurface::Int
+    nd::T
+    vd::T
+    dPgF::T
+    pickedUp::Bool
+end
+
+"""
+    ZemaxGlassSolve{T}()
+
+Default glass solve for a surface with no (or a bare) `GLAS` line: solve
+type 0 (fixed), pickup surface 0, zero model-glass parameters, not a
+pickup.
+"""
+ZemaxGlassSolve{T}() where {T} = ZemaxGlassSolve{T}(0, 0, zero(T), zero(T), zero(T), false)
+
+"""
+    zemaxGlasToken(entries, key::Symbol, T::Type, default)
+
+Parse the `GLAS`-line token named `key` (a field of
+[`ZEMAX_GLAS_TOKENS`](@ref)) from a whitespace-split `.zmx` line
+`entries` as type `T`, or return `default` if the line is too short to
+have that token. A token that's present but doesn't parse as `T` throws,
+rather than silently falling back to `default`.
+"""
+function zemaxGlasToken(entries, key::Symbol, T::Type, default)
+    idx = ZEMAX_GLAS_TOKENS[key]
+    length(entries) >= idx ? parse(T, entries[idx]) : default
+end
 
 """
     ZemaxSurf{T}
@@ -32,6 +121,8 @@ Fields:
                              being preallocated to a fixed length, since XDAT can run
                              longer than `parmlength`; empty when the surface has no
                              XDAT lines at all (the common case)
+    glassSolve::ZemaxGlassSolve{T} - material solve parsed from the rest of the GLAS line (model
+                             glass parameters, pickup source) -- see `ZemaxGlassSolve`
 """
 mutable struct ZemaxSurf{T}
     curvature::T
@@ -45,6 +136,7 @@ mutable struct ZemaxSurf{T}
     type::String
     comm::String
     extraData::Vector{T}
+    glassSolve::ZemaxGlassSolve{T}
 end
 
 """
@@ -52,10 +144,22 @@ end
 
 Convenience constructor omitting `extraData` (defaults to an empty
 vector -- the common case, since only a few Zemax surface types like
-`TYPE XPOLYNOM` use `XDAT` lines at all).
+`TYPE XPOLYNOM` use `XDAT` lines at all) and `glassSolve` (defaults to
+`ZemaxGlassSolve{T}()`, a fixed catalog material).
 """
 ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm) =
     ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm, eltype(aspherics)[])
+
+"""
+    ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm, extraData)
+
+Convenience constructor omitting `glassSolve` (defaults to
+`ZemaxGlassSolve{T}()`, a fixed catalog material, with `T` taken from
+`aspherics`).
+"""
+ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm, extraData) =
+    ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating, type, comm, extraData,
+        ZemaxGlassSolve{eltype(aspherics)}())
 
 """
     ZemaxSurf()
@@ -63,7 +167,7 @@ ZemaxSurf(curvature, distance, material, radius, stop, conic, aspherics, coating
 Construct a `ZemaxSurf{Float64}` with default values: zero curvature,
 distance, and conic; `"DEFAULT"` material; not a stop; `parmlength`
 zeroed aspheric coefficients; empty coating; `"STANDARD"` type; empty
-comment; empty extra data.
+comment; empty extra data; default (fixed, non-pickup) glass solve.
 """
 ZemaxSurf() = ZemaxSurf(0.0, 0.0, "DEFAULT", 0.0, false, 0.0, zeros(Float64, parmlength), "", "STANDARD","")
 
@@ -144,9 +248,17 @@ system-level metadata.
 Recognized `SURF`-scoped line keywords: `CURV`, `DISZ`, `GLAS`, `DIAM`,
 `STOP`, `TYPE`, `CONI`, `PARM`, `XDAT`, `COAT`, `COMM`. Recognized header
 keywords: `UNIT`, `NAME`, `WAVM`, `PWAV`, `ENPD`/`OBNA`/`FNUM`/`FLOA`,
-`FTYP`, `XFLN`/`YFLN`/`FWGN`, `GCAT`, `MODE`, `NOTE`. Any other keyword
-is silently ignored. Surface positions/orientations are computed later,
-by [`zemaxsurfToSurface`](@ref)/[`zemaxsurfsToGeo`](@ref).
+`FTYP`, `XFLN`/`YFLN`/`FWGN`, `GCAT`, `MODE`, `NOTE`. A `SOLVETYPE`
+line isn't decoded but logs a warning (no real file seen so far has
+one, see `TODO.md` #39); any other keyword is silently ignored. Surface
+positions/orientations are computed later, by
+[`zemaxsurfToSurface`](@ref)/[`zemaxsurfsToGeo`](@ref).
+
+A `GLAS` line sets both `material` (its name) and `glassSolve` (its
+model glass / pickup fields, see [`ZEMAX_GLAS_TOKENS`](@ref)). After
+unit conversion, material pickups are resolved by
+[`resolveZemaxGlassPickups!`](@ref), so every returned surface's
+`material`/`glassSolve` already describes its actual material.
 
 Before returning, every length-dimensioned field of `zsurfs`/`header` is
 converted from the file's own `UNIT` to [`LENGTH_UNIT`](@ref) (mm) via
@@ -174,7 +286,7 @@ function readZemax(filename::String)
     yfln = Float64[] # accumulated from YFLN
 
     # Parse the file to extract the necessary data
-    for l in lines
+    for (lineNumber, l) in enumerate(lines)
         curline =  replace(string(strip(l,['\n','\r',' ', '\t', '\xff', '\xfe', '\0']) ), "\x00" => "") # Clean line endings and whitespace
         entries = split(curline)
 
@@ -265,8 +377,22 @@ function readZemax(filename::String)
             # Handle distance definitions
             zsurf.distance = parse(Float64, entries[2])
         elseif startswith(entries[1], "GLAS")
-            # Handle glass/material definitions
-            zsurf.material = entries[2]
+            # Handle glass/material definitions -- the name plus the
+            # material solve (model glass / pickup), token layout in
+            # ZEMAX_GLAS_TOKENS; tokens missing from a short line keep
+            # their defaults
+            zsurf.material = entries[ZEMAX_GLAS_TOKENS.name]
+            zsurf.glassSolve = ZemaxGlassSolve{Float64}(
+                zemaxGlasToken(entries, :solveType, Int, 0), zemaxGlasToken(entries, :pickupSurface, Int, 0),
+                zemaxGlasToken(entries, :nd, Float64, 0.0), zemaxGlasToken(entries, :vd, Float64, 0.0),
+                zemaxGlasToken(entries, :dPgF, Float64, 0.0), false)
+        elseif startswith(entries[1], "SOLVETYPE")
+            # Not decoded: some references describe model glass solves
+            # stored as a separate SOLVETYPE line, but no sample file seen
+            # so far uses one (see TODO.md #39) -- warn so a real example
+            # gets noticed instead of being silently ignored
+            @warn "readZemax: $filename line $lineNumber: SOLVETYPE line not decoded (model-glass SOLVETYPE form " *
+                "not yet supported; please report it or add the file as a test fixture): $curline"
         elseif startswith(entries[1], "DIAM")
             # Handle diameter definitions
             zsurf.radius = parse(Float64, entries[2])
@@ -313,6 +439,7 @@ function readZemax(filename::String)
     push!(zsurfs, zsurf)
     header.fields = Point2.(xfln, yfln)
     convertZemaxUnitsToMM!(zsurfs, header)
+    resolveZemaxGlassPickups!(zsurfs)
     return zsurfs, header
 end
 
@@ -405,7 +532,9 @@ Also converts `header.apertureValue` (× factor), but only when
 `"OBNA"`/`"FNUM"` are dimensionless ratios and `"FLOA"` has no value, so
 neither is scaled. `header.fields` (`XFLN`/`YFLN`) is converted (× factor)
 only when [`zemaxFieldTypeIsHeight`](@ref)`(header.fieldType)`;
-`header.fieldWeight` is never scaled (always dimensionless).
+`header.fieldWeight` is never scaled (always dimensionless), and
+neither is any surface's `glassSolve` (model glass `nd`/`vd`/`dPgF` are
+dimensionless).
 `header.wavelengths` is never scaled -- Zemax's `WAVM` values are always
 in [`WAVELENGTH_UNIT`](@ref) regardless of `header.units`.
 """
@@ -450,17 +579,131 @@ function convertZemaxUnitsToMM!(zsurfs, header::ZemaxHeader)
 end
 
 """
+    resolveZemaxGlassPickups!(zsurfs)
+
+Resolve every material pickup (`glassSolve.solveType == 2`) in `zsurfs`
+in place, following chains of pickups (e.g. surface 9 picks up from 7,
+which is itself a model glass) back to a surface that isn't a pickup,
+then copying that surface's `material` and its `glassSolve`'s
+`solveType`/`nd`/`vd`/`dPgF` onto each surface in the chain. Each
+resolved surface keeps its own `pickupSurface` and gets
+`pickedUp = true`.
+
+`zsurfs` must be the full [`readZemax`](@ref) vector, object surface
+included, since pickup sources use Zemax surface numbers: Zemax surface
+`N` is `zsurfs[N+1]`. Called by `readZemax` itself; also why this can't
+wait until [`zemaxsurfsToGeo`](@ref), which never sees the object
+surface.
+
+A pickup source with no `GLAS` line has material `"DEFAULT"` (air), and
+so does the pickup. That's the common case in real files: a pickup
+written as `GLAS ___BLANK 2 15 1.5 40 ...` whose surface 15 is air, where
+`1.5 40` is filler, not a real glass. That's why the pickup's own
+trailing numbers are never used.
+
+Throws an `ErrorException` for a pickup whose source surface number is
+outside `zsurfs`, or a chain of pickups that loops back on itself.
+
+Returns `nothing`.
+"""
+function resolveZemaxGlassPickups!(zsurfs)
+    for i in eachindex(zsurfs)
+        zsurfs[i].glassSolve.solveType == 2 || continue
+        chain = Int[]
+        j = i
+        while zsurfs[j].glassSolve.solveType == 2
+            j in chain && error("resolveZemaxGlassPickups!: material pickup cycle among Zemax surfaces " *
+                "$(join(chain .- 1, " -> ")) -> $(j - 1)")
+            push!(chain, j)
+            source = zsurfs[j].glassSolve.pickupSurface
+            1 <= source + 1 <= length(zsurfs) || error("resolveZemaxGlassPickups!: Zemax surface $(j - 1) " *
+                "picks up its material from surface $source, which doesn't exist (file has surfaces 0-$(length(zsurfs) - 1))")
+            j = source + 1
+        end
+        sourceSurf = zsurfs[j]
+        sourceSolve = sourceSurf.glassSolve
+        for k in chain
+            s = zsurfs[k]
+            s.material = sourceSurf.material
+            s.glassSolve = typeof(s.glassSolve)(sourceSolve.solveType, s.glassSolve.pickupSurface,
+                sourceSolve.nd, sourceSolve.vd, sourceSolve.dPgF, true)
+        end
+    end
+    return nothing
+end
+
+"""
+    zemaxGlassIndexFunc(zsurf::ZemaxSurf, glassCatalog::AbstractDict;
+        surfaceNumber = nothing, glassCatalogNames = String[])
+
+Return the `wavelength -> refractive index` function for one surface's
+material, after pickups have already been resolved by
+[`resolveZemaxGlassPickups!`](@ref) (as [`readZemax`](@ref) does). The
+reserved `"MIRROR"` material isn't handled here: a mirror doesn't
+change the medium, so [`zemaxsurfsToGeo`](@ref) never asks for its
+index.
+
+Checked in order:
+1. `zsurf.glassSolve.solveType == 1` (model glass): a
+   [`ModelGlass`](@ref) built from `nd`/`vd`/`dPgF`, whatever
+   `zsurf.material` says (usually the `___BLANK` placeholder).
+2. `zsurf.material` is a key of `glassCatalog`: that catalog entry. The
+   `GLAS` line's numeric fields are ignored, since for a catalog glass
+   they're either Zemax's cached values or `1.5 40` filler.
+3. Otherwise: throws an `ErrorException` naming the glass, the surface,
+   and the file's `GCAT` catalogs. It never falls back to the line's
+   cached `nd`/`vd`, which may be filler.
+
+Arguments:
+- `zsurf` -- the surface whose material to look up
+- `glassCatalog` -- glass name -> `wavelength -> index` function (see
+  [`defaultGlassCatalog`](@ref))
+- `surfaceNumber` -- (keyword) surface number to name in the error
+  message, if known
+- `glassCatalogNames` -- (keyword) the file's `GCAT` catalog names, to
+  name in the error message
+"""
+function zemaxGlassIndexFunc(zsurf::ZemaxSurf, glassCatalog::AbstractDict;
+        surfaceNumber = nothing, glassCatalogNames = String[])
+    solve = zsurf.glassSolve
+    solve.solveType == 1 && return ModelGlass(solve.nd, solve.vd, solve.dPgF)
+    haskey(glassCatalog, zsurf.material) && return glassCatalog[zsurf.material]
+    location = surfaceNumber === nothing ? "" : " (surface $surfaceNumber)"
+    catalogs = isempty(glassCatalogNames) ? "none listed" : join(glassCatalogNames, ", ")
+    error("zemaxGlassIndexFunc: glass \"$(zsurf.material)\"$location not found in glassCatalog " *
+        "(file's GCAT catalogs: $catalogs) -- load it first, e.g. with loadAGFCatalog! or loadRICatalog!")
+end
+
+"""
+    zemaxMaterialLabel(s::ZemaxSurf) -> String
+
+Short human-readable description of a surface's resolved material, for
+[`printZemaxSurfs`](@ref) and the Zemax browser's surface table: the
+material name for a catalog glass, `MODEL nd/vd/dPgF` for a model glass
+(rather than its meaningless `___BLANK` placeholder name), prefixed with
+`PICKUP←N ` when the material was picked up from Zemax surface `N`.
+"""
+function zemaxMaterialLabel(s::ZemaxSurf)
+    solve = s.glassSolve
+    base = solve.solveType == 1 ?
+        @sprintf("MODEL %.4f/%.2f/%.4f", solve.nd, solve.vd, solve.dPgF) : s.material
+    solve.pickedUp ? "PICKUP←$(solve.pickupSurface) $base" : base
+end
+
+"""
     printZemaxSurfs(zsurfs::Vector{ZemaxSurf})
 
 Print a one-line summary (curvature, distance, material, radius, stop,
 conic, coating, type) for each surface in `zsurfs` to stdout, followed
 by its aspheric coefficient vector. Useful for inspecting the result of
-[`readZemax`](@ref).
+[`readZemax`](@ref). The material column comes from
+[`zemaxMaterialLabel`](@ref), so model glasses and pickups show what
+they resolve to rather than a `___BLANK` placeholder.
 """
 function printZemaxSurfs(zsurfs::Vector{ZemaxSurf})
     println("surface curvature distance material radius stop conic coating type")
     for (i, s) in enumerate(zsurfs)
-        println("$i  $(s.curvature) $(s.distance) $(s.material) $(s.radius) $(s.stop) $(s.conic)
+        println("$i  $(s.curvature) $(s.distance) $(zemaxMaterialLabel(s)) $(s.radius) $(s.stop) $(s.conic)
         $(s.coating) $(s.type)")
         println("  Aspherics: ", s.aspherics)
     end
@@ -700,7 +943,8 @@ end
 
 """
     zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64;
-        ydir::Union{Vec3,Nothing} = nothing, glassCatalog::Dict{AbstractString, Any} = defaultGlassCatalog)
+        ydir::Union{Vec3,Nothing} = nothing, glassCatalog::Dict{AbstractString, Any} = defaultGlassCatalog,
+        glassCatalogNames::Vector{String} = String[])
 
 Convert a vector of *real* [`ZemaxSurf`](@ref) records into a traceable
 geometry at the given wavelength, by repeatedly calling
@@ -728,9 +972,14 @@ propagating `Inf`/`NaN` into later surfaces' coordinates -- the object
 surface's own (possibly infinite) distance is meant to be handled
 before this function ever sees `zemaxsurfs`, not by this loop.
 
-`glassCatalog` maps each surface's `material` name to a function of
-wavelength returning its refractive index (see `defaultGlassCatalog`) --
-never consulted for a `COORDBRK` surface (which has no material), nor
+Each surface's refractive index comes from
+[`zemaxGlassIndexFunc`](@ref): a [`ModelGlass`](@ref) for a model-glass
+solve, otherwise `glassCatalog`'s entry for the surface's `material`
+name (see `defaultGlassCatalog`). An unknown glass throws an error
+naming the surface and `glassCatalogNames` (the file's `GCAT` list, as
+passed by [`readZemaxSystem`](@ref)). Material pickups must already be
+resolved, as [`readZemax`](@ref) does. No index is looked up for a
+`COORDBRK` surface (which has no material), nor
 for a surface whose material is the reserved name `"MIRROR"` (Zemax's
 convention for a reflective surface, e.g. `GLAS MIRROR`; not a real
 glass, so never present in a catalog): reflection doesn't change the
@@ -754,7 +1003,8 @@ breaks, never a bare reflective surface.
 Returns the resulting `Vector{AbstractSurface}`.
 """
 function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64;
-        ydir::Union{Vec3,Nothing} = nothing, glassCatalog::Dict{AbstractString, Any} =defaultGlassCatalog)
+        ydir::Union{Vec3,Nothing} = nothing, glassCatalog::Dict{AbstractString, Any} =defaultGlassCatalog,
+        glassCatalogNames::Vector{String} = String[])
     geo = Vector{AbstractSurface}()
     rinIn = rInDef()
     for (i,zsurf) in enumerate(zemaxsurfs)
@@ -767,7 +1017,8 @@ function zemaxsurfsToGeo(zemaxsurfs, base, dir, wavelength::Float64;
                 zsurf.aspherics[5], zsurf.aspherics[6])
             base = base + zsurf.distance * dir
         else
-            rinOut = zsurf.material == "MIRROR" ? rinIn : glassCatalog[zsurf.material](wavelength)
+            rinOut = zsurf.material == "MIRROR" ? rinIn :
+                zemaxGlassIndexFunc(zsurf, glassCatalog; surfaceNumber = i, glassCatalogNames)(wavelength)
             base, dir, ydir, rinIn, surf = zemaxsurfToSurface(i, rinIn, rinOut, base, dir, ydir, zsurf)
             push!(geo, surf)
         end
@@ -803,7 +1054,8 @@ function readZemaxSystem(filename; basept = ORIGIN, dir = ZAXIS, wavelength = 0.
         "not supported -- this package's tracer is sequential-only, see TODO.md")
 
     objSurf = zsurfs[1]
-    geo = zemaxsurfsToGeo(zsurfs[2:end], basept, dir, wavelength; glassCatalog)
+    geo = zemaxsurfsToGeo(zsurfs[2:end], basept, dir, wavelength; glassCatalog,
+        glassCatalogNames = header.glassCatalogs)
     objectSurface = zemaxObjectToModelSurface(objSurf, basept, dir)
 
     OpticalSystem(geo, objectSurface, header.name, header.units, header.wavelengths,

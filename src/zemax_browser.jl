@@ -391,7 +391,7 @@ function renderZemaxFileSummary(summary::ZemaxFileSummary)
     )
     rows = [Bonito.DOM.tr(
                 Bonito.DOM.td(string(i)), Bonito.DOM.td(s.type), Bonito.DOM.td(string(s.curvature)),
-                Bonito.DOM.td(string(s.distance)), Bonito.DOM.td(s.material), Bonito.DOM.td(string(s.radius)),
+                Bonito.DOM.td(string(s.distance)), Bonito.DOM.td(zemaxMaterialLabel(s)), Bonito.DOM.td(string(s.radius)),
                 Bonito.DOM.td(string(s.stop)), Bonito.DOM.td(string(s.conic)), Bonito.DOM.td(s.coating),
                 Bonito.DOM.td(s.comm),
             ) for (i, s) in enumerate(summary.zsurfs)]

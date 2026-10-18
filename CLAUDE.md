@@ -63,11 +63,16 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
     (`loadAGFCatalog!`/`loadAGFCatalog`, paralleling
     `lens_refractive_index.jl`'s `loadRICatalog!`/`loadRICatalog`, and
     populating the same `defaultGlassCatalog` dict) by reusing the
-    already-implemented `riFormula1`/`riFormula3` dispersion math rather
-    than new formula code -- only AGF dispersion-formula codes 1
-    (Schott) and 2 (Sellmeier1) are supported, since those are the only
-    ones that are exact special cases of `riFormula3`/`riFormula1`
-    respectively; other codes are skipped (see `TODO.md` #37).
+    already-implemented `riFormula1`/`riFormula3`/`riFormula5`
+    dispersion math rather than new formula code -- only AGF
+    dispersion-formula codes 1 (Schott), 2 (Sellmeier1) and 5 (Conrady)
+    are supported, since those are the only ones that are exact special
+    cases of `riFormula3`/`riFormula1`/`riFormula5` respectively; other
+    codes are skipped (see `TODO.md` #37). `riFormula5` (the Cauchy form
+    `n = c₁ + Σ cᵢ·λ^cᵢ₊₁`, also RefractiveIndex.info "formula 5") is
+    shared with `ModelGlass` (`lens_refractive_index.jl`), Zemax's
+    `nd`/`vd`/`dPgF` model glass -- a callable struct, so it drops into
+    a glass catalog's `wavelength -> index` slot like any other entry.
   - `zemax.jl` — Zemax file import (`.zmx` parsing, `.zar`/`.zmf`
     archive reading and extraction). `readZemaxSystem` (returning an
     `OpticalSystem`, `lens_definitions.jl`) is the canonical entry
@@ -79,7 +84,18 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
     what's still unsupported, e.g. `GRID_SAG`/`FZERNSAG`). This
     package's tracer is sequential-only end to end -- a Zemax `MODE
     NSC` (non-sequential) file is rejected outright by
-    `readZemaxSystem`, not partially supported. A Zemax file's own
+    `readZemaxSystem`, not partially supported. Materials: a `GLAS`
+    line carries a solve code, not just a name (`ZEMAX_GLAS_TOKENS`/
+    `ZemaxGlassSolve`: 0 catalog, 1 model glass, 2 pickup, 3
+    substitute), and its `___BLANK` placeholder name usually means a
+    *pickup of air*, not a model glass -- so `readZemax` resolves
+    pickups itself (`resolveZemaxGlassPickups!`, which needs the object
+    surface still in the vector), and `zemaxsurfsToGeo` picks each
+    index via `zemaxGlassIndexFunc` (model glass -> `ModelGlass`, else
+    catalog lookup, else a hard error). Never trust a `GLAS` line's
+    trailing `nd`/`vd` outside solve 1: `1.5 40` is common filler. See
+    `zemax_model_glass_parsing.md` and `TODO.md` #39 for what's
+    unverified (e.g. the `SOLVETYPE` form, which only warns). A Zemax file's own
     length unit (`UNIT` -- `MM`/`CM`/`IN`/`M`) is converted to this
     package's canonical `LENGTH_UNIT` (mm, `constants.jl`) once, inside
     `readZemax` (via `convertZemaxUnitsToMM!`/`zemaxUnitToMM`), before

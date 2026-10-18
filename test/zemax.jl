@@ -51,6 +51,7 @@
         @test s1.curvature == 0.05
         @test s1.distance == 5.0
         @test s1.material == "TESTGLASS"
+        @test s1.glassSolve == ZemaxGlassSolve{Float64}() # bare "GLAS TESTGLASS" line: default solve fields
         @test s1.radius == 10.0
         @test s1.stop == true
         @test s1.conic == 0.0
@@ -685,6 +686,183 @@
             write(nscFixture, replace(read(fixture, String), "MODE SEQ" => "MODE NSC"))
             @test_throws ErrorException readZemaxSystem(nscFixture; glassCatalog = testCatalog)
             rm(nscFixture)
+        end
+    end
+
+    @testset "GLAS model glass / material pickups (test_model_glass.zmx)" begin
+        # Hand-written fixture using the real 13-token GLAS layout. The
+        # object is surface 0, so Zemax surface N is zsurfs[N+1].
+        modelFixture = joinpath(@__DIR__, "fixtures", "test_model_glass.zmx")
+        modelCatalog = Dict{AbstractString,Any}("DEFAULT" => (λ -> 1.0), "TESTGLASS" => (λ -> 1.7))
+        zsurfs, header = readZemax(modelFixture)
+        surf(n) = zsurfs[n+1]
+
+        @testset "GLAS parsing and pickup resolution" begin
+            @test length(zsurfs) == 9
+
+            # 1: catalog glass -- numeric fields parsed as-is (1.5 40 filler)
+            @test surf(1).material == "TESTGLASS"
+            @test surf(1).glassSolve == ZemaxGlassSolve{Float64}(0, 0, 1.5, 40.0, 0.0, false)
+            # 2: model glass
+            @test surf(2).material == "___BLANK"
+            @test surf(2).glassSolve == ZemaxGlassSolve{Float64}(1, 0, 1.6, 40.0, 0.001, false)
+            # 3: no GLAS line -- air
+            @test surf(3).material == "DEFAULT"
+            @test surf(3).glassSolve == ZemaxGlassSolve{Float64}()
+            # 4: pickup of the model glass -- becomes a model glass itself
+            @test surf(4).material == "___BLANK"
+            @test surf(4).glassSolve == ZemaxGlassSolve{Float64}(1, 2, 1.6, 40.0, 0.001, true)
+            # 5: pickup of air -- its own "1.5 40" filler must not survive
+            @test surf(5).material == "DEFAULT"
+            @test surf(5).glassSolve == ZemaxGlassSolve{Float64}(0, 3, 0.0, 0.0, 0.0, true)
+            # 6: pickup of a catalog glass
+            @test surf(6).material == "TESTGLASS"
+            @test surf(6).glassSolve == ZemaxGlassSolve{Float64}(0, 1, 1.5, 40.0, 0.0, true)
+            # 7: chained pickup 7 -> 4 -> 2 (model glass)
+            @test surf(7).material == "___BLANK"
+            @test surf(7).glassSolve == ZemaxGlassSolve{Float64}(1, 4, 1.6, 40.0, 0.001, true)
+            # no unresolved pickups left
+            @test all(s -> s.glassSolve.solveType != 2, zsurfs)
+        end
+
+        @testset "zemaxMaterialLabel" begin
+            @test OpticTrace.zemaxMaterialLabel(surf(1)) == "TESTGLASS"
+            @test OpticTrace.zemaxMaterialLabel(surf(2)) == "MODEL 1.6000/40.00/0.0010"
+            @test OpticTrace.zemaxMaterialLabel(surf(3)) == "DEFAULT"
+            @test OpticTrace.zemaxMaterialLabel(surf(4)) == "PICKUP←2 MODEL 1.6000/40.00/0.0010"
+            @test OpticTrace.zemaxMaterialLabel(surf(5)) == "PICKUP←3 DEFAULT"
+            output = mktemp() do path, io
+                redirect_stdout(() -> printZemaxSurfs(zsurfs), io)
+                close(io)
+                read(path, String)
+            end
+            @test occursin("PICKUP←3 DEFAULT", output)
+        end
+
+        @testset "zemaxGlassIndexFunc" begin
+            @test zemaxGlassIndexFunc(surf(2), modelCatalog) isa ModelGlass
+            @test zemaxGlassIndexFunc(surf(2), modelCatalog) == ModelGlass(1.6, 40.0, 0.001)
+            @test zemaxGlassIndexFunc(surf(1), modelCatalog)(0.55) == 1.7
+            @test zemaxGlassIndexFunc(surf(5), modelCatalog)(0.55) == 1.0
+
+            # model glass wins over a name that happens to be in the catalog
+            named = deepcopy(surf(2))
+            named.material = "TESTGLASS"
+            @test zemaxGlassIndexFunc(named, modelCatalog) isa ModelGlass
+
+            # unknown glass: error names the glass, surface and GCAT catalogs;
+            # never falls back to the GLAS line's cached nd/vd
+            err = try
+                zemaxGlassIndexFunc(surf(1), Dict{AbstractString,Any}("DEFAULT" => rInDef);
+                    surfaceNumber = 1, glassCatalogNames = ["SCHOTT", "MISC"])
+            catch e
+                e
+            end
+            @test err isa ErrorException
+            @test occursin("\"TESTGLASS\"", err.msg)
+            @test occursin("surface 1", err.msg)
+            @test occursin("SCHOTT, MISC", err.msg)
+        end
+
+        @testset "readZemaxSystem indices" begin
+            λ = 0.5875618
+            sys = readZemaxSystem(modelFixture; wavelength = λ, glassCatalog = modelCatalog)
+            nModel = ModelGlass(1.6, 40.0, 0.001)(λ)
+            @test nModel ≈ 1.6 atol = 1e-4
+            @test [s.mod.refIndexOut for s in sys.geo] ≈ [1.7, nModel, 1.0, nModel, 1.0, 1.7, nModel, 1.0]
+            @test sys.geo[2].mod.refIndexIn == 1.7
+
+            @test_throws ErrorException readZemaxSystem(modelFixture; wavelength = λ,
+                glassCatalog = Dict{AbstractString,Any}("DEFAULT" => rInDef))
+            err = try
+                readZemaxSystem(modelFixture; wavelength = λ, glassCatalog = Dict{AbstractString,Any}("DEFAULT" => rInDef))
+            catch e
+                e
+            end
+            @test occursin("SCHOTT, MISC", err.msg) # header.glassCatalogs passed through
+        end
+
+        @testset "bad pickups" begin
+            text = read(modelFixture, String)
+            badFixture = tempname() * ".zmx"
+
+            # cycle: 4 picks up from 7, which picks up from 4
+            write(badFixture, replace(text, "GLAS ___BLANK 2 2 1.6" => "GLAS ___BLANK 2 7 1.6"))
+            @test_throws ErrorException readZemax(badFixture)
+
+            # source surface doesn't exist
+            write(badFixture, replace(text, "GLAS ___BLANK 2 3 1.5" => "GLAS ___BLANK 2 99 1.5"))
+            @test_throws ErrorException readZemax(badFixture)
+
+            # a surface picking up from itself
+            write(badFixture, replace(text, "GLAS ___BLANK 2 3 1.5" => "GLAS ___BLANK 2 5 1.5"))
+            @test_throws ErrorException readZemax(badFixture)
+            rm(badFixture)
+        end
+
+        @testset "resolveZemaxGlassPickups! directly" begin
+            mk(material, solve) = OpticTrace.ZemaxSurf(0.0, 1.0, material, 1.0, false, 0.0, zeros(Float64, 20),
+                "", "STANDARD", "", Float64[], solve)
+            chain = [mk("DEFAULT", ZemaxGlassSolve{Float64}()),
+                     mk("N-BK7", ZemaxGlassSolve{Float64}(0, 0, 1.5168, 64.17, 0.0, false)),
+                     mk("___BLANK", ZemaxGlassSolve{Float64}(2, 1, 1.5, 40.0, 0.0, false)),
+                     mk("___BLANK", ZemaxGlassSolve{Float64}(2, 2, 1.5, 40.0, 0.0, false))]
+            @test resolveZemaxGlassPickups!(chain) === nothing
+            @test chain[3].material == "N-BK7" && chain[4].material == "N-BK7"
+            @test chain[4].glassSolve == ZemaxGlassSolve{Float64}(0, 2, 1.5168, 64.17, 0.0, true)
+            # idempotent
+            resolveZemaxGlassPickups!(chain)
+            @test chain[4].glassSolve == ZemaxGlassSolve{Float64}(0, 2, 1.5168, 64.17, 0.0, true)
+        end
+
+        @testset "SOLVETYPE lines warn instead of being silently ignored" begin
+            solveFixture = tempname() * ".zmx"
+            write(solveFixture, replace(read(modelFixture, String),
+                "  COMM Model glass\n" => "  COMM Model glass\n  SOLVETYPE 2 GM 1.6 40 0.001\n"))
+            @test_logs (:warn, r"SOLVETYPE") readZemax(solveFixture)
+            rm(solveFixture)
+        end
+    end
+
+    if !HAS_ZEMAX_SAMPLES
+        @info "Skipping zemax.jl real-sample model glass / pickup tests: $ZEMAX_SAMPLES_DIR not found"
+    else
+        @testset "GLAS model glass / pickups on real OpticStudio samples (read in place)" begin
+            # every catalog glass these samples name, stubbed -- this tests
+            # material resolution, not catalog dispersion data
+            stubCatalog = Dict{AbstractString,Any}("DEFAULT" => rInDef)
+            for name in ("BK7", "F2", "SSK4A", "SF2", "SF4", "SK2", "BAF3", "S-NSL5", "S-TIM22")
+                stubCatalog[name] = (λ -> 1.55)
+            end
+            adv = joinpath(ZEMAX_SAMPLES_DIR, "Advanced Optical System Design Using OpticStudio")
+            osd = joinpath(ZEMAX_SAMPLES_DIR, "Optical System Design Using OpticStudio")
+
+            @testset "Doublet_Complex.zmx" begin
+                path = joinpath(adv, "Doublet_Complex.zmx")
+                zs, = readZemax(path)
+                @test zs[7+1].glassSolve.solveType == 1 && !zs[7+1].glassSolve.pickedUp
+                @test zs[9+1].glassSolve.solveType == 1 && zs[9+1].glassSolve.pickedUp  # picks up 7
+                @test zs[11+1].glassSolve.solveType == 1 && zs[11+1].glassSolve.pickedUp # picks up 7
+                @test zs[17+1].material == "DEFAULT" # "___BLANK 2 15 1.5 40": surface 15 is air
+                @test readZemaxSystem(path; wavelength = 0.5875618, glassCatalog = stubCatalog) isa OpticalSystem
+            end
+
+            @testset "double-pass_all misalignments.ZMX" begin
+                path = joinpath(osd, "double-pass_all misalignments.ZMX")
+                zs, = readZemax(path)
+                @test all(n -> zs[n+1].material == "DEFAULT", (7, 12, 14)) # pickups of air
+                @test zs[17+1].material == "S-TIM22"
+                @test zs[21+1].material == "S-NSL5"
+                # no readZemaxSystem check here: this file also has TYPE
+                # IRREGULA surfaces, not supported yet (TODO.md bug #4)
+            end
+
+            @testset "SC_Tol_RflScp.zmx" begin
+                path = joinpath(osd, "SC_Tol_RflScp.zmx")
+                zs, = readZemax(path)
+                @test zs[20+1].material == "DEFAULT" # pickup of air
+                @test readZemaxSystem(path; wavelength = 0.5875618, glassCatalog = stubCatalog) isa OpticalSystem
+            end
         end
     end
 

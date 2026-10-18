@@ -8,6 +8,10 @@ NM NBK7TEST 2 587.0 1.5168 64.17 0 0 0
 GC synthetic Sellmeier1-formula test glass (coefficients from N-BK7)
 CD 1.03961212 0.00600069867 0.231792344 0.0200179144 1.01046945 103.560653 0 0 0 0
 LD 0.3 2.5
+NM CONRADYTEST 5 0.0 0.0 0.0 0 0 0
+GC synthetic Conrady-formula test glass (invented coefficients)
+CD 1.45 0.0125 7.0E-05 0 0 0 0 0 0 0
+LD 0.334 2.325
 NM HERZTEST 3 0.0 0.0 0.0 0.0 0.0 0.0
 GC synthetic Herzberger-formula glass, unsupported dispform -- should be skipped
 CD 1.0 2.0 3.0 4.0 5.0 6.0 0 0 0 0

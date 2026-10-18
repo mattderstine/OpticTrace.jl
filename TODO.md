@@ -35,6 +35,27 @@ cleanup candidates, and open design questions that aren't bugs. See
   `Sequential/Telescopes/Hubble.zmx`) use `UNIT METER` and fail to
   parse with the current code. Fix: add a `units == "METER" && return
   1000.0` branch (same factor as `"M"`).
+- **15.** `src/lens_refractive_index.jl`, `getRefractiveIndexFunc`:
+  looks up the dispersion formula lazily, inside the returned closure
+  (`f(x) = funcs[typeData](x, coefs)`), so a RefractiveIndex.info record
+  of an unsupported formula type (`"formula 4"`, `"6"`-`"9"`; ~107 such
+  records in the local database) loads into a catalog via
+  `loadRICatalog!` without complaint, then throws
+  `KeyError("formula 4")` the first time that glass's index is
+  evaluated. Confirmed with `organic/C8H5KO4 - potassium hydrogen
+  phthalate/Moutzouris-alpha.yml`. Fix: check `haskey(funcs, typeData)`
+  up front and return `nothing` (skip, with a message) like the
+  no-coefficients case.
+- **16.** `src/agf.jl`, `getAGFRefractiveIndexFunc` (dispform 2,
+  Sellmeier1): computes `sqrt(L_i)` while building the coefficient
+  vector, which throws a `DomainError` for a glass with a negative
+  `L_i` -- and since that's not caught, it aborts `loadAGFCatalog!` for
+  the whole file (and for every later file when loading a directory).
+  Confirmed: `loadAGFCatalog` on the local Zemax `Glasscat/` directory
+  dies partway through, and loading `OHARA.AGF` or `MISC.AGF` alone
+  throws partway through their records. Fix: either
+  map Sellmeier1 onto `riFormula2` (which takes the pole term unsquared,
+  so no `sqrt` is needed) or skip such glasses with a message.
 
 ## Code issues
 
@@ -283,17 +304,22 @@ already resolved.
   be done by first checking the operation on the sample files and then 
   writing new .zmx files with surface tests.
 - **37.** `src/agf.jl`: `getAGFRefractiveIndexFunc` only supports AGF
-  dispersion-formula codes 1 (Schott) and 2 (Sellmeier1) -- the two
-  that happen to be exact special cases of the already-implemented
-  `riFormula3`/`riFormula1` (see the function's docstring for the
-  coefficient-vector mapping), covering the large majority of glasses
-  in real SCHOTT/OHARA/HOYA/CDGM `.agf` catalogs. Other AGF formula
-  codes (Sellmeier2/3/4/5, Herzberger, Conrady, Handbook of Optics 1/2,
+  dispersion-formula codes 1 (Schott), 2 (Sellmeier1) and 5 (Conrady)
+  -- the ones that happen to be exact special cases of the
+  already-implemented `riFormula3`/`riFormula1`/`riFormula5` (see the
+  function's docstring for the coefficient-vector mappings), covering
+  the large majority of glasses in real SCHOTT/OHARA/HOYA/CDGM `.agf`
+  catalogs. Conrady was added alongside Zemax model glass support (both
+  are the Cauchy form `riFormula5` evaluates, see #39). Other AGF
+  formula codes (Sellmeier2/3/4/5, Herzberger, Handbook of Optics 1/2,
   Extended1/2/3) aren't implemented -- glasses using them are skipped
   (same pattern as unsupported Zemax surface `TYPE`s, bug #4) rather
-  than erroring. Adding real support means new dispersion-formula math,
-  deliberately deferred rather than done as part of the initial `.agf`
-  loader.
+  than erroring. None of them fits the Cauchy form (they're written in
+  `n²`, or Herzberger's `1/(λ²-0.028)` terms), so each needs new
+  dispersion-formula math. By count in the local Zemax `Glasscat/`
+  directory (2026-09-13), the biggest remaining gaps are Extended3
+  (code 13, 340 glasses), Herzberger (code 3, 45), Extended2 (code 12,
+  42) and Sellmeier3 (code 6, 39).
 - **38.** `src/lens_refractive_index.jl`/`src/agf.jl`: glass import and
   index-lookup only handle glasses defined by a dispersion *formula* --
   `getRefractiveIndexFunc` (`lens_refractive_index.jl`) returns
@@ -310,6 +336,47 @@ already resolved.
   into a `wavelength -> index` function of the same shape. Until this
   is done, any real-world glass that's tabulated-only is silently
   unavailable via either loader.
+- **39.** `src/lens_refractive_index.jl`/`src/zemax.jl`: Zemax model
+  glass support has three open questions.
+  - **Unverified formula.** `ModelGlass` uses OpticSim.jl's
+    `modelglass` fit (Schott TIE-29 normal line + GNU GOptical's
+    `Material::Abbe` coefficients). That approximates OpticStudio's own
+    model glass, but hasn't been checked against real OpticStudio
+    output; it reproduces `vd` only to ~0.1% (e.g. 64.10 for a
+    `vd = 64.17` input). It also only warns (once) outside its 0.36-0.75
+    μm fit range.
+  - **Undecoded `GLAS` token 4 on model glasses.** On a solve-1
+    (model glass) line, the `pickupSurface` token (`ZEMAX_GLAS_TOKENS`)
+    has been seen as both `1 3` and `1 0` in real files; its meaning
+    there is unknown and it's ignored.
+  - **`SOLVETYPE` form unverified.** `zemax_model_glass_parsing.md`
+    describes model glass solves stored as separate `SOLVETYPE` lines
+    (`SOLVETYPE surf, GM, Nd, Vd, dPgF`). None of the 469 local sample
+    `.zmx` files uses one (every model glass / pickup was in the `GLAS`
+    line itself), but that corpus is small, so `readZemax` warns on any
+    `SOLVETYPE` line rather than ignoring it. Decode it once a real
+    example turns up (add it as a test fixture if its license allows).
+- **40.** `src/lens_refractive_index.jl`: `riFormula1`/`riFormula2`/
+  `riFormula3` require `c::AbstractVector{T}` with `T == typeof(λ)`, so
+  they throw a `MethodError` when `λ` is a `ForwardDiff` dual but the
+  coefficients are `Float64` (or vice versa) -- i.e. autodiff through a
+  catalog glass's index with respect to wavelength doesn't work.
+  `riFormula5` deliberately takes independent type parameters
+  (`λ::Real, c::AbstractVector{<:Real}`) instead; the siblings could do
+  the same, and also drop their hardcoded `1.0 +` Float64 literal.
+
+- **41.** `src/tracing.jl`, `modFunc(::ParaxialLensT)` (and its
+  `ParaxialProfile`): the ideal thin lens only bends the ray -- it adds
+  no optical path, so `Σ nIn·delta` through it is missing the lens's
+  phase `-r²/(2f)` (`r` = transverse offset from the axis, `f` =
+  `focalLength`, in OPL terms). Any OPD/wavefront calculation through a
+  paraxial lens, including Zemax `PARAXIAL` imports, will be wrong
+  without it. Planned fix: a `surfacePhase` method for `ParaxialLensT`
+  as part of the wavefront-analysis work
+  (`plans/wavefront_analysis.md`). Sign and the not-quite-quadratic
+  (exact vs paraxial) form need a decision; add a regression test that
+  an ideal lens focuses a collimated beam with zero OPD at the paraxial
+  focus.
 
   ## New Features
 
