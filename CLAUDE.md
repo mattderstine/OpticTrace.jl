@@ -64,11 +64,12 @@ Bonito.jl file/directory picker component (`src/UItools/filepicker.jl`).
     `lens_refractive_index.jl`'s `loadRICatalog!`/`loadRICatalog`, and
     populating the same `defaultGlassCatalog` dict) by reusing the
     already-implemented `riFormula1`/`riFormula3`/`riFormula5`
-    dispersion math rather than new formula code -- only AGF
-    dispersion-formula codes 1 (Schott), 2 (Sellmeier1) and 5 (Conrady)
-    are supported, since those are the only ones that are exact special
-    cases of `riFormula3`/`riFormula1`/`riFormula5` respectively; other
-    codes are skipped (see `TODO.md` #37). `riFormula5` (the Cauchy form
+    dispersion math rather than new formula code -- AGF
+    dispersion-formula codes 1-13 are all supported, each an exact
+    special case of `riFormula2`/`3`/`4`/`5`/`7` (see the function's
+    docstring for the mapping; codes 4 and 10 are unverified against
+    real glasses, `TODO.md` #37 in `FIXED.md`); any other code is
+    skipped. `riFormula5` (the Cauchy form
     `n = c₁ + Σ cᵢ·λ^cᵢ₊₁`, also RefractiveIndex.info "formula 5") is
     shared with `ModelGlass` (`lens_refractive_index.jl`), Zemax's
     `nd`/`vd`/`dPgF` model glass -- a callable struct, so it drops into

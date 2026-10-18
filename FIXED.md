@@ -311,6 +311,68 @@ list doesn't.
   swapped for a bare `NAME`, same pattern already used by that file's
   `"MODE NSC rejected"` testset.
 
+- **16.** `src/agf.jl`, `getAGFRefractiveIndexFunc` (dispform 2,
+  Sellmeier1): computes `sqrt(L_i)` while building the coefficient
+  vector, which throws a `DomainError` for a glass with a negative
+  `L_i` -- and since that's not caught, it aborts `loadAGFCatalog!` for
+  the whole file (and for every later file when loading a directory).
+  Confirmed: `loadAGFCatalog` on the local Zemax `Glasscat/` directory
+  dies partway through, and loading `OHARA.AGF` or `MISC.AGF` alone
+  throws partway through their records. Fix: either
+  map Sellmeier1 onto `riFormula2` (which takes the pole term unsquared,
+  so no `sqrt` is needed) or skip such glasses with a message.
+
+  **Fixed**: `getAGFRefractiveIndexFunc`'s `dispform == 2` branch now
+  maps Sellmeier1 onto `riFormula2` (`c = [0.0, K1,L1, K2,L2, K3,L3]`,
+  pole term unsquared) so no `sqrt` is taken. Regression tests in
+  `test/agf.jl` (a pure-math negative-`L` case, plus a `NEGLTEST`
+  record in `test/fixtures/test_glasses.agf` placed ahead of other
+  records to confirm `loadAGFCatalog!` no longer aborts).
+
+- **15.** `src/lens_refractive_index.jl`, `getRefractiveIndexFunc`:
+  looks up the dispersion formula lazily, inside the returned closure
+  (`f(x) = funcs[typeData](x, coefs)`), so a RefractiveIndex.info record
+  of an unsupported formula type (`"formula 4"`, `"6"`-`"9"`; ~107 such
+  records in the local database) loads into a catalog via
+  `loadRICatalog!` without complaint, then throws
+  `KeyError("formula 4")` the first time that glass's index is
+  evaluated. Confirmed with `organic/C8H5KO4 - potassium hydrogen
+  phthalate/Moutzouris-alpha.yml`. Fix: check `haskey(funcs, typeData)`
+  up front and return `nothing` (skip, with a message) like the
+  no-coefficients case.
+
+  **Fixed**: `getRefractiveIndexFunc` now resolves the formula up front
+  through a new module-level `riFormulas` dict and returns `nothing`
+  (with a "Skipping ... unsupported dispersion formula" message) for an
+  unknown type, so `loadRICatalog!` skips it instead of storing a
+  closure that throws on first evaluation. Rather than only skipping the
+  ~107 affected records, the missing formulas were also implemented:
+  `riFormula4` (extended Sellmeier-style, up to 17 coefficients; missing
+  trailing ones are zero, and a zero-numerator pole term is skipped to
+  avoid `0/0`), `riFormula6` (gases), `riFormula7` (Herzberger),
+  `riFormula8` (retro) and `riFormula9` (exotic). A sweep over the local
+  database evaluated every coefficient-bearing record at the middle of
+  its `wavelength_range`: 1998 finite, none skipped. Covered in
+  `test/refractive_index.jl` (hand-evaluated values for each formula,
+  a temp-dir unsupported-type regression test, and real-record checks
+  that need the local catalog).
+
+- **14.** `src/zemax.jl`, `zemaxUnitToMM(units::String)`: only accepts
+  the abbreviated Zemax `UNIT` tokens `"MM"`/`"CM"`/`"IN"`/`"M"` --
+  `readZemax` (via `convertZemaxUnitsToMM!`) throws an `ArgumentError`
+  on any `.zmx` file whose `UNIT` line spells the unit out as `"METER"`
+  instead of `"M"`. Confirmed against real sample files: at least three
+  files under the local Zemax install's `Samples/` tree (`Non-
+  sequential/Miscellaneous/Multiple mirror telescope.zmx`, `Sequential/
+  Image Simulation/Example 4, a diffraction limited system.ZMX`,
+  `Sequential/Telescopes/Hubble.zmx`) use `UNIT METER` and fail to
+  parse with the current code. Fix: add a `units == "METER" && return
+  1000.0` branch (same factor as `"M"`).
+
+  **Fixed**: `zemaxUnitToMM` now also accepts `"METER"` (1000.0, same as
+  `"M"`), and its error message and docstring list it. Regression test
+  in `test/zemax.jl`'s `zemaxUnitToMM` testset.
+
 ## Code issues
 
 - **1.** `src/zemax.jl`: `ZemaxGeometry` struct was defined but never
@@ -623,3 +685,40 @@ list doesn't.
   `"GLAS MIRROR (TODO.md #27)"` sub-testset in `test/zemax.jl`'s
   `"zemaxsurfsToGeo"` testset, using the same hand-built-`ZemaxSurf`
   pattern as the adjacent `"COORDBRK"` sub-testset.
+
+- **37.** `src/agf.jl`: `getAGFRefractiveIndexFunc` only supports AGF
+  dispersion-formula codes 1 (Schott), 2 (Sellmeier1) and 5 (Conrady)
+  -- the ones that happen to be exact special cases of the
+  already-implemented `riFormula3`/`riFormula1`/`riFormula5` (see the
+  function's docstring for the coefficient-vector mappings), covering
+  the large majority of glasses in real SCHOTT/OHARA/HOYA/CDGM `.agf`
+  catalogs. Conrady was added alongside Zemax model glass support (both
+  are the Cauchy form `riFormula5` evaluates, see #39). Other AGF
+  formula codes (Sellmeier2/3/4/5, Herzberger, Handbook of Optics 1/2,
+  Extended1/2/3) aren't implemented -- glasses using them are skipped
+  (same pattern as unsupported Zemax surface `TYPE`s, bug #4) rather
+  than erroring. None of them fits the Cauchy form (they're written in
+  `n²`, or Herzberger's `1/(λ²-0.028)` terms), so each needs new
+  dispersion-formula math. By count in the local Zemax `Glasscat/`
+  directory (2026-09-13), the biggest remaining gaps are Extended3
+  (code 13, 340 glasses), Herzberger (code 3, 45), Extended2 (code 12,
+  42) and Sellmeier3 (code 6, 39).
+
+  **Fixed**: `getAGFRefractiveIndexFunc` now supports every standard
+  AGF dispersion-formula code, 1-13. The original premise that the
+  remaining codes each needed new math turned out wrong once
+  `riFormula4` and `riFormula7` existed (TODO #15): Herzberger (3) is
+  `riFormula7`; Sellmeier2 (4) and Handbook of Optics 1/2 (7/8) are
+  `riFormula4`; Sellmeier3/4/5 (6/9/11) are `riFormula2`; and
+  Extended/Extended2/Extended3 (10/12/13) are `riFormula3` with fixed
+  exponent lists -- no new formula code was needed. Verified against the
+  `nd` on each glass's own `NM` line across the whole local `Glasscat/`
+  (codes 3, 6, 7, 8, 9, 12, 13: agreement ~1e-6, skipping glasses whose
+  `nd` is a 0/1.0 placeholder). Codes 4 and 10 have no glass there at
+  all and 11 only one with a placeholder `nd` (KRS5, spot-checked
+  physically), so those three are unverified against real data and
+  documented as such in the function's docstring. Tests in
+  `test/agf.jl` (per-code real-coefficient cases, independent-math cases
+  for 4/10/11, and a Glasscat-wide `nd` sweep when the catalog is
+  present). The synthetic `HERZTEST` fixture record changed to code 99
+  since code 3 is now supported.

@@ -93,6 +93,56 @@
                 @test_logs ModelGlass(1.5, 60.0)(0.5) # no warning inside the range
             end
         end
+
+        # Formulas 4, 6-9 (TODO.md #15): expected values written out
+        # independently from each formula's definition (not via the
+        # code under test), using coefficients from real records.
+        @testset "riFormula4 (KAP Moutzouris-gamma, 11 of 17 coefficients)" begin
+            c = [2.196073191, 0.015025722, 0, 0.190981743, 2, 0, 0, 0, 1, -0.006100780, 2]
+            λ = 0.5875618
+            n2 = 2.196073191 + 0.015025722 / (λ^2 - 0.190981743^2) - 0.006100780 * λ^2
+            @test OpticTrace.riFormula4(λ, c) ≈ sqrt(n2) atol = 1e-12
+            @test OpticTrace.riFormula4(λ, c) ≈ 1.497542175829694 atol = 1e-9
+            # explicit zero padding gives the same answer
+            @test OpticTrace.riFormula4(λ, [c; zeros(6)]) == OpticTrace.riFormula4(λ, c)
+        end
+
+        @testset "riFormula6 (He, Mansfield)" begin
+            c = [0, 0.01470091, 423.98]
+            @test OpticTrace.riFormula6(0.5875618, c) ≈ 1.0000349121124632 atol = 1e-12
+        end
+
+        @testset "riFormula7 (Si, Edwards; c6 omitted)" begin
+            c = [3.41983, 0.159906, -0.123109, 1.26878e-6, -1.95104e-9]
+            @test OpticTrace.riFormula7(3.0, c) ≈ 3.436134677527718 atol = 1e-9
+        end
+
+        @testset "riFormula8 (AgBr, Schroter)" begin
+            c = [0.452505, 0.09939, 0.070537, -0.000150]
+            @test OpticTrace.riFormula8(0.55, c) ≈ 2.275584479878346 atol = 1e-9
+        end
+
+        @testset "riFormula9 (urea, Rosker-e)" begin
+            c = [2.51527, 0.0240, 0.0300, 0.020, 1.52, 0.8771]
+            @test OpticTrace.riFormula9(0.6, c) ≈ 1.605403788031452 atol = 1e-9
+        end
+
+        @testset "getRefractiveIndexFunc unsupported formula (TODO.md #15)" begin
+            mktempdir() do dir
+                write(joinpath(dir, "bad.yml"), "DATA:\n  - type: formula 99\n    coefficients: 1 2 3\n")
+                write(joinpath(dir, "good.yml"), "DATA:\n  - type: formula 6\n    coefficients: 0 0.01470091 423.98\n")
+                write(joinpath(dir, "tab.yml"), "DATA:\n  - type: tabulated n\n    data: |\n      0.5 1.5\n")
+                # skipped at load time, not a KeyError on first evaluation
+                @test getRefractiveIndexFunc(dir, "bad.yml") === nothing
+                @test getRefractiveIndexFunc(dir, "tab.yml") === nothing
+                f = getRefractiveIndexFunc(dir, "good.yml")
+                @test f(0.5875618) ≈ 1.0000349121124632 atol = 1e-12
+                cat = Dict{AbstractString,Any}()
+                loadRICatalog!(cat, "."; basepath=dir)
+                @test haskey(cat, "good")
+                @test !haskey(cat, "bad")
+            end
+        end
     end
 
     if !HAS_GLASS_CATALOG
@@ -115,6 +165,20 @@
             f = getRefractiveIndexFunc(OpticTrace.dirBaseRefractiveIndex, "glass/misc/soda-lime/Rubin-lowiron.yml")
             λ = 0.5875618
             @test f(λ) ≈ 1.5130 - 0.003169 * λ^2 + 0.003962 / λ^2 atol = 1e-12
+        end
+
+        @testset "formulas 4, 6-9 real records (TODO.md #15)" begin
+            base = OpticTrace.dirBaseRefractiveIndex
+            f = getRefractiveIndexFunc(base, "organic/C8H5KO4 - potassium hydrogen phthalate/Moutzouris-gamma.yml")
+            @test f(0.5875618) ≈ 1.497542175829694 atol = 1e-9
+            f = getRefractiveIndexFunc(base, "main/He/Mansfield.yml")
+            @test f(0.5875618) ≈ 1.0000349121124632 atol = 1e-12
+            f = getRefractiveIndexFunc(base, "main/Si/Edwards.yml")
+            @test f(3.0) ≈ 3.436134677527718 atol = 1e-9
+            f = getRefractiveIndexFunc(base, "main/AgBr/Schroter.yml")
+            @test f(0.55) ≈ 2.275584479878346 atol = 1e-9
+            f = getRefractiveIndexFunc(base, "organic/CH4N2O - urea/Rosker-e.yml")
+            @test f(0.6) ≈ 1.605403788031452 atol = 1e-9
         end
 
         @testset "loadRICatalog! (into a caller-supplied dict)" begin

@@ -204,6 +204,128 @@ function riFormula5(λ::Real, c::AbstractVector{<:Real})
 end
 
 """
+    riCoef(c::AbstractVector, i::Integer)
+
+Coefficient `c[i]`, or `zero(eltype(c))` when the glass record lists
+fewer than `i` coefficients -- RefractiveIndex.info records may omit
+trailing zero coefficients of the fixed-length formulas
+([`riFormula4`](@ref), [`riFormula7`](@ref)).
+"""
+riCoef(c::AbstractVector, i::Integer) = i <= length(c) ? c[i] : zero(eltype(c))
+
+"""
+    riFormula4(λ::Real, c::AbstractVector{<:Real})
+
+Dispersion formula (RefractiveIndex.info "formula 4"):
+`n² = c1 + c2·λ^c3/(λ²-c4^c5) + c6·λ^c7/(λ²-c8^c9) + c10·λ^c11 +
+c12·λ^c13 + c14·λ^c15 + c16·λ^c17`, with `λ` in microns. Missing
+trailing coefficients are taken as zero, and a pole term whose
+numerator coefficient (`c2`/`c6`) is zero is skipped, so unused terms
+can't produce `0/0`.
+
+Arguments:
+- `λ` -- wavelength, in microns
+- `c` -- dispersion coefficients, as read from the glass YAML file
+"""
+function riFormula4(λ::Real, c::AbstractVector{<:Real})
+    λ2 = λ^2
+    sum = riCoef(c, 1)
+    for i in (2, 6)
+        ci = riCoef(c, i)
+        iszero(ci) && continue
+        sum += ci * λ ^ riCoef(c, i+1) / (λ2 - riCoef(c, i+2) ^ riCoef(c, i+3))
+    end
+    for i in (10, 12, 14, 16)
+        ci = riCoef(c, i)
+        iszero(ci) && continue
+        sum += ci * λ ^ riCoef(c, i+1)
+    end
+    sqrt(sum)
+end
+
+"""
+    riFormula6(λ::Real, c::AbstractVector{<:Real})
+
+Dispersion formula (RefractiveIndex.info "formula 6", gases):
+`n = 1 + c[1] + Σ c[i]/(c[i+1] - λ⁻²)` summed over `i = 2, 4, 6, ...`,
+with `λ` in microns.
+
+Arguments:
+- `λ` -- wavelength, in microns
+- `c` -- dispersion coefficients, as read from the glass YAML file
+"""
+function riFormula6(λ::Real, c::AbstractVector{<:Real})
+    sum = 1 + c[1]
+    for i in 2:2:length(c)-1
+        sum += c[i] / (c[i+1] - λ^-2)
+    end
+    sum
+end
+
+"""
+    riFormula7(λ::Real, c::AbstractVector{<:Real})
+
+Dispersion formula (RefractiveIndex.info "formula 7", Herzberger):
+`n = c1 + c2/(λ²-0.028) + c3/(λ²-0.028)² + c4·λ² + c5·λ⁴ + c6·λ⁶`,
+with `λ` in microns. A missing `c6` is taken as zero.
+
+Arguments:
+- `λ` -- wavelength, in microns
+- `c` -- dispersion coefficients, as read from the glass YAML file
+"""
+function riFormula7(λ::Real, c::AbstractVector{<:Real})
+    λ2 = λ^2
+    d = λ2 - 0.028
+    riCoef(c, 1) + riCoef(c, 2) / d + riCoef(c, 3) / d^2 +
+        riCoef(c, 4) * λ2 + riCoef(c, 5) * λ2^2 + riCoef(c, 6) * λ2^3
+end
+
+"""
+    riFormula8(λ::Real, c::AbstractVector{<:Real})
+
+Dispersion formula (RefractiveIndex.info "formula 8", retro): with
+`x = c1 + c2·λ²/(λ²-c3) + c4·λ²`, `(n²-1)/(n²+2) = x`, i.e.
+`n = sqrt((1+2x)/(1-x))`, with `λ` in microns.
+
+Arguments:
+- `λ` -- wavelength, in microns
+- `c` -- dispersion coefficients, as read from the glass YAML file
+"""
+function riFormula8(λ::Real, c::AbstractVector{<:Real})
+    λ2 = λ^2
+    x = c[1] + c[2] * λ2 / (λ2 - c[3]) + c[4] * λ2
+    sqrt((1 + 2x) / (1 - x))
+end
+
+"""
+    riFormula9(λ::Real, c::AbstractVector{<:Real})
+
+Dispersion formula (RefractiveIndex.info "formula 9", exotic):
+`n² = c1 + c2/(λ²-c3) + c4·(λ-c5)/((λ-c5)²+c6)`, with `λ` in microns.
+
+Arguments:
+- `λ` -- wavelength, in microns
+- `c` -- dispersion coefficients, as read from the glass YAML file
+"""
+function riFormula9(λ::Real, c::AbstractVector{<:Real})
+    d = λ - c[5]
+    sqrt(c[1] + c[2] / (λ^2 - c[3]) + c[4] * d / (d^2 + c[6]))
+end
+
+"""
+    riFormulas
+
+Maps a RefractiveIndex.info `DATA[1]["type"]` string (`"formula 1"`
+... `"formula 9"`) to its dispersion function, `riFormulaN(λ, c)`.
+Used by [`getRefractiveIndexFunc`](@ref); tabulated record types have
+no entry.
+"""
+const riFormulas = Dict{String,Function}(
+    "formula 1" => riFormula1, "formula 2" => riFormula2, "formula 3" => riFormula3,
+    "formula 4" => riFormula4, "formula 5" => riFormula5, "formula 6" => riFormula6,
+    "formula 7" => riFormula7, "formula 8" => riFormula8, "formula 9" => riFormula9)
+
+"""
     ModelGlass{T<:Real}
 
 Zemax "Model Glass": an idealized glass defined only by its refractive
@@ -303,12 +425,13 @@ riN_LAK22(0.5)
 Build a `wavelength -> refractive index` function for one glass, by
 reading its RefractiveIndex.info-style YAML record at
 `joinpath(basepath, path)`, dispatching on its `DATA[1]["type"]` field
-to [`riFormula1`](@ref)/[`riFormula2`](@ref)/[`riFormula3`](@ref)/
-[`riFormula5`](@ref) (`"formula 1"`/`"formula 2"`/`"formula 3"`/
-`"formula 5"`), and parsing its `"coefficients"` field.
+through [`riFormulas`](@ref) to [`riFormula1`](@ref)-[`riFormula9`](@ref)
+(`"formula 1"`-`"formula 9"`), and parsing its `"coefficients"` field.
 
 Returns `nothing` if the record has no `"coefficients"` entry (e.g. a
-tabulated-data-only record with no dispersion formula); otherwise
+tabulated-data-only record with no dispersion formula) or its formula
+type isn't in [`riFormulas`](@ref) (skipped with a message, at load
+time rather than on first evaluation); otherwise
 returns a 1-argument function `wavelength -> index`, suitable for use
 as a [`defaultGlassCatalog`](@ref) entry.
 
@@ -317,7 +440,6 @@ Arguments:
 - `path` -- glass YAML file path, relative to `basepath`
 """
 function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
-    funcs = Dict("formula 2"=>riFormula2, "formula 1"=> riFormula1, "formula 3"=>riFormula3, "formula 5"=>riFormula5)
     pth = joinpath(basepath,path)
     record = YAML.load_file(pth)
     data = record["DATA"][1]
@@ -326,8 +448,13 @@ function getRefractiveIndexFunc(basepath::AbstractString, path::AbstractString)
     if coefentries == nothing
         return nothing
     end
+    fn = get(riFormulas, typeData, nothing)
+    if fn === nothing
+        println("Skipping $pth: unsupported dispersion formula \"$typeData\"")
+        return nothing
+    end
     coefs = map(x->parse(Float64,x),split(coefentries))
-    f(x) = funcs[typeData](x, coefs)
+    f(x) = fn(x, coefs)
     f
 end
 

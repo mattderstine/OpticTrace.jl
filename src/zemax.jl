@@ -447,7 +447,8 @@ end
     zemaxUnitToMM(units::String) -> Float64
 
 Millimeters per one `units` (a Zemax `UNIT` token: `"MM"`, `"CM"`,
-`"IN"`, or `"M"`). Throws an `ArgumentError` for anything else, rather
+`"IN"`, `"M"`, or `"METER"` -- some files spell the unit out rather than
+abbreviating it). Throws an `ArgumentError` for anything else, rather
 than silently treating an unrecognized token as millimeters (Zemax's own
 supported `UNIT` values).
 """
@@ -455,9 +456,9 @@ function zemaxUnitToMM(units::String)::Float64
     units == "MM" && return 1.0
     units == "CM" && return 10.0
     units == "IN" && return 25.4
-    units == "M" && return 1000.0
+    (units == "M" || units == "METER") && return 1000.0
     throw(ArgumentError("zemaxUnitToMM: unrecognized Zemax UNIT \"$units\" " *
-        "(expected one of \"MM\", \"CM\", \"IN\", \"M\")"))
+        "(expected one of \"MM\", \"CM\", \"IN\", \"M\", \"METER\")"))
 end
 
 """

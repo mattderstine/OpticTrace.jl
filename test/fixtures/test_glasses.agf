@@ -4,6 +4,10 @@ GC synthetic Schott-formula test glass (coefficients from Hoya BAF11)
 ED 0.0 0.0 0.0 0.0
 CD 2.7272955 -0.013470236 0.014809271 0.0019615335 -0.00019787663 1.0851117e-05 0 0 0 0
 LD 0.365 2.325
+NM NEGLTEST 2 587.0 1.2 50.0 0 0 0
+GC synthetic Sellmeier1 glass with a negative L1 -- must not abort the file
+CD 0.5 -0.1 0.0 1.0 0.0 1.0 0 0 0 0
+LD 0.3 2.5
 NM NBK7TEST 2 587.0 1.5168 64.17 0 0 0
 GC synthetic Sellmeier1-formula test glass (coefficients from N-BK7)
 CD 1.03961212 0.00600069867 0.231792344 0.0200179144 1.01046945 103.560653 0 0 0 0
@@ -12,7 +16,15 @@ NM CONRADYTEST 5 0.0 0.0 0.0 0 0 0
 GC synthetic Conrady-formula test glass (invented coefficients)
 CD 1.45 0.0125 7.0E-05 0 0 0 0 0 0 0
 LD 0.334 2.325
-NM HERZTEST 3 0.0 0.0 0.0 0.0 0.0 0.0
-GC synthetic Herzberger-formula glass, unsupported dispform -- should be skipped
+NM HERZTEST 99 0.0 0.0 0.0 0.0 0.0 0.0
+GC synthetic glass with an unassigned dispform code -- should be skipped
 CD 1.0 2.0 3.0 4.0 5.0 6.0 0 0 0 0
+LD 0.4 1.0
+NM FLOATCODETEST 1.00000000E+00 0.0 1.66672 47.0 0 0 0
+GC synthetic Schott-formula glass whose dispform is written as a float (as in some vendor catalogs)
+CD 2.7272955 -0.013470236 0.014809271 0.0019615335 -0.00019787663 1.0851117e-05 0 0 0 0
+LD 0.365 2.325
+NM FRACCODETEST 1.5 0.0 1.5 50.0 0 0 0
+GC synthetic glass with a non-integer dispform -- should be skipped
+CD 1 2 3 4 5 6 0 0 0 0
 LD 0.4 1.0

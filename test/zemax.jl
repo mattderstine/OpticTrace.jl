@@ -301,6 +301,7 @@
             @test OpticTrace.zemaxUnitToMM("CM") == 10.0
             @test OpticTrace.zemaxUnitToMM("IN") == 25.4
             @test OpticTrace.zemaxUnitToMM("M") == 1000.0
+            @test OpticTrace.zemaxUnitToMM("METER") == 1000.0 # TODO.md #14
             @test_throws ArgumentError OpticTrace.zemaxUnitToMM("MICRON")
         end
 
