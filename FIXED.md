@@ -735,3 +735,20 @@ list doesn't.
   focus (the quadratic form leaves `r⁴/(8f³)`). Whether it matches
   Zemax's own `PARAXIAL` phase is unchecked (no license). The stopgap
   `wavefrontMap` warning was removed. Tests in `test/wavefront.jl`.
+
+- **46.** `src/characterization.jl`, `localRaysHexapolar`/`spotDiagramHex`:
+  the outermost ring sat at the pupil edge (scaled by a
+  `ROUNDINGCONTROL = 0.99` fudge) with the same per-ray weight as the
+  interior, over-weighting the edge, so the RMS radius read high and
+  converged slowly with the ring count.
+
+  **Fixed**: ring `j` is now at `j / (rings + 1/2)` of the pupil size
+  (still `6j` rays per ring plus the centre ray), so each ray's band
+  `(j ± 1/2)/(rings + 1/2)` ends exactly at the pupil edge. `ROUNDINGCONTROL`
+  is gone (the outer ring is now well inside the aperture), as is the
+  float-stepped ring loop. Chosen over the legacy equal-area layout
+  (`rmsWavefrontLegacy`) because it keeps the hexapolar ray count
+  (`1 + 3rings(rings+1)`) and centre ray. On a uniform-disk test the RMS
+  error went from +30/+13/+6.5/+3% (old) to -13/-2.4/-0.7/-0.2% at
+  1/3/6/12 rings, with the sign now low (the centre ray is slightly
+  over-weighted, ~1/N² effect). Tests in `test/characterization.jl`.

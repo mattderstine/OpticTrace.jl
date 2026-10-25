@@ -440,7 +440,6 @@ end
     returns the local coodinates of the reference ray intersection at surfview
 
 """
-
 function getrefbase(r::Point3, geo, surfview)
     surfnum = tracenumFromName(surfview, geo)
     s = geo[surfnum-1]  #surfnum is defined for traces

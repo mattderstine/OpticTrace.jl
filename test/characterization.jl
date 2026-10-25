@@ -45,6 +45,33 @@
 
             @test_throws ErrorException localRaysHexapolar(geo, basept, pupil, 0)
         end
+
+        @testset "localRaysHexapolar ring placement and area weighting (TODO.md #46 / FIXED.md)" begin
+            geo = [referencePlane("lrh2_img", ORIGIN, ZAXIS, 1.0, 10.0, "none")]
+            pupil = referencePlane("lrh2_pupil", Point3(0.0, 0.0, 5.0), ZAXIS, 1.0, 3.0, "none")
+            basept = Point3(0.0, 0.0, -5.0)
+            for n in (1, 3, 6)
+                rays = localRaysHexapolar(geo, basept, pupil, n)
+                @test length(rays) == 1 + 3n * (n + 1)
+                # image plane is halfway to the pupil, so radii are halved:
+                # the outermost ring sits at n/(n+1/2) of the pupil radius
+                @test maximum(r -> norm(r.base[1:2]), rays) ≈ 0.5 * 3.0 * n / (n + 0.5)
+            end
+
+            # the image of a uniform pupil disk of radius R is a uniform disk of
+            # radius R/2, with RMS radius R/2/sqrt(2). The old sampling (outer ring
+            # at the pupil edge) read 30%/13%/6.5%/3% high at 1/3/6/12 rings.
+            exact = 0.5 * 3.0 / sqrt(2.0)
+            errs = map((1, 3, 6, 12)) do n
+                _, _, rms, _ = spotDiagramHex(geo, basept, pupil, n; bestFocus=false)
+                abs(rms - exact) / exact
+            end
+            @test errs[1] < 0.15
+            @test errs[2] < 0.03
+            @test errs[3] < 0.01
+            @test errs[4] < 0.003
+            @test issorted(errs; rev=true) # converges monotonically
+        end
     end
 
     @testset "Closest approach & focal plane" begin

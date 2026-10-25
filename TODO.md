@@ -344,13 +344,6 @@ already resolved.
   checked against Zemax's; there is no Zemax license to compare. Flip the
   constant if it turns out opposite. The PSF orientation does not depend on
   it (it uses the physical sign).
-- **46.** `src/characterization.jl`, `localRaysHexapolar`/`spotDiagramHex`:
-  the rings put the outermost ring at the pupil edge and weight every ray
-  equally, which over-weights the edge, so the RMS radius reads high and
-  converges slowly with the ring count (measured for the analogous
-  `opdRel` sampling: 4.96/4.61/4.42 waves for 6/12/24 rings against a
-  converged 4.2). `rmsWavefrontLegacy` uses equal-area ring midpoints
-  instead; this function could too.
 - **47.** `src/plotting.jl`, `opdRel`/`plotOPD!`/`plotOPD3D!`: the legacy OPD
   path has known defects (no chief-ray/mean-piston removal; reference sphere
   vertex forced onto the axis; paraxial exit pupil estimate; sphere index

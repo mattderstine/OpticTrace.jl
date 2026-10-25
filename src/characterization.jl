@@ -376,64 +376,51 @@ toLocalRay(ray::Ray{3,T}, surf::OpticTrace.AbstractSurface{3,T}) where {T<:Real}
 
 """
     localRaysHexapolar(geo, basept, pupil, rings)
-    compute rays on hexapolar grid from basept through geo in local coords of last surface
-    rings = number of rings of rays to trace
-    pupil is a surface defining the entrance pupil
 
-    returns
-        rays - array of rays at last surface in local coordinates
+Trace rays from `basept` through `geo` on a hexapolar grid over the
+entrance pupil `pupil` (a surface), returning the rays at the last
+surface in its local coordinates.
 
+`rings` is the number of rings (>= 1). The grid is the centre ray plus
+`6j` rays on ring `j`, at radius `j / (rings + 1/2)` times the pupil
+size, so `1 + 3rings(rings + 1)` rays in all. Each ray stands for the
+band of radii `(j ± 1/2) / (rings + 1/2)` around its ring, so the
+outermost band ends exactly at the pupil edge and every ray carries
+close to equal pupil area; this keeps the edge from being over-weighted
+(`TODO.md` #46, `FIXED.md`) and the RMS radius converges quickly with
+`rings`. Rays that fail to trace are dropped.
 
+Returns the `Vector` of rays.
 """
 function localRaysHexapolar(geo, basept::Point{3,T}, pupil::P, rings::I) where {T<:Real, P<:OpticTrace.AbstractSurface{3, T}, I<:Integer}
-    ROUNDINGCONTROL = 0.99
-
     if rings < 1
         error("rings must be >= 1")
     end
 
     rays = Vector{Ray{3, Float64}}(undef, 0)
     baseap = pupil.base.base
-    radius = ROUNDINGCONTROL * sizeOptic(pupil)
-    
+    radius = sizeOptic(pupil)
+
     #trace the center ray from basept through the center of the pupil
     centerdir = Vec3(normalize(baseap .- basept))
     statusc, trccenter = traceGeometryRel(Ray(basept, centerdir), geo)
-    if statusc == 3 
-        nocenterray = true
-    elseif statusc != 0
+    if statusc != 0 && statusc != 3
         error("Center ray did not make it through the system")
-    else
-        nocenterray = false
-        #println("base = $(toloc(trccenter[end].ray.base))")
+    elseif statusc == 0
         push!(rays, toLocalRay(trccenter[end].ray, geo[end]))
     end
-    #compute the distance between rings
-    d = radius * 2sin(2pi/(rings * 6.0))
-    deltad = radius/rings
-    deltarhoj = 1.0/rings
-    maxr = 0.0
-    maxrhoj = 0.0
-    for rhoj in deltarhoj:deltarhoj:(1.0+0.5*deltarhoj)
-        r = rhoj * radius
-        maxr = max(r, maxr)
-        maxrhoj = max(rhoj, maxrhoj)
-        deltaangle = pi/(3rhoj * rings)
-        for angle in 0.0:deltaangle:(2pi - EPSILON_ANGLE)
+    for j in 1:rings
+        r = radius * j / (rings + 0.5)
+        nangles = 6j
+        for k in 0:(nangles - 1)
+            angle = 2pi * k / nangles
             dir = Vec3(normalize(pupil.toGlobalCoord(Point3(r * cos(angle), r * sin(angle), 0.)) .- basept))
-            localna = sqrt(1.0 - dir[3]^2)
-            #println("lcoalNA = $localna asin(localna) = $(asin(localna))")
-            #println("tracing ray at angle = $angle  dir = $dir")
-            #println("x = $(r*cos(angle))  y = $(r*sin(angle))")
             status, trc = traceGeometry(Ray(basept, dir), geo)
             if status == 0
-                #thepoint = toloc(trc[end].ray.base)
-                #println("  hit at point = $thepoint")
                 push!(rays, toLocalRay(trc[end].ray, geo[end]))
             end
         end
     end
-    #println("maxr = $maxr  maxrhoj = $hoj")
     return rays
 end
 

@@ -33,7 +33,7 @@ const ∞ = Inf
 
 Small angular tolerance (radians). Used to avoid a duplicate endpoint
 when building a closed angular range, e.g.
-`0.0:deltaangle:(2pi - EPSILON_ANGLE)` in `src/characterization.jl`.
+`0.0:deltaangle:(2pi - EPSILON_ANGLE)`.
 """
 const EPSILON_ANGLE = 1e-7
 
