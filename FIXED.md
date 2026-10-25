@@ -722,3 +722,16 @@ list doesn't.
   for 4/10/11, and a Glasscat-wide `nd` sweep when the catalog is
   present). The synthetic `HERZTEST` fixture record changed to code 99
   since code 3 is now supported.
+
+- **41.** `src/tracing.jl`, `modFunc(::ParaxialLensT)`: the ideal thin
+  lens only bent the ray and added no optical path, so OPD through a
+  paraxial lens (including Zemax `PARAXIAL` imports) was wrong.
+
+  **Fixed**: `bendPhase(::ParaxialLensT, ...)` in `src/wavefront.jl`
+  returns `-sign(f) * (sqrt(f² + r²) - |f|)` mm of OPL (`r` from the
+  local intersection coordinates, the same `r` the bend uses). The exact
+  form was chosen over `-r²/(2f)` because the bend aims a collimated ray
+  exactly at `z = f`, so a collimated beam has zero OPD at the paraxial
+  focus (the quadratic form leaves `r⁴/(8f³)`). Whether it matches
+  Zemax's own `PARAXIAL` phase is unchecked (no license). The stopgap
+  `wavefrontMap` warning was removed. Tests in `test/wavefront.jl`.

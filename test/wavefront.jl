@@ -164,6 +164,47 @@ weightedRMS(r) = (m = r.mask; o = r.opd[m]; sqrt(sum(abs2, o .- sum(o) / length(
         @test count(i -> abs(r.opd[i]) > 1e-9, findall(r.mask)) == count(r.mask) - 9   # zero along the axis perpendicular to the gradient
     end
 
+    @testset "ideal thin lens (ParaxialLensT) phase, TODO.md #41" begin
+        paraxialLens(f, basept = Point3(0., 0., 0.), dir = Vec3(0., 0., 1.)) = begin
+            ydir, tgc, tlc, tgd, tld = OT.updateCoordChange(basept, dir, nothing)
+            OT.OptSurface("paraxial", OT.SurfBase(basept, dir, ydir), OT.SizeLens(10.0),
+                OT.ParaxialProfile(0.0), OT.ParaxialLensT(f, 1.0, 1.0),
+                OT.getAmpParams("none"; OT.attributesSurfaces), tgc, tlc, tgd, tld, :cyan3)
+        end
+        trcAt(lens, x, y) = (OT.Trace(OT.Ray(Point3(x, y, 0.), Vec3(0., 0., 1.)), 1.0, 0.0, OT.identityAmpMats()),)
+        for f in (100.0, -100.0)
+            lens = paraxialLens(f)
+            @test OT.bendPhase(lens.mod, lens, nothing, trcAt(lens, 0., 0.)[1], 0.5) == 0
+            for r in (1.0, 5.0, 10.0)
+                ph = OT.bendPhase(lens.mod, lens, nothing, trcAt(lens, 3r / 5, 4r / 5)[1], 0.5)
+                @test ph ≈ -sign(f) * (sqrt(f^2 + r^2) - abs(f))
+            end
+            ph = OT.bendPhase(lens.mod, lens, nothing, trcAt(lens, 0.5, 0.)[1], 0.5)
+            @test ph ≈ -0.5^2 / (2f) rtol = 1e-4
+        end
+
+        # collimated beam through f = 100 mm: zero OPD at the paraxial focus
+        f, λ = 100.0, 0.5
+        geo = Vector{OT.AbstractSurface}([paraxialLens(f),
+            refractSphere("img", Point3(0., 0., f), Vec3(0., 0., 1.), 1., 1., 0.0, 25., "c")])
+        r = @test_logs wavefrontMap(geo, CollimatedField(Vec3(0., 0., 1.)), λ; N = 17, geoWavelength = λ)
+        @test r isa WavefrontResult
+        @test maximum(abs, r.opd[r.mask]) < 1e-6
+        # defocused image plane gives a nonzero OPD (the phase is not hiding everything)
+        geo2 = Vector{OT.AbstractSurface}([paraxialLens(f),
+            refractSphere("img", Point3(0., 0., f + 1.0), Vec3(0., 0., 1.), 1., 1., 0.0, 25., "c")])
+        r2 = wavefrontMap(geo2, CollimatedField(Vec3(0., 0., 1.)), λ; N = 17, geoWavelength = λ)
+        @test maximum(abs, r2.opd[r2.mask]) > 1.0
+
+        # diverging lens: zero OPD against its virtual focus (image surface at z = f < 0 is
+        # behind the lens, so check that the wavefront is spherical about it instead)
+        gd = Vector{OT.AbstractSurface}([paraxialLens(-f),
+            refractSphere("img", Point3(0., 0., 50.), Vec3(0., 0., 1.), 1., 1., 0.0, 25., "c")])
+        rd = wavefrontMap(gd, CollimatedField(Vec3(0., 0., 1.)), λ; N = 17, geoWavelength = λ)
+        @test !isnothing(rd)
+        @test all(isfinite, rd.opd[rd.mask])
+    end
+
     @testset "unsupported / warned cases" begin
         geo, field = parabolaSystem(100.0)
         diff = cDiffuser("diff", Point3(0., 0., 50.), Vec3(0., 0., 1.), 1., 1., 0.1, 10., "c")

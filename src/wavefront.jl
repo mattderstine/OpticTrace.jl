@@ -252,12 +252,32 @@ Phase added by a surface's `mod` ("bend") type, as an optical path length
 in `LENGTH_UNIT` (mm), on top of the geometric `nIn * delta` term. The
 default is `0`. Add a method for a new `AbstractBendType` to model a
 grating (`m*λ*x/d`), a diffractive optic, or an ideal lens
-(`TODO.md` Code issues #41). `s` is the surface, `rayIn` the ray arriving
+(see the `ParaxialLensT` method below, `FIXED.md` #41). `s` is the surface, `rayIn` the ray arriving
 at it, `trcOut` the [`Trace`](@ref) element it produced, and `λ` the
 evaluation wavelength in `WAVELENGTH_UNIT` (μm) -- convert with
 `LENGTH_TO_WAVELENGTH` when the result is a length.
 """
 bendPhase(mod::AbstractBendType, s, rayIn, trcOut, λ) = zero(trcOut.delta)
+
+"""
+    bendPhase(mod::ParaxialLensT, s, rayIn, trcOut, λ)
+
+Phase of an ideal thin lens (Zemax `PARAXIAL`), as optical path length in
+mm: `-sign(f) * (sqrt(f² + r²) - |f|)`, with `f = mod.focalLength` and `r`
+the ray's transverse distance from the lens axis (taken from the local
+coordinates of the intersection, the same `r` the bend in
+`modFunc(::ParaxialLensT)` uses). It is `-r²/(2f)` for small `r`. The
+exact form is used because the bend aims a collimated ray at radius `r`
+exactly at the axial point `z = f`, so this makes the OPD of a collimated
+beam zero at that focus (the quadratic form would leave `r⁴/(8f³)` of
+spurious spherical aberration). Negative for a converging lens (`f > 0`):
+outer rays travel farther after the lens, so it removes path from them.
+"""
+function bendPhase(mod::ParaxialLensT, s, rayIn, trcOut, λ)
+    p = s.toLocalCoord(trcOut.ray.base)
+    f = mod.focalLength
+    -sign(f) * (sqrt(f^2 + p[1]^2 + p[2]^2) - abs(f))
+end
 
 """
     surfacePhase(s::AbstractSurface, rayIn, trcOut, λ)
@@ -476,8 +496,7 @@ if it differs from `λ` or is not given.
 
 Not supported (warns and returns `nothing`): a `CDiffuser` anywhere in
 `geo` (random scatter, so OPD is meaningless). Warns but continues: a
-`ParaxialLensT` (adds no phase, `TODO.md` Code issues #41, so OPD
-through it is wrong). `OptSurface`s do not clip rays at their `aperture`
+`OptSurface`s do not clip rays at their `aperture`
 (only `ModelSurface`s do), so the mask only reflects misses, TIR, and
 `ModelSurface` clipping.
 
@@ -505,9 +524,6 @@ function wavefrontMap(geo, field::AbstractFieldPoint{T}, λ::Real;
             @warn "wavefrontMap: surface \"$(s.surfname)\" is a CDiffuser (random scatter), which is incompatible with OPD calculations. Stopping."
             return nothing
         end
-    end
-    if any(s -> s isa OptSurface && s.mod isa ParaxialLensT, geo)
-        @warn "wavefrontMap: geo contains a ParaxialLensT, which adds no phase (TODO.md Code issues #41); OPD through it is wrong." maxlog=1
     end
     if isnothing(geoWavelength)
         @warn "wavefrontMap: geoWavelength not given; assuming geo's refractive indices match λ = $λ μm." maxlog=1

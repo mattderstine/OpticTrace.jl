@@ -315,19 +315,6 @@ already resolved.
   (`λ::Real, c::AbstractVector{<:Real}`) instead; the siblings could do
   the same, and also drop their hardcoded `1.0 +` Float64 literal.
 
-- **41.** `src/tracing.jl`, `modFunc(::ParaxialLensT)` (and its
-  `ParaxialProfile`): the ideal thin lens only bends the ray -- it adds
-  no optical path, so `Σ nIn·delta` through it is missing the lens's
-  phase `-r²/(2f)` (`r` = transverse offset from the axis, `f` =
-  `focalLength`, in OPL terms). Any OPD/wavefront calculation through a
-  paraxial lens, including Zemax `PARAXIAL` imports, will be wrong
-  without it. Planned fix: a `surfacePhase` method for `ParaxialLensT`
-  as part of the wavefront-analysis work
-  (`plans/wavefront_analysis.md`). Sign and the not-quite-quadratic
-  (exact vs paraxial) form need a decision; add a regression test that
-  an ideal lens focuses a collimated beam with zero OPD at the paraxial
-  focus.
-
 - **42.** `src/tracing.jl`, `traceSurf(::OptSurface)`: does not clip rays at
   the surface's `aperture` (only `ModelSurface`'s `traceSurf` does, giving
   status 3), so lens-edge vignetting is not modelled when tracing

@@ -54,9 +54,9 @@ exit pupil is at infinity it becomes a plane (`refRadius == Inf`).
   `FunctionPupil(f)` or `AnglePupil(f)`; the amplitude becomes the ray weight
   used by the statistics and the PSF.
 - **Unsupported:** a `CDiffuser` in `geo` (random scatter) makes OPD
-  meaningless, so `wavefrontMap` warns and returns `nothing`. A
-  `ParaxialLensT` adds no phase (`TODO.md` Code issues #41), so OPD through it
-  is wrong, and a warning says so.
+  meaningless, so `wavefrontMap` warns and returns `nothing`.
+- An ideal thin lens (`ParaxialLensT`) adds the phase `-(sqrt(f²+r²) - f)`,
+  so a collimated beam through one has zero OPD at its paraxial focus.
 - `OptSurface`s do not clip rays at their aperture (`TODO.md` Code issues
   #42), so the pupil mask only reflects misses, total internal reflection and
   `ModelSurface` clipping.

@@ -173,7 +173,7 @@ running a scratch trace (plane-parallel plate, tilted ray, sphere, mirror).
 
 ### Additional findings that affect the design
 
-- **`ParaxialLensT` (ideal thin lens) adds no phase.** `modFunc` only bends
+- **`ParaxialLensT` (ideal thin lens) originally added no phase (now fixed).** `modFunc` only bends
   the ray. A true ideal lens needs a phase of `-r²/(2f)` (in OPL terms), so a
   `surfacePhase` method for `ParaxialLensT` is required for correct OPD
   through paraxial/ideal-lens systems, including Zemax `PARAXIAL` imports.
@@ -182,8 +182,8 @@ running a scratch trace (plane-parallel plate, tilted ray, sphere, mirror).
   `geo` for any surface whose `mod` is a `CDiffuser` before tracing; if one is
   present it emits `@warn` naming the surface and exits, returning `nothing`
   (no partial result). The legacy `opdRel` path is left unchanged.
-- **`ParaxialLensT` phase** is tracked as `TODO.md` Code issues #41 (a
-  `surfacePhase` method giving `-r²/(2f)`); implement with the phase hook.
+- **`ParaxialLensT` phase** was `TODO.md` #41, now fixed (see `FIXED.md`): a `bendPhase`
+  method giving the exact `-(sqrt(f²+r²)-f)`.
 - **Unit conversion in the existing `plotOPD!` is consistent.**
   `LENGTH_TO_WAVELENGTH = 0.001` (μm→mm by multiplying), and both methods
   divide an mm OPD by it correctly. Reuse the constant in the new code.
