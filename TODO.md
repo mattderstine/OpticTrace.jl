@@ -395,6 +395,15 @@ already resolved.
 
   Make them less verbose, make them more uniform, use markdown formating
 
-  ### add a preview plot of the Zemax file being shown in zemaxBrowser
+  ### Stand-alone zemaxBrowser
 
-  Add a plot in the 3rd column below the table. Load the file, and plot the geometry when a zemax file is selected
+  Create a separate project (its own repository/environment depending on
+  OpticTrace.jl) that builds `zemaxBrowser` into a stand-alone utility with
+  JuliaC, replacing the current `scripts/zemaxbrowser.jl` launcher.
+  - open issue: how to handle the refractive index libraries. The launcher
+    currently loads the glass catalogs from machine-local paths
+    (`OpticTrace.dirBaseRefractiveIndex`, Zemax `.agf` files), which a
+    compiled app can't assume. Options include bundling a vendored catalog
+    subset, letting the user point the app at catalog directories (and
+    remembering that), or both. Ties in with the vendored-catalog item for
+    CI coverage.
